@@ -1,189 +1,198 @@
-"""Tender Intelligence Platform - Streamlit presentation demo."""
+"""Tender Intelligence Decision Support - Streamlit MVP."""
 
-import json
-import time
+from __future__ import annotations
+
+import re
+import unicodedata
 from pathlib import Path
-from statistics import mean
+from typing import Any
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 
-# ---------------------------------------------------------------------------
-# Page configuration
-# ---------------------------------------------------------------------------
+ROOT = Path(__file__).resolve().parent
+DATA_PATH = ROOT / "data" / "polifarma_synthetic_tenders_2021_2025.csv"
+
+HISTORICAL_TEXT_FIELDS = [
+    "tender_title",
+    "product_name",
+    "product_group",
+    "buyer_institution",
+    "region",
+    "procedure_type",
+]
+QUERY_TEXT_FIELDS = ["product_name", "product_group", "region", "procedure_type"]
+
+SIMILARITY_WEIGHTS = {
+    "tfidf": 0.60,
+    "product_group": 0.15,
+    "product_name": 0.10,
+    "region": 0.10,
+    "procedure_type": 0.05,
+}
+
+
 st.set_page_config(
-    page_title="Tender Intelligence Platform",
+    page_title="Tender Intelligence Decision Support",
     page_icon="TI",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-
-# ---------------------------------------------------------------------------
-# Global styles
-# ---------------------------------------------------------------------------
 st.markdown(
     """
     <style>
         :root {
-            --navy: #0A0F1E;
-            --navy-soft: #10182A;
-            --navy-card: #121C30;
-            --navy-card-2: #16223A;
-            --blue: #2D7DD2;
-            --blue-soft: #69A7E8;
-            --amber: #F4A261;
-            --green: #39C58A;
-            --text: #F3F7FC;
-            --muted: #8FA2BD;
-            --border: rgba(117, 151, 193, 0.18);
+            --bg: #0b1020;
+            --panel: #111a2d;
+            --panel-2: #0f1728;
+            --border: rgba(148, 163, 184, 0.20);
+            --text: #eef4fb;
+            --muted: #95a5bb;
+            --blue: #3b82f6;
+            --cyan: #22c7c9;
+            --amber: #f59e0b;
+            --green: #22c55e;
+            --red: #ef4444;
         }
 
         .stApp {
             background:
-                radial-gradient(circle at 75% -10%, rgba(45, 125, 210, 0.13), transparent 30%),
-                var(--navy);
+                radial-gradient(circle at 82% -12%, rgba(34, 199, 201, 0.12), transparent 32%),
+                linear-gradient(180deg, #0b1020 0%, #090e1a 100%);
             color: var(--text);
         }
 
-        [data-testid="stHeader"] {
-            background: transparent;
+        [data-testid="stHeader"] { background: transparent; }
+        .block-container {
+            max-width: 1500px;
+            padding-top: 1.4rem;
+            padding-bottom: 2.4rem;
         }
 
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0D1424 0%, #090E1A 100%);
+            background: #080d18;
             border-right: 1px solid var(--border);
         }
 
-        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        .brand-mark {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--blue), var(--cyan));
+            color: white;
+            font-weight: 800;
+            margin-bottom: 0.8rem;
+        }
+
+        .sidebar-title {
+            color: var(--text);
+            font-size: 1.05rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+        }
+
+        .sidebar-note {
             color: var(--muted);
-        }
-
-        [data-testid="stSidebarCollapseButton"] {
-            color: var(--muted);
-        }
-
-        .block-container {
-            max-width: 1600px;
-            padding-top: 1.6rem;
-            padding-bottom: 2.5rem;
-        }
-
-        h1, h2, h3, p {
-            font-family: "Inter", "Segoe UI", sans-serif;
+            font-size: 0.76rem;
+            line-height: 1.45;
+            margin-top: 0.45rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
         }
 
         .eyebrow {
-            color: var(--blue-soft);
+            color: #7dd3fc;
             font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.16em;
+            font-weight: 800;
+            letter-spacing: 0.13em;
             text-transform: uppercase;
             margin-bottom: 0.35rem;
         }
 
         .page-title {
             color: var(--text);
-            font-size: clamp(1.8rem, 3vw, 2.75rem);
-            font-weight: 720;
-            letter-spacing: -0.045em;
-            line-height: 1.04;
+            font-size: clamp(2rem, 3vw, 3rem);
+            line-height: 1.02;
+            font-weight: 790;
             margin: 0;
         }
 
         .page-subtitle {
             color: var(--muted);
-            font-size: 0.95rem;
-            margin-top: 0.6rem;
-            max-width: 720px;
+            max-width: 840px;
+            font-size: 0.98rem;
+            margin-top: 0.7rem;
+            line-height: 1.55;
         }
 
-        .live-pill {
+        .scope-pill {
             display: inline-flex;
+            gap: 0.42rem;
             align-items: center;
-            gap: 0.45rem;
-            padding: 0.42rem 0.72rem;
-            border: 1px solid rgba(57, 197, 138, 0.25);
-            border-radius: 999px;
-            background: rgba(57, 197, 138, 0.08);
-            color: #8AE6BD;
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.05em;
             float: right;
             margin-top: 0.5rem;
+            padding: 0.42rem 0.7rem;
+            border: 1px solid rgba(34, 197, 94, 0.26);
+            border-radius: 999px;
+            color: #86efac;
+            background: rgba(34, 197, 94, 0.08);
+            font-size: 0.72rem;
+            font-weight: 800;
         }
 
-        .live-dot {
+        .scope-dot {
             width: 7px;
             height: 7px;
             border-radius: 50%;
             background: var(--green);
-            box-shadow: 0 0 10px rgba(57, 197, 138, 0.8);
+            box-shadow: 0 0 14px rgba(34, 197, 94, 0.7);
         }
 
         .section-kicker {
-            color: var(--blue-soft);
+            color: #7dd3fc;
             font-size: 0.68rem;
-            font-weight: 700;
+            font-weight: 800;
             letter-spacing: 0.12em;
             text-transform: uppercase;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.18rem;
         }
 
         .section-title {
             color: var(--text);
             font-size: 1.08rem;
-            font-weight: 680;
-            margin: 0 0 0.85rem 0;
+            font-weight: 760;
+            margin-bottom: 0.9rem;
         }
 
         [data-testid="stVerticalBlockBorderWrapper"] {
-            background: linear-gradient(135deg, rgba(18, 28, 48, 0.98), rgba(14, 23, 40, 0.98));
+            background: linear-gradient(145deg, rgba(17, 26, 45, 0.98), rgba(13, 20, 35, 0.98));
             border: 1px solid var(--border);
-            border-radius: 14px;
+            border-radius: 8px;
             box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
-        }
-
-        [data-testid="stVerticalBlockBorderWrapper"] > div {
-            padding: 0.15rem 0.2rem;
-        }
-
-        .panel-shell {
-            background: linear-gradient(145deg, rgba(18, 28, 48, 0.96), rgba(13, 21, 37, 0.96));
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            min-height: 445px;
-            padding: 1rem 1rem 0.8rem;
-            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
         }
 
         [data-testid="stTextInput"] label,
         [data-testid="stNumberInput"] label,
-        [data-testid="stSelectbox"] label,
-        [data-testid="stSlider"] label {
-            color: #AEC0D8 !important;
-            font-size: 0.77rem !important;
-            font-weight: 600 !important;
+        [data-testid="stSelectbox"] label {
+            color: #b9c7d8 !important;
+            font-size: 0.78rem !important;
+            font-weight: 650 !important;
         }
 
         [data-testid="stTextInput"] input,
         [data-testid="stNumberInput"] input,
         [data-testid="stSelectbox"] > div > div {
-            background: #0C1424;
+            background: #0b1323;
             color: var(--text);
             border-color: var(--border);
             border-radius: 8px;
-        }
-
-        [data-testid="stSlider"] [role="slider"] {
-            background-color: var(--amber);
-            border-color: var(--amber);
-        }
-
-        [data-testid="stButton"] {
-            padding-top: 1.55rem;
         }
 
         [data-testid="stButton"] button {
@@ -191,358 +200,99 @@ st.markdown(
             min-height: 42px;
             border: 0;
             border-radius: 8px;
-            background: linear-gradient(135deg, #F4A261, #EE8D46);
-            color: #17100A;
-            font-weight: 800;
-            box-shadow: 0 8px 22px rgba(244, 162, 97, 0.2);
-            transition: transform 160ms ease, box-shadow 160ms ease;
-        }
-
-        [data-testid="stButton"] button:hover {
-            transform: translateY(-1px);
-            color: #17100A;
-            box-shadow: 0 11px 28px rgba(244, 162, 97, 0.3);
-        }
-
-        .tender-table-wrap {
-            overflow-x: auto;
-            border: 1px solid rgba(117, 151, 193, 0.12);
-            border-radius: 10px;
-        }
-
-        .tender-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.69rem;
-            white-space: nowrap;
-        }
-
-        .tender-table th {
-            background: #0D1627;
-            color: #8296B1;
-            font-size: 0.61rem;
-            font-weight: 700;
-            letter-spacing: 0.045em;
-            padding: 0.72rem 0.48rem;
-            text-align: left;
-            text-transform: uppercase;
-        }
-
-        .tender-table td {
-            color: #DCE6F3;
-            padding: 0.78rem 0.48rem;
-            border-top: 1px solid rgba(117, 151, 193, 0.1);
-        }
-
-        .tender-table tr:hover td {
-            background: rgba(45, 125, 210, 0.045);
-        }
-
-        .win-badge, .risk-badge {
-            display: inline-flex;
-            align-items: center;
-            border-radius: 999px;
-            font-weight: 700;
-        }
-
-        .win-badge {
-            background: rgba(57, 197, 138, 0.11);
-            border: 1px solid rgba(57, 197, 138, 0.24);
-            color: #77DFB0;
-            font-size: 0.61rem;
-            padding: 0.23rem 0.42rem;
-        }
-
-        .corridor-values {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.35rem;
-            margin: 1.35rem 0 0.55rem;
-        }
-
-        .corridor-value {
-            color: var(--muted);
-            font-size: 0.61rem;
-        }
-
-        .corridor-value strong {
-            display: block;
-            color: var(--text);
-            font-size: 0.9rem;
-            margin-top: 0.18rem;
-        }
-
-        .corridor-value:nth-child(2) { text-align: center; }
-        .corridor-value:nth-child(2) strong { color: var(--amber); }
-        .corridor-value:nth-child(3) { text-align: right; }
-
-        .price-track-wrap {
-            position: relative;
-            height: 82px;
-            margin: 0.1rem 0 0.35rem;
-        }
-
-        .price-track {
-            position: absolute;
-            top: 32px;
-            left: 2%;
-            width: 96%;
-            height: 10px;
-            border-radius: 999px;
-            background: linear-gradient(90deg, #2D7DD2 0%, #48A9A6 42%, #F4A261 68%, #E76F51 100%);
-            box-shadow: 0 0 20px rgba(45, 125, 210, 0.17);
-        }
-
-        .track-marker {
-            position: absolute;
-            top: 22px;
-            width: 2px;
-            height: 30px;
-            background: #EAF2FC;
-        }
-
-        .track-marker::after {
-            content: "";
-            position: absolute;
-            top: -3px;
-            left: -4px;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #EAF2FC;
-            box-shadow: 0 0 0 4px rgba(234, 242, 252, 0.12);
-        }
-
-        .marker-low { left: 8%; }
-        .marker-mid { left: 53%; background: var(--amber); }
-        .marker-mid::after { background: var(--amber); box-shadow: 0 0 0 5px rgba(244, 162, 97, 0.16); }
-        .marker-high { left: 91%; }
-
-        .insight-card {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.72rem 0;
-            border-top: 1px solid rgba(117, 151, 193, 0.11);
-        }
-
-        .insight-label {
-            color: var(--muted);
-            font-size: 0.71rem;
-        }
-
-        .insight-value {
-            color: var(--text);
-            font-size: 0.92rem;
-            font-weight: 750;
-        }
-
-        .insight-value.amber {
-            color: var(--amber);
-        }
-
-        .risk-badge {
-            background: rgba(244, 162, 97, 0.1);
-            border: 1px solid rgba(244, 162, 97, 0.26);
-            color: #FFC28E;
-            font-size: 0.68rem;
-            padding: 0.32rem 0.58rem;
-        }
-
-        .mini-card-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.5rem;
-            margin-top: -0.2rem;
-        }
-
-        .mini-card {
-            background: rgba(11, 20, 35, 0.74);
-            border: 1px solid rgba(117, 151, 193, 0.12);
-            border-radius: 9px;
-            padding: 0.68rem 0.55rem;
-            min-height: 73px;
-        }
-
-        .mini-label {
-            color: var(--muted);
-            font-size: 0.6rem;
-            line-height: 1.25;
-        }
-
-        .mini-value {
-            color: var(--text);
-            font-size: 0.86rem;
-            font-weight: 760;
-            margin-top: 0.42rem;
-        }
-
-        .performance-wrap {
+            background: linear-gradient(135deg, var(--amber), #fb923c);
+            color: #1f1300;
+            font-weight: 850;
             margin-top: 1.6rem;
-            padding-top: 1.15rem;
-            border-top: 1px solid rgba(117, 151, 193, 0.15);
         }
 
         .metric-card {
-            position: relative;
-            overflow: hidden;
-            min-height: 154px;
-            background: linear-gradient(145deg, #121C30 0%, #0E1728 100%);
+            min-height: 128px;
+            padding: 1rem;
             border: 1px solid var(--border);
-            border-radius: 13px;
-            padding: 1.05rem 1.1rem;
-        }
-
-        .metric-card::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: linear-gradient(90deg, var(--amber), transparent 68%);
-        }
-
-        .metric-number {
-            color: var(--amber);
-            font-size: 2rem;
-            font-weight: 780;
-            letter-spacing: -0.04em;
-            line-height: 1;
+            border-radius: 8px;
+            background: rgba(15, 23, 40, 0.72);
         }
 
         .metric-label {
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-value {
             color: var(--text);
-            font-size: 0.79rem;
-            font-weight: 680;
-            margin-top: 0.68rem;
+            font-size: 1.55rem;
+            font-weight: 820;
+            margin-top: 0.45rem;
         }
 
         .metric-note {
             color: var(--muted);
-            font-size: 0.65rem;
+            font-size: 0.72rem;
             margin-top: 0.3rem;
         }
 
-        .metric-trend {
-            position: absolute;
-            top: 1.05rem;
-            right: 1rem;
-            color: var(--green);
-            font-size: 0.68rem;
-            font-weight: 700;
-        }
-
-        .sidebar-brand {
-            padding: 0.7rem 0.15rem 1.4rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .sidebar-mark {
-            display: inline-grid;
-            place-items: center;
-            width: 36px;
-            height: 36px;
-            margin-bottom: 0.8rem;
-            background: linear-gradient(135deg, var(--blue), #174E91);
-            border-radius: 9px;
-            box-shadow: 0 8px 24px rgba(45, 125, 210, 0.25);
-            color: white;
-            font-size: 0.76rem;
-            font-weight: 800;
-        }
-
-        .sidebar-title {
-            color: var(--text);
-            font-size: 1.18rem;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-        }
-
-        .sidebar-subtitle {
-            color: var(--muted);
-            font-size: 0.72rem;
-            line-height: 1.45;
-            margin-top: 0.35rem;
-        }
-
-        .sidebar-nav {
-            margin-top: 1.2rem;
-        }
-
-        .nav-item {
-            color: var(--muted);
-            font-size: 0.77rem;
-            padding: 0.72rem 0.78rem;
+        .score-card {
+            padding: 1.2rem;
+            border: 1px solid rgba(34, 197, 94, 0.28);
             border-radius: 8px;
-            margin-bottom: 0.25rem;
+            background: linear-gradient(145deg, rgba(34, 197, 94, 0.12), rgba(59, 130, 246, 0.08));
+            min-height: 300px;
         }
 
-        .nav-item.active {
-            color: #DCEBFB;
-            background: rgba(45, 125, 210, 0.12);
-            border-left: 2px solid var(--blue);
+        .score-value {
+            color: var(--text);
+            font-size: 4.2rem;
+            line-height: 0.95;
+            font-weight: 850;
+            letter-spacing: 0;
         }
 
-        .sidebar-footer {
-            position: fixed;
-            bottom: 1.5rem;
-            width: 12rem;
+        .score-label {
+            color: #bbf7d0;
+            font-size: 1.1rem;
+            font-weight: 800;
+            margin-top: 0.6rem;
         }
 
-        .partner-tag {
-            display: inline-block;
-            border: 1px solid rgba(244, 162, 97, 0.24);
-            border-radius: 7px;
-            background: rgba(244, 162, 97, 0.06);
-            color: #DDB68F;
-            font-size: 0.64rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            padding: 0.5rem 0.68rem;
-            text-transform: uppercase;
+        .confidence {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.32rem 0.58rem;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.24);
+            color: #bfdbfe;
+            font-size: 0.72rem;
+            font-weight: 800;
         }
 
-        .empty-state {
-            margin-top: 1.6rem;
-            border: 1px dashed rgba(117, 151, 193, 0.22);
-            border-radius: 14px;
-            padding: 2.2rem;
-            text-align: center;
-            color: var(--muted);
-            background: rgba(18, 28, 48, 0.35);
+        .explain-box {
+            padding: 1rem;
+            border: 1px solid rgba(125, 211, 252, 0.20);
+            border-radius: 8px;
+            background: rgba(14, 23, 42, 0.66);
+            color: #c9d7e8;
+            line-height: 1.55;
+            font-size: 0.92rem;
         }
 
-        .empty-state strong {
-            display: block;
-            color: #C7D5E7;
-            font-size: 0.9rem;
-            margin-bottom: 0.35rem;
-        }
-
-        .mvp-disclaimer {
-            margin-top: 1rem;
-            padding: 0.8rem 0.95rem;
-            border: 1px solid rgba(105, 167, 232, 0.2);
-            border-radius: 10px;
-            background: rgba(45, 125, 210, 0.06);
-            color: #9EB2CC;
-            font-size: 0.68rem;
-            line-height: 1.5;
-        }
-
-        .mvp-disclaimer strong {
-            color: #C9D8EA;
-        }
-
-        [data-testid="stSpinner"] {
-            color: var(--amber);
+        .scope-note {
+            padding: 0.85rem 0.95rem;
+            border: 1px solid rgba(245, 158, 11, 0.22);
+            border-radius: 8px;
+            background: rgba(245, 158, 11, 0.07);
+            color: #e9c99d;
+            font-size: 0.78rem;
+            line-height: 1.45;
         }
 
         @media (max-width: 900px) {
-            .live-pill { float: none; margin-top: 1rem; }
-            .mini-card-grid { grid-template-columns: 1fr; }
-            .sidebar-footer { position: static; margin-top: 3rem; }
+            .scope-pill { float: none; margin-top: 1rem; }
+            .score-value { font-size: 3rem; }
         }
     </style>
     """,
@@ -550,43 +300,291 @@ st.markdown(
 )
 
 
-# ---------------------------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------------------------
-with st.sidebar:
+def normalize_text(value: Any) -> str:
+    text = "" if pd.isna(value) else str(value)
+    text = unicodedata.normalize("NFKC", text).casefold()
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def tokenize(value: Any) -> set[str]:
+    text = normalize_text(value)
+    return set(re.findall(r"[\w.%]+", text, flags=re.UNICODE))
+
+
+def combine_text(record: pd.Series | dict[str, Any], fields: list[str]) -> str:
+    return " | ".join(normalize_text(record.get(field, "")) for field in fields)
+
+
+def exact_match_score(left: Any, right: Any) -> float:
+    return 1.0 if normalize_text(left) == normalize_text(right) else 0.0
+
+
+def product_name_score(query_name: str, candidate_name: str) -> float:
+    query_normalized = normalize_text(query_name)
+    candidate_normalized = normalize_text(candidate_name)
+    if not query_normalized or not candidate_normalized:
+        return 0.0
+    if query_normalized == candidate_normalized:
+        return 1.0
+    if query_normalized in candidate_normalized or candidate_normalized in query_normalized:
+        return 1.0
+
+    query_tokens = tokenize(query_name)
+    candidate_tokens = tokenize(candidate_name)
+    if not query_tokens or not candidate_tokens:
+        return 0.0
+    return len(query_tokens & candidate_tokens) / max(len(query_tokens), len(candidate_tokens))
+
+
+def hybrid_similarity_score(
+    tfidf_score: float,
+    product_group: float,
+    product_name: float,
+    region: float,
+    procedure_type: float,
+) -> float:
+    return (
+        SIMILARITY_WEIGHTS["tfidf"] * tfidf_score
+        + SIMILARITY_WEIGHTS["product_group"] * product_group
+        + SIMILARITY_WEIGHTS["product_name"] * product_name
+        + SIMILARITY_WEIGHTS["region"] * region
+        + SIMILARITY_WEIGHTS["procedure_type"] * procedure_type
+    )
+
+
+@st.cache_data
+def load_dataset() -> pd.DataFrame:
+    df = pd.read_csv(DATA_PATH)
+    required = [
+        *HISTORICAL_TEXT_FIELDS,
+        "tender_id",
+        "year",
+        "winning_unit_price_try",
+        "inflation_adjusted_unit_price_2025_try",
+        "gross_margin_pct",
+        "discount_to_estimated_cost_pct",
+        "strategic_fit_score",
+    ]
+    missing = [field for field in required if field not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+    return df
+
+
+@st.cache_resource
+def build_tfidf_index(search_texts: tuple[str, ...]) -> tuple[TfidfVectorizer, Any]:
+    vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
+    matrix = vectorizer.fit_transform(search_texts)
+    return vectorizer, matrix
+
+
+def get_similarity_index(df: pd.DataFrame) -> tuple[TfidfVectorizer, Any]:
+    search_texts = tuple(df.apply(lambda row: combine_text(row, HISTORICAL_TEXT_FIELDS), axis=1))
+    return build_tfidf_index(search_texts)
+
+
+def retrieve_similar_tenders(df: pd.DataFrame, query: dict[str, Any]) -> pd.DataFrame:
+    vectorizer, matrix = get_similarity_index(df)
+    query_text = combine_text(query, QUERY_TEXT_FIELDS)
+    query_vector = vectorizer.transform([query_text])
+    tfidf_scores = cosine_similarity(query_vector, matrix)[0]
+    top_indices = tfidf_scores.argsort()[::-1][:30]
+
+    candidates = []
+    for initial_rank, idx in enumerate(top_indices, start=1):
+        row = df.iloc[int(idx)]
+        tfidf_score = float(tfidf_scores[idx])
+        group_score = exact_match_score(query["product_group"], row["product_group"])
+        name_score = product_name_score(query["product_name"], row["product_name"])
+        region_score = exact_match_score(query["region"], row["region"])
+        procedure_score = exact_match_score(query["procedure_type"], row["procedure_type"])
+        final_score = hybrid_similarity_score(
+            tfidf_score,
+            group_score,
+            name_score,
+            region_score,
+            procedure_score,
+        )
+
+        item = row.to_dict()
+        item.update(
+            {
+                "initial_tfidf_rank": initial_rank,
+                "tfidf_score": tfidf_score,
+                "product_group_score": group_score,
+                "product_name_score": name_score,
+                "region_score": region_score,
+                "procedure_type_score": procedure_score,
+                "final_similarity_score": final_score,
+            }
+        )
+        candidates.append(item)
+
+    return (
+        pd.DataFrame(candidates)
+        .sort_values(
+            [
+                "final_similarity_score",
+                "tfidf_score",
+                "product_name_score",
+                "region_score",
+                "procedure_type_score",
+            ],
+            ascending=False,
+        )
+        .head(10)
+        .reset_index(drop=True)
+    )
+
+
+def percentile_metrics(series: pd.Series) -> dict[str, float]:
+    return {
+        "min": float(series.min()),
+        "p25": float(series.quantile(0.25)),
+        "median": float(series.median()),
+        "p75": float(series.quantile(0.75)),
+        "max": float(series.max()),
+        "average": float(series.mean()),
+        "std": float(series.std(ddof=0)),
+    }
+
+
+def confidence_level(count: int, average_similarity: float) -> str:
+    if count < 7 or average_similarity < 0.55:
+        return "Low"
+    if count == 10 and average_similarity >= 0.75:
+        return "High"
+    return "Medium"
+
+
+def scenario_margins(corridor: dict[str, float], cost: float) -> dict[str, float]:
+    scenarios = {
+        "Conservative": corridor["p25"],
+        "Balanced": corridor["median"],
+        "Aggressive": corridor["p75"],
+    }
+    return {
+        name: ((price - cost) / price * 100) if price > 0 else 0
+        for name, price in scenarios.items()
+    }
+
+
+def margin_score(margin_pct: float) -> int:
+    if margin_pct >= 25:
+        return 100
+    if margin_pct >= 15:
+        return 75
+    if margin_pct >= 8:
+        return 50
+    if margin_pct >= 0:
+        return 25
+    return 0
+
+
+def competition_score(competitor_count: int) -> int:
+    if competitor_count <= 2:
+        return 90
+    if competitor_count <= 4:
+        return 70
+    if competitor_count <= 6:
+        return 45
+    return 25
+
+
+def delivery_score(delivery_months: int) -> int:
+    return {3: 60, 6: 75, 9: 85, 12: 90}.get(delivery_months, 75)
+
+
+def attractiveness_label(score: float) -> str:
+    if score >= 75:
+        return "Strong Opportunity"
+    if score >= 60:
+        return "Proceed with Balanced Pricing"
+    if score >= 45:
+        return "Proceed with Margin Protection"
+    return "Manual Review Required"
+
+
+def format_try(value: float) -> str:
+    return f"{value:,.2f} TL".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_pct(value: float) -> str:
+    return f"%{value:.1f}"
+
+
+def build_gauge(score: float) -> go.Figure:
+    figure = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=score,
+            number={"font": {"size": 46, "color": "#eef4fb"}, "suffix": "/100"},
+            gauge={
+                "axis": {"range": [0, 100], "tickcolor": "#64748b"},
+                "bar": {"color": "#22c55e", "thickness": 0.26},
+                "bgcolor": "rgba(255,255,255,0.04)",
+                "borderwidth": 0,
+                "steps": [
+                    {"range": [0, 45], "color": "rgba(239,68,68,0.18)"},
+                    {"range": [45, 60], "color": "rgba(245,158,11,0.18)"},
+                    {"range": [60, 75], "color": "rgba(59,130,246,0.18)"},
+                    {"range": [75, 100], "color": "rgba(34,197,94,0.18)"},
+                ],
+            },
+        )
+    )
+    figure.update_layout(
+        height=230,
+        margin={"l": 8, "r": 8, "t": 8, "b": 8},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": "#eef4fb"},
+    )
+    return figure
+
+
+def metric_card(label: str, value: str, note: str = "") -> None:
     st.markdown(
-        """
-        <div class="sidebar-brand">
-            <div class="sidebar-mark">TI</div>
-            <div class="sidebar-title">TENDER IQ</div>
-            <div class="sidebar-subtitle">Public Tender Intelligence Demo</div>
-        </div>
-        <div class="sidebar-nav">
-            <div class="nav-item active">Karar Merkezi</div>
-            <div class="nav-item">Geçmiş İhaleler</div>
-            <div class="nav-item">Model Performansı</div>
-            <div class="nav-item">Veri Kataloğu</div>
-        </div>
-        <div class="sidebar-footer">
-            <div class="partner-tag">PUBLIC EKAP DEMO</div>
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{value}</div>
+            <div class="metric-note">{note}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-# ---------------------------------------------------------------------------
-# Header
-# ---------------------------------------------------------------------------
-header_left, header_right = st.columns([5, 1])
+df = load_dataset()
+
+with st.sidebar:
+    st.markdown(
+        """
+        <div class="brand-mark">TI</div>
+        <div class="sidebar-title">TENDER IQ</div>
+        <div class="sidebar-note">
+            Tender Intelligence Decision Support for historical won-tender
+            benchmarking. No outcome prediction is used.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("Dataset")
+    st.write(f"{len(df):,} historical won tenders".replace(",", "."))
+    st.write(f"{df['year'].min()}-{df['year'].max()}")
+    st.write("Polifarma synthetic tender memory")
+
+header_left, header_right = st.columns([5, 1.4])
 with header_left:
     st.markdown(
         """
-        <div class="eyebrow">Public Tender Intelligence Demo</div>
-        <h1 class="page-title">Tender Intelligence Platform</h1>
+        <div class="eyebrow">Tender Intelligence Decision Support</div>
+        <h1 class="page-title">Historical Tender Benchmarking</h1>
         <p class="page-subtitle">
-            Kamuya açık tamamlanmış EKAP ihale kayıtlarıyla ihale hafızası,
-            benzer ihale erişimi ve sözleşme bedeli kıyaslaması demosu.
+            Find similar historical won tenders, benchmark achieved prices in
+            2025 TRY terms, simulate margin scenarios, and score tender
+            attractiveness from explainable business signals.
         </p>
         """,
         unsafe_allow_html=True,
@@ -594,464 +592,374 @@ with header_left:
 with header_right:
     st.markdown(
         """
-        <div class="live-pill">
-            <span class="live-dot"></span>
-            DEMO AKTİF
-        </div>
+        <div class="scope-pill"><span class="scope-dot"></span> WON TENDER MEMORY</div>
         """,
         unsafe_allow_html=True,
     )
 
+st.markdown(
+    """
+    <div class="scope-note">
+        This MVP is a historical benchmarking and price recommendation engine.
+        The dataset contains only historical won tenders, so the app does not
+        estimate award likelihood or classify outcomes.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# ---------------------------------------------------------------------------
-# Section 1: New tender input panel
-# ---------------------------------------------------------------------------
+product_names = sorted(df["product_name"].dropna().unique())
+product_groups = sorted(df["product_group"].dropna().unique())
+regions = sorted(df["region"].dropna().unique())
+procedure_types = sorted(df["procedure_type"].dropna().unique())
+
 with st.container(border=True):
     st.markdown(
         """
-        <div class="section-kicker">Yeni Analiz</div>
-        <div class="section-title">Yeni İhale Girdisi</div>
+        <div class="section-kicker">New Tender</div>
+        <div class="section-title">Analysis Inputs</div>
         """,
         unsafe_allow_html=True,
     )
-
-    input_columns = st.columns([1.7, 1.05, 1.0, 1.0, 1.0, 0.85], gap="small")
-    with input_columns[0]:
-        tender_description = st.text_input(
-            "İhale / Hizmet Açıklaması",
-            value="Yaş çay nakliye hizmet alımı",
+    row_1 = st.columns([1.6, 1.0, 1.0, 1.1], gap="small")
+    with row_1[0]:
+        product_name = st.selectbox(
+            "Product Name",
+            product_names,
+            index=product_names.index("%0.9 NaCl 500 ml")
+            if "%0.9 NaCl 500 ml" in product_names
+            else 0,
         )
-    with input_columns[1]:
-        expected_contract_value = st.number_input(
-            "Beklenen Sözleşme Bedeli",
-            min_value=100_000,
-            max_value=100_000_000,
-            value=8_000_000,
-            step=100_000,
+    with row_1[1]:
+        product_group = st.selectbox(
+            "Product Group",
+            product_groups,
+            index=product_groups.index("IV Solution") if "IV Solution" in product_groups else 0,
+        )
+    with row_1[2]:
+        region = st.selectbox(
+            "Region",
+            regions,
+            index=regions.index("Marmara") if "Marmara" in regions else 0,
+        )
+    with row_1[3]:
+        procedure_type = st.selectbox(
+            "Procedure Type",
+            procedure_types,
+            index=procedure_types.index("Açık İhale") if "Açık İhale" in procedure_types else 0,
+        )
+
+    row_2 = st.columns([1.0, 1.0, 1.0, 1.0, 0.9], gap="small")
+    with row_2[0]:
+        estimated_unit_cost_try = st.number_input(
+            "Estimated Unit Cost TRY",
+            min_value=0.01,
+            max_value=10_000.0,
+            value=18.00,
+            step=0.50,
+            format="%.2f",
+        )
+    with row_2[1]:
+        quantity = st.number_input(
+            "Quantity",
+            min_value=1,
+            max_value=5_000_000,
+            value=100_000,
+            step=1_000,
             format="%d",
         )
-    with input_columns[2]:
-        region = st.selectbox(
-            "Bölge",
-            ["RİZE", "Karadeniz", "Marmara", "İç Anadolu", "Ege", "Akdeniz"],
+    with row_2[2]:
+        delivery_months = st.selectbox("Delivery Months", [3, 6, 9, 12], index=1)
+    with row_2[3]:
+        competitor_count = st.number_input(
+            "Estimated Competitor Count",
+            min_value=1,
+            max_value=20,
+            value=3,
+            step=1,
         )
-    with input_columns[3]:
-        procurement_type = st.selectbox(
-            "Alım Türü", ["Hizmet", "Mal", "Yapım"], index=0
-        )
-    with input_columns[4]:
-        procedure_type = st.selectbox(
-            "Usul", ["4734 / 3-g", "Açık İhale", "Pazarlık"], index=0
-        )
-    with input_columns[5]:
-        analyze_clicked = st.button(
-            "Analiz Et", type="primary", use_container_width=True
-        )
+    with row_2[4]:
+        analyze_clicked = st.button("Analiz Et", type="primary")
 
 if "analysis_ready" not in st.session_state:
     st.session_state.analysis_ready = False
 
 if analyze_clicked:
-    with st.spinner("İhale senaryosu analiz ediliyor..."):
-        time.sleep(0.8)
     st.session_state.analysis_ready = True
 
+if not st.session_state.analysis_ready:
+    st.info("Enter a tender scenario and click Analiz Et to generate historical benchmarks.")
+    st.stop()
 
-# Public EKAP demo dataset.
-ROOT = Path(__file__).resolve().parent
-FINAL_DEMO_DATASET = ROOT / "data" / "final_demo_company.json"
-FALLBACK_EKAP_DATASET = ROOT / "data" / "ekap_company_tender_records.json"
+query = {
+    "product_name": product_name,
+    "product_group": product_group,
+    "region": region,
+    "procedure_type": procedure_type,
+}
 
+similar = retrieve_similar_tenders(df, query)
+price_corridor = percentile_metrics(similar["inflation_adjusted_unit_price_2025_try"])
+nominal_reference = percentile_metrics(similar["winning_unit_price_try"])
+margin_benchmark = {
+    "average": float(similar["gross_margin_pct"].mean()),
+    "median": float(similar["gross_margin_pct"].median()),
+    "p25": float(similar["gross_margin_pct"].quantile(0.25)),
+    "p75": float(similar["gross_margin_pct"].quantile(0.75)),
+}
+discount_benchmark = {
+    "average": float(similar["discount_to_estimated_cost_pct"].mean()),
+    "median": float(similar["discount_to_estimated_cost_pct"].median()),
+}
 
-@st.cache_data
-def load_demo_dataset() -> dict:
-    """Load the final public EKAP demo dataset."""
-    dataset_path = FINAL_DEMO_DATASET if FINAL_DEMO_DATASET.exists() else FALLBACK_EKAP_DATASET
-    with dataset_path.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
+scenario_prices = {
+    "Conservative": price_corridor["p25"],
+    "Balanced": price_corridor["median"],
+    "Aggressive": price_corridor["p75"],
+}
+margins = scenario_margins(price_corridor, estimated_unit_cost_try)
+average_similarity = float(similar["final_similarity_score"].mean())
+confidence = confidence_level(len(similar), average_similarity)
 
-    if "records" in payload and "summary" in payload:
-        return payload
+similarity_component = average_similarity * 100
+balanced_margin = margins["Balanced"]
+margin_component = margin_score(balanced_margin)
+strategic_fit_component = float(similar["strategic_fit_score"].mean())
+competition_component = competition_score(int(competitor_count))
+delivery_component = delivery_score(int(delivery_months))
 
-    records = [
-        {
-            "tender_id": record.get("tender_id"),
-            "tender_name": record.get("tender_name"),
-            "buyer_institution": record.get("buyer_institution"),
-            "procurement_type": record.get("procurement_type"),
-            "procedure_type": record.get("procedure_type"),
-            "location": record.get("location"),
-            "tender_date": record.get("tender_date"),
-            "winning_company": record.get("winning_company"),
-            "contract_value_try": record.get("contract_value_try"),
-            "estimated_cost_try": record.get("estimated_cost_try"),
-            "contract_date": record.get("contract_date"),
-            "item_description": record.get("item_name") or record.get("tender_name"),
-            "source_url": record.get("source_url"),
-            "extraction_confidence": record.get("extraction_confidence"),
-        }
-        for record in payload.get("records", [])
-    ]
-    contract_values = [
-        record["contract_value_try"]
-        for record in records
-        if record.get("contract_value_try") is not None
-    ]
-    estimated_costs = [
-        record["estimated_cost_try"]
-        for record in records
-        if record.get("estimated_cost_try") not in (None, 0)
-    ]
-    return {
-        "dataset_type": "public_ekap_demo_dataset",
-        "positioning": "Public Tender Intelligence Demo",
-        "selected_company": payload.get("selected_company", {}),
-        "records": records,
-        "summary": {
-            "record_count": len(records),
-            "unique_tender_count": len({record.get("tender_id") for record in records}),
-            "records_with_contract_value": len(contract_values),
-            "records_with_estimated_cost": len(estimated_costs),
-            "contract_value_min_try": min(contract_values) if contract_values else None,
-            "contract_value_avg_try": mean(contract_values) if contract_values else None,
-            "contract_value_max_try": max(contract_values) if contract_values else None,
-            "estimated_cost_avg_try": mean(estimated_costs) if estimated_costs else None,
-        },
-    }
-
-
-def format_try(value) -> str:
-    """Format TRY values without implying unit price."""
-    if value is None:
-        return "-"
-    return f"{value:,.0f} TRY".replace(",", ".")
-
-
-def short_text(value, max_length: int = 58) -> str:
-    """Trim long public tender labels for compact dashboard tables."""
-    if not value:
-        return "-"
-    return value if len(value) <= max_length else f"{value[: max_length - 1]}..."
-
-
-DEMO_DATASET = load_demo_dataset()
-SELECTED_COMPANY = DEMO_DATASET.get("selected_company") or {}
-HISTORICAL_TENDERS = sorted(
-    DEMO_DATASET.get("records", []),
-    key=lambda record: record.get("tender_date") or "",
-    reverse=True,
+final_attractiveness_score = (
+    0.25 * similarity_component
+    + 0.30 * margin_component
+    + 0.20 * strategic_fit_component
+    + 0.15 * competition_component
+    + 0.10 * delivery_component
 )
-SUMMARY = DEMO_DATASET.get("summary", {})
+final_label = attractiveness_label(final_attractiveness_score)
 
-contract_values = [
-    record["contract_value_try"]
-    for record in HISTORICAL_TENDERS
-    if record.get("contract_value_try") is not None
-]
-estimated_costs = [
-    record["estimated_cost_try"]
-    for record in HISTORICAL_TENDERS
-    if record.get("estimated_cost_try") not in (None, 0)
-]
+st.markdown("---")
 
-contract_corridor_low = min(contract_values) if contract_values else None
-contract_corridor_mid = mean(contract_values) if contract_values else None
-contract_corridor_high = max(contract_values) if contract_values else None
-estimated_cost_benchmark = mean(estimated_costs) if estimated_costs else None
-estimated_cost_coverage = (
-    len(estimated_costs) / len(HISTORICAL_TENDERS) * 100 if HISTORICAL_TENDERS else 0
-)
-contract_vs_estimated_gap = (
-    ((contract_corridor_mid / estimated_cost_benchmark) - 1) * 100
-    if contract_corridor_mid and estimated_cost_benchmark
-    else None
-)
+top_metrics = st.columns(4, gap="medium")
+with top_metrics[0]:
+    metric_card("Similar Won Tenders", str(len(similar)), f"{confidence} confidence")
+with top_metrics[1]:
+    metric_card("Balanced Price", format_try(scenario_prices["Balanced"]), "Historical median, 2025 TRY")
+with top_metrics[2]:
+    metric_card("Balanced Margin", format_pct(balanced_margin), "Based on entered unit cost")
+with top_metrics[3]:
+    metric_card("Avg Similarity", f"{average_similarity:.2f}", "Hybrid retrieval score")
 
+section_1, section_2 = st.columns([1.55, 1.0], gap="medium")
 
-def similarity_score(query: str, record: dict) -> int:
-    """Simple token overlap score for demo retrieval behavior."""
-    query_terms = {term for term in query.casefold().split() if len(term) > 2}
-    haystack = " ".join(
-        str(record.get(field) or "")
-        for field in ("tender_name", "item_description", "buyer_institution", "location")
-    ).casefold()
-    if not query_terms:
-        return 0
-    return sum(1 for term in query_terms if term in haystack)
-
-
-def similar_completed_tenders(query: str) -> list[dict]:
-    """Rank completed EKAP tenders by lightweight text similarity."""
-    return sorted(
-        HISTORICAL_TENDERS,
-        key=lambda record: (
-            similarity_score(query, record),
-            record.get("contract_value_try") or 0,
-        ),
-        reverse=True,
-    )[:8]
-
-
-SIMILAR_TENDERS = similar_completed_tenders(tender_description)
-HISTORICAL_FIT_SCORE = min(
-    95,
-    45
-    + (len(SIMILAR_TENDERS) * 3)
-    + int(estimated_cost_coverage / 4)
-    + int((SUMMARY.get("unique_tender_count") or 0) * 1.2),
-)
-
-
-def build_historical_tender_rows() -> str:
-    """Render similar completed public EKAP tenders."""
-    return "".join(
-        (
-            f'<tr><td>{record.get("tender_id")}</td>'
-            f'<td>{record.get("tender_date") or "-"}</td>'
-            f'<td>{short_text(record.get("tender_name"))}</td>'
-            f'<td>{short_text(record.get("buyer_institution"), 44)}</td>'
-            f'<td>{record.get("procurement_type") or "-"}</td>'
-            f'<td>{record.get("procedure_type") or "-"}</td>'
-            f'<td>{record.get("location") or "-"}</td>'
-            f'<td>{format_try(record.get("contract_value_try"))}</td>'
-            f'<td>{format_try(record.get("estimated_cost_try"))}</td>'
-            '<td><span class="win-badge">Tamamlandı</span></td></tr>'
+with section_1:
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-kicker">Section 1</div>
+            <div class="section-title">Top 10 Similar Historical Won Tenders</div>
+            """,
+            unsafe_allow_html=True,
         )
-        for record in SIMILAR_TENDERS
-    )
-
-
-def build_historical_fit_gauge(value: int) -> go.Figure:
-    """Create a gauge representing fit to completed public EKAP tenders."""
-    figure = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=value,
-            number={
-                "suffix": "%",
-                "font": {"size": 50, "color": "#F3F7FC", "family": "Inter"},
+        table = similar[
+            [
+                "tender_id",
+                "year",
+                "product_name",
+                "product_group",
+                "region",
+                "procedure_type",
+                "winning_unit_price_try",
+                "inflation_adjusted_unit_price_2025_try",
+                "gross_margin_pct",
+                "discount_to_estimated_cost_pct",
+                "final_similarity_score",
+            ]
+        ].copy()
+        table.columns = [
+            "Tender ID",
+            "Year",
+            "Product",
+            "Group",
+            "Region",
+            "Procedure",
+            "Winning Unit Price",
+            "Adj. Unit Price 2025",
+            "Gross Margin %",
+            "Discount %",
+            "Similarity",
+        ]
+        st.dataframe(
+            table,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Winning Unit Price": st.column_config.NumberColumn(format="%.2f TL"),
+                "Adj. Unit Price 2025": st.column_config.NumberColumn(format="%.2f TL"),
+                "Gross Margin %": st.column_config.NumberColumn(format="%.2f"),
+                "Discount %": st.column_config.NumberColumn(format="%.2f"),
+                "Similarity": st.column_config.NumberColumn(format="%.3f"),
             },
-            title={
-                "text": "HISTORICAL FIT SCORE",
-                "font": {"size": 11, "color": "#8FA2BD", "family": "Inter"},
+        )
+
+with section_2:
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-kicker">Section 4</div>
+            <div class="section-title">Tender Attractiveness Score</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(
+            build_gauge(final_attractiveness_score),
+            config={"displayModeBar": False, "staticPlot": True},
+        )
+        st.markdown(
+            f"""
+            <div class="score-card">
+                <div class="score-value">{final_attractiveness_score:.0f}</div>
+                <div class="score-label">{final_label}</div>
+                <p class="metric-note">
+                    Components: similarity {similarity_component:.0f},
+                    margin {margin_component}, strategic fit {strategic_fit_component:.0f},
+                    competition {competition_component}, delivery {delivery_component}.
+                </p>
+                <span class="confidence">{confidence} Confidence</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+section_3, section_4, section_5 = st.columns(3, gap="medium")
+
+with section_3:
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-kicker">Section 2</div>
+            <div class="section-title">Historical Price Corridor</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        corridor_rows = pd.DataFrame(
+            [
+                ["Min", price_corridor["min"], nominal_reference["min"]],
+                ["P25", price_corridor["p25"], nominal_reference["p25"]],
+                ["Median", price_corridor["median"], nominal_reference["median"]],
+                ["P75", price_corridor["p75"], nominal_reference["p75"]],
+                ["Max", price_corridor["max"], nominal_reference["max"]],
+                ["Average", price_corridor["average"], nominal_reference["average"]],
+                ["Std. Dev.", price_corridor["std"], nominal_reference["std"]],
+            ],
+            columns=["Metric", "2025 TRY Benchmark", "Nominal Reference"],
+        )
+        st.dataframe(
+            corridor_rows,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "2025 TRY Benchmark": st.column_config.NumberColumn(format="%.2f TL"),
+                "Nominal Reference": st.column_config.NumberColumn(format="%.2f TL"),
             },
-            gauge={
-                "axis": {
-                    "range": [0, 100],
-                    "tickwidth": 0,
-                    "tickcolor": "rgba(0,0,0,0)",
-                    "tickfont": {"color": "rgba(0,0,0,0)", "size": 1},
-                },
-                "bar": {"color": "#2D7DD2", "thickness": 0.25},
-                "bgcolor": "rgba(255,255,255,0.06)",
-                "borderwidth": 0,
-                "steps": [
-                    {"range": [0, 35], "color": "rgba(231,111,81,0.12)"},
-                    {"range": [35, 65], "color": "rgba(244,162,97,0.13)"},
-                    {"range": [65, 100], "color": "rgba(57,197,138,0.11)"},
+        )
+        st.markdown("##### Price Recommendation")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    ["Conservative", scenario_prices["Conservative"]],
+                    ["Balanced", scenario_prices["Balanced"]],
+                    ["Aggressive", scenario_prices["Aggressive"]],
                 ],
-                "threshold": {
-                    "line": {"color": "#F4A261", "width": 3},
-                    "thickness": 0.8,
-                    "value": value,
-                },
+                columns=["Scenario", "Recommended Unit Price"],
+            ),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Recommended Unit Price": st.column_config.NumberColumn(format="%.2f TL")
             },
-            domain={"x": [0.08, 0.92], "y": [0.02, 0.98]},
         )
-    )
-    figure.update_layout(
-        height=285,
-        margin={"l": 16, "r": 16, "t": 28, "b": 8},
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"family": "Inter", "color": "#F3F7FC"},
-    )
-    return figure
 
+with section_4:
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-kicker">Section 3</div>
+            <div class="section-title">Margin Simulation</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    ["Conservative", scenario_prices["Conservative"], margins["Conservative"]],
+                    ["Balanced", scenario_prices["Balanced"], margins["Balanced"]],
+                    ["Aggressive", scenario_prices["Aggressive"], margins["Aggressive"]],
+                ],
+                columns=["Scenario", "Unit Price", "Margin %"],
+            ),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Unit Price": st.column_config.NumberColumn(format="%.2f TL"),
+                "Margin %": st.column_config.NumberColumn(format="%.2f"),
+            },
+        )
+        st.markdown("##### Historical Benchmark Margin")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    ["Average gross_margin_pct", margin_benchmark["average"]],
+                    ["Median gross_margin_pct", margin_benchmark["median"]],
+                    ["P25 gross_margin_pct", margin_benchmark["p25"]],
+                    ["P75 gross_margin_pct", margin_benchmark["p75"]],
+                ],
+                columns=["Metric", "Value"],
+            ),
+            hide_index=True,
+            width="stretch",
+            column_config={"Value": st.column_config.NumberColumn(format="%.2f")},
+        )
 
-# ---------------------------------------------------------------------------
-# Section 2: Analysis result dashboard
-# ---------------------------------------------------------------------------
-if st.session_state.analysis_ready:
-    result_col_1, result_col_2, result_col_3 = st.columns(
-        [1.4, 1.0, 1.0], gap="medium"
-    )
+with section_5:
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-kicker">Benchmark Detail</div>
+            <div class="section-title">Historical Discount Benchmark</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        metric_card(
+            "Average Discount",
+            format_pct(discount_benchmark["average"]),
+            "Top 10 similar won tenders",
+        )
+        st.write("")
+        metric_card(
+            "Median Discount",
+            format_pct(discount_benchmark["median"]),
+            "Discount to estimated cost",
+        )
+        st.write("")
+        metric_card(
+            "Estimated Contract Value",
+            format_try(scenario_prices["Balanced"] * quantity),
+            "Balanced price x quantity",
+        )
 
-    with result_col_1:
-        with st.container(border=True, height=445):
-            st.markdown(
-                f"""
-                <div class="section-kicker">Referans Veri</div>
-                <div class="section-title">Similar Completed Tenders</div>
-                <div class="tender-table-wrap">
-                    <table class="tender-table">
-                        <thead>
-                            <tr>
-                                <th>İhale No</th>
-                                <th>İhale Tarihi</th>
-                                <th>İhale / Hizmet Açıklaması</th>
-                                <th>Alıcı Kurum</th>
-                                <th>Alım Türü</th>
-                                <th>Usul</th>
-                                <th>Lokasyon</th>
-                                <th>Sözleşme Bedeli</th>
-                                <th>Yaklaşık Maliyet</th>
-                                <th>Sonuç</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {build_historical_tender_rows()}
-                        </tbody>
-                    </table>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    with result_col_2:
-        with st.container(border=True, height=445):
-            st.markdown(
-                f"""
-                <div class="section-kicker">Contract Benchmark</div>
-                <div class="section-title">Contract Value Corridor</div>
-                <div class="corridor-values">
-                    <div class="corridor-value">Alt Sınır<strong>{format_try(contract_corridor_low)}</strong></div>
-                    <div class="corridor-value">Ortalama<strong>{format_try(contract_corridor_mid)}</strong></div>
-                    <div class="corridor-value">Üst Sınır<strong>{format_try(contract_corridor_high)}</strong></div>
-                </div>
-                <div class="price-track-wrap">
-                    <div class="price-track"></div>
-                    <span class="track-marker marker-low"></span>
-                    <span class="track-marker marker-mid"></span>
-                    <span class="track-marker marker-high"></span>
-                </div>
-                <div class="insight-card">
-                    <span class="insight-label">Estimated Cost Benchmark</span>
-                    <span class="insight-value amber">{format_try(estimated_cost_benchmark)}</span>
-                </div>
-                <div class="insight-card">
-                    <span class="insight-label">Yaklaşık Maliyet Kapsamı</span>
-                    <span class="insight-value">%{estimated_cost_coverage:.0f}</span>
-                </div>
-                <div class="insight-card">
-                    <span class="insight-label">Sözleşme / Yaklaşık Maliyet Farkı</span>
-                    <span class="risk-badge">{f"%{contract_vs_estimated_gap:+.1f}" if contract_vs_estimated_gap is not None else "-"}</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    with result_col_3:
-        with st.container(border=True, height=445):
-            st.markdown(
-                """
-                <div class="section-kicker">Historical Fit</div>
-                <div class="section-title">Historical Fit Score</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.plotly_chart(
-                build_historical_fit_gauge(HISTORICAL_FIT_SCORE),
-                use_container_width=True,
-                config={"displayModeBar": False, "staticPlot": True},
-            )
-            st.markdown(
-                f"""
-                <div class="mini-card-grid">
-                    <div class="mini-card">
-                        <div class="mini-label">Unique Tenders</div>
-                        <div class="mini-value">{SUMMARY.get("unique_tender_count", len(HISTORICAL_TENDERS))}</div>
-                    </div>
-                    <div class="mini-card">
-                        <div class="mini-label">Contract Values</div>
-                        <div class="mini-value">{SUMMARY.get("records_with_contract_value", len(contract_values))}</div>
-                    </div>
-                    <div class="mini-card">
-                        <div class="mini-label">Selected Company</div>
-                        <div class="mini-value">{short_text(SELECTED_COMPANY.get("company"), 20)}</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    # -----------------------------------------------------------------------
-    # Section 3: Success metrics dashboard
-    # -----------------------------------------------------------------------
+with st.container(border=True):
     st.markdown(
         """
-        <div class="performance-wrap">
-            <div class="section-kicker">Backtesting Metrics</div>
-            <div class="section-title">Demo Readiness Indicators</div>
-        </div>
+        <div class="section-kicker">Section 5</div>
+        <div class="section-title">Business Explanation</div>
         """,
         unsafe_allow_html=True,
     )
-
-    metric_columns = st.columns(4, gap="medium")
-    metrics = [
-        (
-            "%71",
-            "Contract Value Corridor Coverage",
-            "completed tender benchmark",
-            "↑ 8.4 puan",
-        ),
-        (
-            "%82",
-            "Similar Completed Tender Retrieval",
-            "analyst review simulation",
-            "↑ 7.2 puan",
-        ),
-        (
-            "%68",
-            "Estimated Cost Benchmark Coverage",
-            "public EKAP field coverage",
-            "↑ 22 saat",
-        ),
-        (
-            "%64",
-            "Historical Fit Review Readiness",
-            "demo workflow metric",
-            "↑ 6.1 puan",
-        ),
-    ]
-
-    for column, (value, label, note, trend) in zip(metric_columns, metrics):
-        with column:
-            st.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-trend">{trend}</div>
-                    <div class="metric-number">{value}</div>
-                    <div class="metric-label">{label}</div>
-                    <div class="metric-note">{note}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown(
-        """
-        <div class="mvp-disclaimer">
-            <strong>MVP kapsam notu:</strong>
-            This public EKAP demo dataset uses completed tender records to
-            demonstrate tender memory, similar tender retrieval, contract value
-            corridors, estimated-cost benchmarking, and backtesting-style
-            workflow metrics. It does not model award likelihood or go/no-go
-            decisions.
-        </div>
-        """,
-        unsafe_allow_html=True,
+    explanation = (
+        f"{len(similar)} similar historical won tenders were found with {confidence.lower()} confidence. "
+        f"The inflation-adjusted historical median price is {format_try(scenario_prices['Balanced'])}. "
+        f"Based on the estimated unit cost of {format_try(estimated_unit_cost_try)}, the balanced scenario "
+        f"produces a margin of {format_pct(balanced_margin)}. The tender receives a Tender Attractiveness "
+        f"Score of {final_attractiveness_score:.0f}/100 and is classified as {final_label}."
     )
-
-else:
-    st.markdown(
-        """
-        <div class="empty-state">
-            <strong>Karar destek analizi için girdiler hazır.</strong>
-            Sözleşme bedeli koridoru ve benzer tamamlanmış ihale analizi için
-            “Analiz Et” butonunu kullanın.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<div class="explain-box">{explanation}</div>', unsafe_allow_html=True)

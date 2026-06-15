@@ -3,6 +3,7 @@ plotly
 requests
 beautifulsoup4
 pandas
+scikit-learn
 lxml
 python-dateutil
 cryptography

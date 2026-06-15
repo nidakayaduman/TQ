@@ -1,18 +1,52 @@
-# Tender Intelligence Platform
+# Tender Intelligence Decision Support
 
-Streamlit demo for a **Public Tender Intelligence** MVP.
+Streamlit MVP for pharmaceutical tender memory, historical price benchmarking,
+margin simulation, and tender attractiveness scoring.
 
-The demo uses completed public EKAP tender records to show:
+The app uses the synthetic Polifarma won-tender dataset:
 
-- tender memory
-- similar completed tender retrieval
-- Contract Value Corridor
-- Estimated Cost Benchmark
-- Historical Fit Score
-- backtesting-style workflow metrics
+- `data/polifarma_synthetic_tenders_2021_2025.csv`
 
-It does **not** model win probability, go/no-go decisions, or true unit price
-when quantity/unit are unavailable.
+## Purpose
+
+The platform answers:
+
+- What similar tenders have we won before?
+- What price range was historically successful?
+- What margin levels were historically achieved?
+- How attractive does this tender look based on historical patterns?
+
+## MVP Modules
+
+1. Similar Tender Retrieval Engine
+   - TF-IDF searchable tender text
+   - cosine similarity
+   - business-rule re-ranking
+   - top 10 historical won tenders
+
+2. Historical Price Benchmark Engine
+   - primary benchmark: `inflation_adjusted_unit_price_2025_try`
+   - nominal reference: `winning_unit_price_try`
+   - min, P25, median, P75, max, average, standard deviation
+   - conservative, balanced, and aggressive price scenarios
+
+3. Margin Simulation Engine
+   - user-entered estimated unit cost
+   - conservative, balanced, and aggressive margin scenarios
+   - historical gross-margin benchmark from the top 10 similar tenders
+
+4. Tender Attractiveness Scoring
+   - similarity score
+   - balanced-margin score
+   - historical strategic fit
+   - competition risk
+   - delivery risk
+
+## Important Data Assumption
+
+The dataset contains only historical won tenders. The MVP is therefore a
+historical benchmarking and decision-support tool, not an award-likelihood
+model or supervised tender-outcome classifier.
 
 ## Run
 
@@ -21,77 +55,26 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Final Demo Dataset
-
-The app reads:
-
-- `data/final_demo_company.json`
-
-Selected company:
-
-`S.S.RİZE 3 NOLU MOTORLU TAŞIYICILAR KOOP`
-
-Reason: highest usable single-company EKAP history in the corrected unique
-tender ranking from the completed-tender scan.
-
-Current final demo summary:
-
-- unique completed tenders: 12
-- records with contract value: 12
-- records with estimated cost: 3
-- unit price calculated: false
-
-See `FINAL_DEMO_POSITIONING.md` for business positioning.
-
-## Data Files
-
-Final app data:
-
-- `data/final_demo_company.json`
-
-EKAP traceability data:
-
-- `data/ekap_company_discovery.json`
-- `data/ekap_company_ranking_unique_tenders.json`
-- `data/ekap_company_tender_records.json`
-- `data/ekap_company_tender_records.csv`
-- `data/ekap_source_audit.json`
-
-Preserved KAP asset:
-
-- `data/company_tender_records.json`
-- `data/company_tender_records.csv`
-- `data/source_audit.json`
-
-## Scripts
-
-EKAP sidecar pipeline:
+If `streamlit` is not on your PATH:
 
 ```bash
-python scripts/export_ekap_dataset.py --max-completed-tenders 500
+python3 -m streamlit run app.py
 ```
 
-KAP pipeline:
+## Local Verification
+
+The current implementation was verified locally with:
 
 ```bash
-python scripts/export_dataset.py
+python3 -m py_compile app.py
+python3 -m streamlit run app.py --server.port 8501 --server.headless true
 ```
 
-The EKAP pipeline uses public completed-tender records with status
-`Sonuç İlanı Yayımlanmış`. Item rows are not counted as separate tenders in the
-corrected company ranking.
+Then the app was opened at `http://localhost:8501`, `Analiz Et` was clicked,
+and the required sections rendered:
 
-## Limitations
-
-This is a public EKAP demo dataset. It proves that the MVP can ingest completed
-public tender records, build tender memory, retrieve similar completed tenders,
-and benchmark contract values against estimated costs.
-
-It does not prove win probability, go/no-go performance, internal margin, or
-competitor behavior. Those require client-owned data:
-
-- won/lost tender history
-- quantity/unit
-- internal cost
-- margin
-- competitor offers
+- Top 10 Similar Historical Won Tenders
+- Historical Price Corridor
+- Margin Simulation
+- Tender Attractiveness Score
+- Business Explanation
