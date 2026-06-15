@@ -1,6 +1,8 @@
 """Tender Intelligence Platform - Streamlit presentation demo."""
 
+import json
 import time
+from pathlib import Path
 from statistics import mean
 
 import plotly.graph_objects as go
@@ -557,7 +559,7 @@ with st.sidebar:
         <div class="sidebar-brand">
             <div class="sidebar-mark">TI</div>
             <div class="sidebar-title">TENDER IQ</div>
-            <div class="sidebar-subtitle">AI Destekli İhale Karar Platformu</div>
+            <div class="sidebar-subtitle">Public Tender Intelligence Demo</div>
         </div>
         <div class="sidebar-nav">
             <div class="nav-item active">Karar Merkezi</div>
@@ -566,7 +568,7 @@ with st.sidebar:
             <div class="nav-item">Veri Kataloğu</div>
         </div>
         <div class="sidebar-footer">
-            <div class="partner-tag">Polifarma x EY</div>
+            <div class="partner-tag">PUBLIC EKAP DEMO</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -580,11 +582,11 @@ header_left, header_right = st.columns([5, 1])
 with header_left:
     st.markdown(
         """
-        <div class="eyebrow">Commercial Excellence / Tender Analytics</div>
+        <div class="eyebrow">Public Tender Intelligence Demo</div>
         <h1 class="page-title">Tender Intelligence Platform</h1>
         <p class="page-subtitle">
-            Geçmiş ihale verilerini ticari önceliklerle birleştiren AI destekli
-            fiyatlandırma ve ihale değerlendirme karar merkezi.
+            Kamuya açık tamamlanmış EKAP ihale kayıtlarıyla ihale hafızası,
+            benzer ihale erişimi ve sözleşme bedeli kıyaslaması demosu.
         </p>
         """,
         unsafe_allow_html=True,
@@ -594,7 +596,7 @@ with header_right:
         """
         <div class="live-pill">
             <span class="live-dot"></span>
-            MODEL AKTİF
+            DEMO AKTİF
         </div>
         """,
         unsafe_allow_html=True,
@@ -613,29 +615,34 @@ with st.container(border=True):
         unsafe_allow_html=True,
     )
 
-    input_columns = st.columns([1.45, 1.05, 1.0, 1.0, 1.2, 0.85], gap="small")
+    input_columns = st.columns([1.7, 1.05, 1.0, 1.0, 1.0, 0.85], gap="small")
     with input_columns[0]:
-        product_name = st.text_input("Ürün Adı", value="%0.9 NaCl 500ml")
+        tender_description = st.text_input(
+            "İhale / Hizmet Açıklaması",
+            value="Yaş çay nakliye hizmet alımı",
+        )
     with input_columns[1]:
-        lot_size = st.number_input(
-            "Lot Miktarı",
-            min_value=1_000,
-            max_value=10_000_000,
-            value=1_200_000,
-            step=50_000,
+        expected_contract_value = st.number_input(
+            "Beklenen Sözleşme Bedeli",
+            min_value=100_000,
+            max_value=100_000_000,
+            value=8_000_000,
+            step=100_000,
             format="%d",
         )
     with input_columns[2]:
         region = st.selectbox(
             "Bölge",
-            ["Marmara", "İç Anadolu", "Ege", "Akdeniz", "Karadeniz"],
+            ["RİZE", "Karadeniz", "Marmara", "İç Anadolu", "Ege", "Akdeniz"],
         )
     with input_columns[3]:
-        delivery = st.selectbox(
-            "Teslimat Süresi", ["3 ay", "6 ay", "12 ay"], index=1
+        procurement_type = st.selectbox(
+            "Alım Türü", ["Hizmet", "Mal", "Yapım"], index=0
         )
     with input_columns[4]:
-        competitor_count = st.slider("Rakip Sayısı Tahmini", 1, 8, 4)
+        procedure_type = st.selectbox(
+            "Usul", ["4734 / 3-g", "Açık İhale", "Pazarlık"], index=0
+        )
     with input_columns[5]:
         analyze_clicked = st.button(
             "Analiz Et", type="primary", use_container_width=True
@@ -650,91 +657,172 @@ if analyze_clicked:
     st.session_state.analysis_ready = True
 
 
-# Dummy won-tender history and year-based inflation adjustment assumptions.
-INFLATION_FACTORS = {2024: 1.28, 2025: 1.12}
-HISTORICAL_TENDERS = [
-    {
-        "tender_no": "IH-2025-184",
-        "year": 2025,
-        "product": "%0.9 NaCl 500ml",
-        "region": "Marmara",
-        "lot": "1.15 mn",
-        "winning_unit_price": 10.72,
-        "gross_margin": 15.2,
-    },
-    {
-        "tender_no": "IH-2025-141",
-        "year": 2025,
-        "product": "%0.9 NaCl 500ml",
-        "region": "Ege",
-        "lot": "980 bin",
-        "winning_unit_price": 10.91,
-        "gross_margin": 14.6,
-    },
-    {
-        "tender_no": "IH-2024-297",
-        "year": 2024,
-        "product": "%0.9 NaCl 500ml",
-        "region": "İç Anadolu",
-        "lot": "1.30 mn",
-        "winning_unit_price": 10.58,
-        "gross_margin": 13.8,
-    },
-    {
-        "tender_no": "IH-2024-233",
-        "year": 2024,
-        "product": "%0.9 NaCl 1000ml",
-        "region": "Marmara",
-        "lot": "760 bin",
-        "winning_unit_price": 11.22,
-        "gross_margin": 16.1,
-    },
-    {
-        "tender_no": "IH-2024-176",
-        "year": 2024,
-        "product": "%0.9 NaCl 500ml",
-        "region": "Akdeniz",
-        "lot": "1.08 mn",
-        "winning_unit_price": 10.66,
-        "gross_margin": 14.1,
-    },
+# Public EKAP demo dataset.
+ROOT = Path(__file__).resolve().parent
+FINAL_DEMO_DATASET = ROOT / "data" / "final_demo_company.json"
+FALLBACK_EKAP_DATASET = ROOT / "data" / "ekap_company_tender_records.json"
+
+
+@st.cache_data
+def load_demo_dataset() -> dict:
+    """Load the final public EKAP demo dataset."""
+    dataset_path = FINAL_DEMO_DATASET if FINAL_DEMO_DATASET.exists() else FALLBACK_EKAP_DATASET
+    with dataset_path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if "records" in payload and "summary" in payload:
+        return payload
+
+    records = [
+        {
+            "tender_id": record.get("tender_id"),
+            "tender_name": record.get("tender_name"),
+            "buyer_institution": record.get("buyer_institution"),
+            "procurement_type": record.get("procurement_type"),
+            "procedure_type": record.get("procedure_type"),
+            "location": record.get("location"),
+            "tender_date": record.get("tender_date"),
+            "winning_company": record.get("winning_company"),
+            "contract_value_try": record.get("contract_value_try"),
+            "estimated_cost_try": record.get("estimated_cost_try"),
+            "contract_date": record.get("contract_date"),
+            "item_description": record.get("item_name") or record.get("tender_name"),
+            "source_url": record.get("source_url"),
+            "extraction_confidence": record.get("extraction_confidence"),
+        }
+        for record in payload.get("records", [])
+    ]
+    contract_values = [
+        record["contract_value_try"]
+        for record in records
+        if record.get("contract_value_try") is not None
+    ]
+    estimated_costs = [
+        record["estimated_cost_try"]
+        for record in records
+        if record.get("estimated_cost_try") not in (None, 0)
+    ]
+    return {
+        "dataset_type": "public_ekap_demo_dataset",
+        "positioning": "Public Tender Intelligence Demo",
+        "selected_company": payload.get("selected_company", {}),
+        "records": records,
+        "summary": {
+            "record_count": len(records),
+            "unique_tender_count": len({record.get("tender_id") for record in records}),
+            "records_with_contract_value": len(contract_values),
+            "records_with_estimated_cost": len(estimated_costs),
+            "contract_value_min_try": min(contract_values) if contract_values else None,
+            "contract_value_avg_try": mean(contract_values) if contract_values else None,
+            "contract_value_max_try": max(contract_values) if contract_values else None,
+            "estimated_cost_avg_try": mean(estimated_costs) if estimated_costs else None,
+        },
+    }
+
+
+def format_try(value) -> str:
+    """Format TRY values without implying unit price."""
+    if value is None:
+        return "-"
+    return f"{value:,.0f} TRY".replace(",", ".")
+
+
+def short_text(value, max_length: int = 58) -> str:
+    """Trim long public tender labels for compact dashboard tables."""
+    if not value:
+        return "-"
+    return value if len(value) <= max_length else f"{value[: max_length - 1]}..."
+
+
+DEMO_DATASET = load_demo_dataset()
+SELECTED_COMPANY = DEMO_DATASET.get("selected_company") or {}
+HISTORICAL_TENDERS = sorted(
+    DEMO_DATASET.get("records", []),
+    key=lambda record: record.get("tender_date") or "",
+    reverse=True,
+)
+SUMMARY = DEMO_DATASET.get("summary", {})
+
+contract_values = [
+    record["contract_value_try"]
+    for record in HISTORICAL_TENDERS
+    if record.get("contract_value_try") is not None
+]
+estimated_costs = [
+    record["estimated_cost_try"]
+    for record in HISTORICAL_TENDERS
+    if record.get("estimated_cost_try") not in (None, 0)
 ]
 
-for tender in HISTORICAL_TENDERS:
-    tender["inflation_factor"] = INFLATION_FACTORS[tender["year"]]
-    tender["adjusted_winning_price"] = (
-        tender["winning_unit_price"] * tender["inflation_factor"]
-    )
+contract_corridor_low = min(contract_values) if contract_values else None
+contract_corridor_mid = mean(contract_values) if contract_values else None
+contract_corridor_high = max(contract_values) if contract_values else None
+estimated_cost_benchmark = mean(estimated_costs) if estimated_costs else None
+estimated_cost_coverage = (
+    len(estimated_costs) / len(HISTORICAL_TENDERS) * 100 if HISTORICAL_TENDERS else 0
+)
+contract_vs_estimated_gap = (
+    ((contract_corridor_mid / estimated_cost_benchmark) - 1) * 100
+    if contract_corridor_mid and estimated_cost_benchmark
+    else None
+)
 
-adjusted_prices = [
-    tender["adjusted_winning_price"] for tender in HISTORICAL_TENDERS
-]
-recommended_price = mean(adjusted_prices)
-lower_price = recommended_price * 0.96
-upper_price = recommended_price * 1.04
+
+def similarity_score(query: str, record: dict) -> int:
+    """Simple token overlap score for demo retrieval behavior."""
+    query_terms = {term for term in query.casefold().split() if len(term) > 2}
+    haystack = " ".join(
+        str(record.get(field) or "")
+        for field in ("tender_name", "item_description", "buyer_institution", "location")
+    ).casefold()
+    if not query_terms:
+        return 0
+    return sum(1 for term in query_terms if term in haystack)
+
+
+def similar_completed_tenders(query: str) -> list[dict]:
+    """Rank completed EKAP tenders by lightweight text similarity."""
+    return sorted(
+        HISTORICAL_TENDERS,
+        key=lambda record: (
+            similarity_score(query, record),
+            record.get("contract_value_try") or 0,
+        ),
+        reverse=True,
+    )[:8]
+
+
+SIMILAR_TENDERS = similar_completed_tenders(tender_description)
+HISTORICAL_FIT_SCORE = min(
+    95,
+    45
+    + (len(SIMILAR_TENDERS) * 3)
+    + int(estimated_cost_coverage / 4)
+    + int((SUMMARY.get("unique_tender_count") or 0) * 1.2),
+)
 
 
 def build_historical_tender_rows() -> str:
-    """Render historical won tenders with nominal and adjusted prices."""
+    """Render similar completed public EKAP tenders."""
     return "".join(
         (
-            f'<tr><td>{tender["tender_no"]}</td>'
-            f'<td>{tender["year"]}</td>'
-            f'<td>{tender["product"]}</td>'
-            f'<td>{tender["region"]}</td>'
-            f'<td>{tender["lot"]}</td>'
-            f'<td>{tender["winning_unit_price"]:.2f} TL</td>'
-            f'<td>{tender["inflation_factor"]:.2f}x</td>'
-            f'<td>{tender["adjusted_winning_price"]:.2f} TL</td>'
-            f'<td>%{tender["gross_margin"]:.1f}</td>'
-            '<td><span class="win-badge">Kazandı</span></td></tr>'
+            f'<tr><td>{record.get("tender_id")}</td>'
+            f'<td>{record.get("tender_date") or "-"}</td>'
+            f'<td>{short_text(record.get("tender_name"))}</td>'
+            f'<td>{short_text(record.get("buyer_institution"), 44)}</td>'
+            f'<td>{record.get("procurement_type") or "-"}</td>'
+            f'<td>{record.get("procedure_type") or "-"}</td>'
+            f'<td>{record.get("location") or "-"}</td>'
+            f'<td>{format_try(record.get("contract_value_try"))}</td>'
+            f'<td>{format_try(record.get("estimated_cost_try"))}</td>'
+            '<td><span class="win-badge">Tamamlandı</span></td></tr>'
         )
-        for tender in HISTORICAL_TENDERS
+        for record in SIMILAR_TENDERS
     )
 
 
 def build_historical_fit_gauge(value: int) -> go.Figure:
-    """Create a gauge representing similarity to historical won tenders."""
+    """Create a gauge representing fit to completed public EKAP tenders."""
     figure = go.Figure(
         go.Indicator(
             mode="gauge+number",
@@ -794,20 +882,20 @@ if st.session_state.analysis_ready:
             st.markdown(
                 f"""
                 <div class="section-kicker">Referans Veri</div>
-                <div class="section-title">Benzer Geçmiş İhaleler</div>
+                <div class="section-title">Similar Completed Tenders</div>
                 <div class="tender-table-wrap">
                     <table class="tender-table">
                         <thead>
                             <tr>
                                 <th>İhale No</th>
-                                <th>Yıl</th>
-                                <th>Ürün</th>
-                                <th>Bölge</th>
-                                <th>Lot</th>
-                                <th>Nominal Fiyat</th>
-                                <th>Enflasyon K.</th>
-                                <th>Düzeltilmiş Fiyat</th>
-                                <th>Brüt Marj</th>
+                                <th>İhale Tarihi</th>
+                                <th>İhale / Hizmet Açıklaması</th>
+                                <th>Alıcı Kurum</th>
+                                <th>Alım Türü</th>
+                                <th>Usul</th>
+                                <th>Lokasyon</th>
+                                <th>Sözleşme Bedeli</th>
+                                <th>Yaklaşık Maliyet</th>
                                 <th>Sonuç</th>
                             </tr>
                         </thead>
@@ -824,12 +912,12 @@ if st.session_state.analysis_ready:
         with st.container(border=True, height=445):
             st.markdown(
                 f"""
-                <div class="section-kicker">Fiyat Optimizasyonu</div>
-                <div class="section-title">Enflasyona Göre Fiyat Koridoru</div>
+                <div class="section-kicker">Contract Benchmark</div>
+                <div class="section-title">Contract Value Corridor</div>
                 <div class="corridor-values">
-                    <div class="corridor-value">Alt Sınır<strong>{lower_price:.2f} TL</strong></div>
-                    <div class="corridor-value">Önerilen<strong>{recommended_price:.2f} TL</strong></div>
-                    <div class="corridor-value">Üst Sınır<strong>{upper_price:.2f} TL</strong></div>
+                    <div class="corridor-value">Alt Sınır<strong>{format_try(contract_corridor_low)}</strong></div>
+                    <div class="corridor-value">Ortalama<strong>{format_try(contract_corridor_mid)}</strong></div>
+                    <div class="corridor-value">Üst Sınır<strong>{format_try(contract_corridor_high)}</strong></div>
                 </div>
                 <div class="price-track-wrap">
                     <div class="price-track"></div>
@@ -838,16 +926,16 @@ if st.session_state.analysis_ready:
                     <span class="track-marker marker-high"></span>
                 </div>
                 <div class="insight-card">
-                    <span class="insight-label">Baz Alınan Fiyat</span>
-                    <span class="insight-value amber">Düzeltilmiş</span>
+                    <span class="insight-label">Estimated Cost Benchmark</span>
+                    <span class="insight-value amber">{format_try(estimated_cost_benchmark)}</span>
                 </div>
                 <div class="insight-card">
-                    <span class="insight-label">Ortalama Enflasyon Katsayısı</span>
-                    <span class="insight-value">{mean(INFLATION_FACTORS.values()):.2f}x</span>
+                    <span class="insight-label">Yaklaşık Maliyet Kapsamı</span>
+                    <span class="insight-value">%{estimated_cost_coverage:.0f}</span>
                 </div>
                 <div class="insight-card">
-                    <span class="insight-label">Risk Sınıfı</span>
-                    <span class="risk-badge">Orta Risk</span>
+                    <span class="insight-label">Sözleşme / Yaklaşık Maliyet Farkı</span>
+                    <span class="risk-badge">{f"%{contract_vs_estimated_gap:+.1f}" if contract_vs_estimated_gap is not None else "-"}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -857,30 +945,30 @@ if st.session_state.analysis_ready:
         with st.container(border=True, height=445):
             st.markdown(
                 """
-                <div class="section-kicker">Benzerlik Analizi</div>
-                <div class="section-title">Geçmiş Kazanım Benzerliği</div>
+                <div class="section-kicker">Historical Fit</div>
+                <div class="section-title">Historical Fit Score</div>
                 """,
                 unsafe_allow_html=True,
             )
             st.plotly_chart(
-                build_historical_fit_gauge(87),
+                build_historical_fit_gauge(HISTORICAL_FIT_SCORE),
                 use_container_width=True,
                 config={"displayModeBar": False, "staticPlot": True},
             )
             st.markdown(
-                """
+                f"""
                 <div class="mini-card-grid">
                     <div class="mini-card">
-                        <div class="mini-label">Referans İhale</div>
-                        <div class="mini-value">5</div>
+                        <div class="mini-label">Unique Tenders</div>
+                        <div class="mini-value">{SUMMARY.get("unique_tender_count", len(HISTORICAL_TENDERS))}</div>
                     </div>
                     <div class="mini-card">
-                        <div class="mini-label">Veri Kalitesi</div>
-                        <div class="mini-value">Yüksek</div>
+                        <div class="mini-label">Contract Values</div>
+                        <div class="mini-value">{SUMMARY.get("records_with_contract_value", len(contract_values))}</div>
                     </div>
                     <div class="mini-card">
-                        <div class="mini-label">Senaryo Güveni</div>
-                        <div class="mini-value">Orta</div>
+                        <div class="mini-label">Selected Company</div>
+                        <div class="mini-value">{short_text(SELECTED_COMPANY.get("company"), 20)}</div>
                     </div>
                 </div>
                 """,
@@ -893,8 +981,8 @@ if st.session_state.analysis_ready:
     st.markdown(
         """
         <div class="performance-wrap">
-            <div class="section-kicker">Backtesting & Pilot Sonuçları</div>
-            <div class="section-title">Model Performans Göstergeleri</div>
+            <div class="section-kicker">Backtesting Metrics</div>
+            <div class="section-title">Demo Readiness Indicators</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -904,26 +992,26 @@ if st.session_state.analysis_ready:
     metrics = [
         (
             "%71",
-            "Inflation Adjusted Price Corridor Coverage",
-            "son 20 ihale backtesting",
+            "Contract Value Corridor Coverage",
+            "completed tender benchmark",
             "↑ 8.4 puan",
         ),
         (
             "%82",
-            "Similar Tender Expert Approval",
-            "uzman değerlendirmesi",
+            "Similar Completed Tender Retrieval",
+            "analyst review simulation",
             "↑ 7.2 puan",
         ),
         (
             "%68",
-            "Evaluation Time Reduction",
-            "manuel vs. sistem",
+            "Estimated Cost Benchmark Coverage",
+            "public EKAP field coverage",
             "↑ 22 saat",
         ),
         (
             "%64",
-            "Recommendation Adoption Rate",
-            "pilot kullanım",
+            "Historical Fit Review Readiness",
+            "demo workflow metric",
             "↑ 6.1 puan",
         ),
     ]
@@ -946,9 +1034,11 @@ if st.session_state.analysis_ready:
         """
         <div class="mvp-disclaimer">
             <strong>MVP kapsam notu:</strong>
-            This MVP does not predict win probability. It uses historical won
-            tenders to support pricing and tender evaluation. True win
-            probability requires both won and lost tender data.
+            This public EKAP demo dataset uses completed tender records to
+            demonstrate tender memory, similar tender retrieval, contract value
+            corridors, estimated-cost benchmarking, and backtesting-style
+            workflow metrics. It does not model award likelihood or go/no-go
+            decisions.
         </div>
         """,
         unsafe_allow_html=True,
@@ -959,7 +1049,7 @@ else:
         """
         <div class="empty-state">
             <strong>Karar destek analizi için girdiler hazır.</strong>
-            Enflasyona göre fiyat koridoru ve geçmiş kazanılmış ihale benzerliği için
+            Sözleşme bedeli koridoru ve benzer tamamlanmış ihale analizi için
             “Analiz Et” butonunu kullanın.
         </div>
         """,

@@ -1,0 +1,11 @@
+__pycache__/
+.pycache/
+*.py[cod]
+.DS_Store
+.streamlit/secrets.toml
+.env
+data/demo_company_assessment.json
+data/ekap_company_ranking.json
+data/ekap_normalized_records.json
+data/ekap_poc_records.json
+data/ekap_scrape_results.json

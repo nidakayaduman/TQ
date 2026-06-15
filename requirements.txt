@@ -1,2 +1,8 @@
 streamlit
 plotly
+requests
+beautifulsoup4
+pandas
+lxml
+python-dateutil
+cryptography
