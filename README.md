@@ -1,7 +1,8 @@
 # Tender Intelligence Platform
 
-Pharmaceutical tender pricing and win-probability decision support demo built
-with Streamlit.
+Pharmaceutical tender pricing and historical-fit decision support demo built
+with Streamlit. The MVP uses won-tender history and does not predict win
+probability.
 
 ## Run locally
 

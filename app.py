@@ -1,6 +1,7 @@
 """Tender Intelligence Platform - Streamlit presentation demo."""
 
 import time
+from statistics import mean
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -517,6 +518,21 @@ st.markdown(
             margin-bottom: 0.35rem;
         }
 
+        .mvp-disclaimer {
+            margin-top: 1rem;
+            padding: 0.8rem 0.95rem;
+            border: 1px solid rgba(105, 167, 232, 0.2);
+            border-radius: 10px;
+            background: rgba(45, 125, 210, 0.06);
+            color: #9EB2CC;
+            font-size: 0.68rem;
+            line-height: 1.5;
+        }
+
+        .mvp-disclaimer strong {
+            color: #C9D8EA;
+        }
+
         [data-testid="stSpinner"] {
             color: var(--amber);
         }
@@ -568,7 +584,7 @@ with header_left:
         <h1 class="page-title">Tender Intelligence Platform</h1>
         <p class="page-subtitle">
             Geçmiş ihale verilerini ticari önceliklerle birleştiren AI destekli
-            fiyatlandırma ve kazanma olasılığı karar merkezi.
+            fiyatlandırma ve ihale değerlendirme karar merkezi.
         </p>
         """,
         unsafe_allow_html=True,
@@ -634,8 +650,91 @@ if analyze_clicked:
     st.session_state.analysis_ready = True
 
 
-def build_probability_gauge(value: int) -> go.Figure:
-    """Create the signature win-probability gauge."""
+# Dummy won-tender history and year-based inflation adjustment assumptions.
+INFLATION_FACTORS = {2024: 1.28, 2025: 1.12}
+HISTORICAL_TENDERS = [
+    {
+        "tender_no": "IH-2025-184",
+        "year": 2025,
+        "product": "%0.9 NaCl 500ml",
+        "region": "Marmara",
+        "lot": "1.15 mn",
+        "winning_unit_price": 10.72,
+        "gross_margin": 15.2,
+    },
+    {
+        "tender_no": "IH-2025-141",
+        "year": 2025,
+        "product": "%0.9 NaCl 500ml",
+        "region": "Ege",
+        "lot": "980 bin",
+        "winning_unit_price": 10.91,
+        "gross_margin": 14.6,
+    },
+    {
+        "tender_no": "IH-2024-297",
+        "year": 2024,
+        "product": "%0.9 NaCl 500ml",
+        "region": "İç Anadolu",
+        "lot": "1.30 mn",
+        "winning_unit_price": 10.58,
+        "gross_margin": 13.8,
+    },
+    {
+        "tender_no": "IH-2024-233",
+        "year": 2024,
+        "product": "%0.9 NaCl 1000ml",
+        "region": "Marmara",
+        "lot": "760 bin",
+        "winning_unit_price": 11.22,
+        "gross_margin": 16.1,
+    },
+    {
+        "tender_no": "IH-2024-176",
+        "year": 2024,
+        "product": "%0.9 NaCl 500ml",
+        "region": "Akdeniz",
+        "lot": "1.08 mn",
+        "winning_unit_price": 10.66,
+        "gross_margin": 14.1,
+    },
+]
+
+for tender in HISTORICAL_TENDERS:
+    tender["inflation_factor"] = INFLATION_FACTORS[tender["year"]]
+    tender["adjusted_winning_price"] = (
+        tender["winning_unit_price"] * tender["inflation_factor"]
+    )
+
+adjusted_prices = [
+    tender["adjusted_winning_price"] for tender in HISTORICAL_TENDERS
+]
+recommended_price = mean(adjusted_prices)
+lower_price = recommended_price * 0.96
+upper_price = recommended_price * 1.04
+
+
+def build_historical_tender_rows() -> str:
+    """Render historical won tenders with nominal and adjusted prices."""
+    return "".join(
+        (
+            f'<tr><td>{tender["tender_no"]}</td>'
+            f'<td>{tender["year"]}</td>'
+            f'<td>{tender["product"]}</td>'
+            f'<td>{tender["region"]}</td>'
+            f'<td>{tender["lot"]}</td>'
+            f'<td>{tender["winning_unit_price"]:.2f} TL</td>'
+            f'<td>{tender["inflation_factor"]:.2f}x</td>'
+            f'<td>{tender["adjusted_winning_price"]:.2f} TL</td>'
+            f'<td>%{tender["gross_margin"]:.1f}</td>'
+            '<td><span class="win-badge">Kazandı</span></td></tr>'
+        )
+        for tender in HISTORICAL_TENDERS
+    )
+
+
+def build_historical_fit_gauge(value: int) -> go.Figure:
+    """Create a gauge representing similarity to historical won tenders."""
     figure = go.Figure(
         go.Indicator(
             mode="gauge+number",
@@ -645,7 +744,7 @@ def build_probability_gauge(value: int) -> go.Figure:
                 "font": {"size": 50, "color": "#F3F7FC", "family": "Inter"},
             },
             title={
-                "text": "WIN PROBABILITY",
+                "text": "HISTORICAL FIT SCORE",
                 "font": {"size": 11, "color": "#8FA2BD", "family": "Inter"},
             },
             gauge={
@@ -693,7 +792,7 @@ if st.session_state.analysis_ready:
     with result_col_1:
         with st.container(border=True, height=445):
             st.markdown(
-                """
+                f"""
                 <div class="section-kicker">Referans Veri</div>
                 <div class="section-title">Benzer Geçmiş İhaleler</div>
                 <div class="tender-table-wrap">
@@ -701,60 +800,19 @@ if st.session_state.analysis_ready:
                         <thead>
                             <tr>
                                 <th>İhale No</th>
+                                <th>Yıl</th>
                                 <th>Ürün</th>
                                 <th>Bölge</th>
                                 <th>Lot</th>
-                                <th>Kazanma Fiyatı</th>
+                                <th>Nominal Fiyat</th>
+                                <th>Enflasyon K.</th>
+                                <th>Düzeltilmiş Fiyat</th>
                                 <th>Brüt Marj</th>
                                 <th>Sonuç</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td>IH-2025-184</td>
-                                <td>%0.9 NaCl 500ml</td>
-                                <td>Marmara</td>
-                                <td>1.15 mn</td>
-                                <td>10.72 TL</td>
-                                <td>%15.2</td>
-                                <td><span class="win-badge">Kazandı</span></td>
-                            </tr>
-                            <tr>
-                                <td>IH-2025-141</td>
-                                <td>%0.9 NaCl 500ml</td>
-                                <td>Ege</td>
-                                <td>980 bin</td>
-                                <td>10.91 TL</td>
-                                <td>%14.6</td>
-                                <td><span class="win-badge">Kazandı</span></td>
-                            </tr>
-                            <tr>
-                                <td>IH-2024-297</td>
-                                <td>%0.9 NaCl 500ml</td>
-                                <td>İç Anadolu</td>
-                                <td>1.30 mn</td>
-                                <td>10.58 TL</td>
-                                <td>%13.8</td>
-                                <td><span class="win-badge">Kazandı</span></td>
-                            </tr>
-                            <tr>
-                                <td>IH-2024-233</td>
-                                <td>%0.9 NaCl 1000ml</td>
-                                <td>Marmara</td>
-                                <td>760 bin</td>
-                                <td>11.22 TL</td>
-                                <td>%16.1</td>
-                                <td><span class="win-badge">Kazandı</span></td>
-                            </tr>
-                            <tr>
-                                <td>IH-2024-176</td>
-                                <td>%0.9 NaCl 500ml</td>
-                                <td>Akdeniz</td>
-                                <td>1.08 mn</td>
-                                <td>10.66 TL</td>
-                                <td>%14.1</td>
-                                <td><span class="win-badge">Kazandı</span></td>
-                            </tr>
+                            {build_historical_tender_rows()}
                         </tbody>
                     </table>
                 </div>
@@ -765,13 +823,13 @@ if st.session_state.analysis_ready:
     with result_col_2:
         with st.container(border=True, height=445):
             st.markdown(
-                """
+                f"""
                 <div class="section-kicker">Fiyat Optimizasyonu</div>
-                <div class="section-title">Fiyat Koridoru Önerisi</div>
+                <div class="section-title">Enflasyona Göre Fiyat Koridoru</div>
                 <div class="corridor-values">
-                    <div class="corridor-value">Alt Sınır<strong>10.20 TL</strong></div>
-                    <div class="corridor-value">Önerilen<strong>10.85 TL</strong></div>
-                    <div class="corridor-value">Üst Sınır<strong>11.40 TL</strong></div>
+                    <div class="corridor-value">Alt Sınır<strong>{lower_price:.2f} TL</strong></div>
+                    <div class="corridor-value">Önerilen<strong>{recommended_price:.2f} TL</strong></div>
+                    <div class="corridor-value">Üst Sınır<strong>{upper_price:.2f} TL</strong></div>
                 </div>
                 <div class="price-track-wrap">
                     <div class="price-track"></div>
@@ -780,12 +838,12 @@ if st.session_state.analysis_ready:
                     <span class="track-marker marker-high"></span>
                 </div>
                 <div class="insight-card">
-                    <span class="insight-label">Beklenen Brüt Marj</span>
-                    <span class="insight-value amber">%14</span>
+                    <span class="insight-label">Baz Alınan Fiyat</span>
+                    <span class="insight-value amber">Düzeltilmiş</span>
                 </div>
                 <div class="insight-card">
-                    <span class="insight-label">Beklenen Katkı Karı</span>
-                    <span class="insight-value">1.82 mn TL</span>
+                    <span class="insight-label">Ortalama Enflasyon Katsayısı</span>
+                    <span class="insight-value">{mean(INFLATION_FACTORS.values()):.2f}x</span>
                 </div>
                 <div class="insight-card">
                     <span class="insight-label">Risk Sınıfı</span>
@@ -799,13 +857,13 @@ if st.session_state.analysis_ready:
         with st.container(border=True, height=445):
             st.markdown(
                 """
-                <div class="section-kicker">Tahmin Modeli</div>
-                <div class="section-title">Kazanma Olasılığı</div>
+                <div class="section-kicker">Benzerlik Analizi</div>
+                <div class="section-title">Geçmiş Kazanım Benzerliği</div>
                 """,
                 unsafe_allow_html=True,
             )
             st.plotly_chart(
-                build_probability_gauge(58),
+                build_historical_fit_gauge(87),
                 use_container_width=True,
                 config={"displayModeBar": False, "staticPlot": True},
             )
@@ -813,8 +871,8 @@ if st.session_state.analysis_ready:
                 """
                 <div class="mini-card-grid">
                     <div class="mini-card">
-                        <div class="mini-label">Benzerlik Skoru</div>
-                        <div class="mini-value">87%</div>
+                        <div class="mini-label">Referans İhale</div>
+                        <div class="mini-value">5</div>
                     </div>
                     <div class="mini-card">
                         <div class="mini-label">Veri Kalitesi</div>
@@ -844,10 +902,30 @@ if st.session_state.analysis_ready:
 
     metric_columns = st.columns(4, gap="medium")
     metrics = [
-        ("%71", "Fiyat Koridoru İsabeti", "son 20 ihale backtesting", "↑ 8.4 puan"),
-        ("%64", "Öneri Benimseme Oranı", "pilot kullanım", "↑ 6.1 puan"),
-        ("%68", "Analiz Süresi Tasarrufu", "manuel vs. sistem", "↑ 22 saat"),
-        ("%79", "Marj Hedef Uyumu", "önerilen vs. gerçekleşen", "↑ 9.3 puan"),
+        (
+            "%71",
+            "Inflation Adjusted Price Corridor Coverage",
+            "son 20 ihale backtesting",
+            "↑ 8.4 puan",
+        ),
+        (
+            "%82",
+            "Similar Tender Expert Approval",
+            "uzman değerlendirmesi",
+            "↑ 7.2 puan",
+        ),
+        (
+            "%68",
+            "Evaluation Time Reduction",
+            "manuel vs. sistem",
+            "↑ 22 saat",
+        ),
+        (
+            "%64",
+            "Recommendation Adoption Rate",
+            "pilot kullanım",
+            "↑ 6.1 puan",
+        ),
     ]
 
     for column, (value, label, note, trend) in zip(metric_columns, metrics):
@@ -864,12 +942,24 @@ if st.session_state.analysis_ready:
                 unsafe_allow_html=True,
             )
 
+    st.markdown(
+        """
+        <div class="mvp-disclaimer">
+            <strong>MVP kapsam notu:</strong>
+            This MVP does not predict win probability. It uses historical won
+            tenders to support pricing and tender evaluation. True win
+            probability requires both won and lost tender data.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 else:
     st.markdown(
         """
         <div class="empty-state">
             <strong>Karar destek analizi için girdiler hazır.</strong>
-            Fiyat koridoru, benzer ihale referansları ve kazanma olasılığı için
+            Enflasyona göre fiyat koridoru ve geçmiş kazanılmış ihale benzerliği için
             “Analiz Et” butonunu kullanın.
         </div>
         """,
