@@ -1,80 +1,101 @@
-# Tender Intelligence Decision Support
+# İhale Karar Yardımcısı
 
-Streamlit MVP for pharmaceutical tender memory, historical price benchmarking,
-margin simulation, and tender attractiveness scoring.
+Streamlit tabanlı demo uygulama. Amaç, yeni bir ihale için geçmişte kazanılmış
+benzer ihalelere bakarak anlaşılır bir fiyat aralığı, marj görünümü ve ihale
+puanı vermektir.
 
-The app uses the synthetic Polifarma won-tender dataset:
+Uygulama X İlaç Şirketi için hazırlanmış sentetik demo verisini kullanır:
 
-- `data/polifarma_synthetic_tenders_2021_2025.csv`
+- `data/x_ilac_synthetic_tenders_2021_2025.csv`
 
-## Purpose
+Bu veri gerçek şirket ihale verisi değildir. Demo ve sunum amacıyla
+oluşturulmuş sentetik veridir.
 
-The platform answers:
+## Uygulama Ne Yapar?
 
-- What similar tenders have we won before?
-- What price range was historically successful?
-- What margin levels were historically achieved?
-- How attractive does this tender look based on historical patterns?
+- Benzer kazanılmış ihaleleri bulur.
+- Geçmiş fiyatları Mayıs 2026 seviyesine taşır.
+- Top-k benzer ihaleler, Linear Regression ve XGBoost ile model destekli fiyat aralığı gösterir.
+- Girilen maliyete göre marj hesaplar.
+- İhaleyi basit bir 0-100 puanla özetler.
 
-## MVP Modules
+## Veri Varsayımı
 
-1. Similar Tender Retrieval Engine
-   - TF-IDF searchable tender text
-   - cosine similarity
-   - business-rule re-ranking
-   - top 10 historical won tenders
+Veri sadece kazanılmış ihaleleri içerir. Kaybedilmiş ihale olmadığı için uygulama
+kazanma ihtimali hesaplamaz, sonuç tahmini yapmaz ve sınıflandırma modeli
+kullanmaz.
 
-2. Historical Price Benchmark Engine
-   - primary benchmark: `inflation_adjusted_unit_price_2025_try`
-   - nominal reference: `winning_unit_price_try`
-   - min, P25, median, P75, max, average, standard deviation
-   - conservative, balanced, and aggressive price scenarios
+## Fiyat Normalizasyonu
 
-3. Margin Simulation Engine
-   - user-entered estimated unit cost
-   - conservative, balanced, and aggressive margin scenarios
-   - historical gross-margin benchmark from the top 10 similar tenders
+Ana fiyat kıyaslaması artık `inflation_adjusted_unit_price_2026_try` alanını
+kullanır. Bu alan fiyatları Mayıs 2026 TL seviyesine taşır.
 
-4. Tender Attractiveness Scoring
-   - similarity score
-   - balanced-margin score
-   - historical strategic fit
-   - competition risk
-   - delivery risk
+Tam yıl 2026 enflasyonu henüz bilinmediği için 2026 yıl sonu tahmini
+kullanılmaz. Bunun yerine en güncel gerçekleşmiş CPI seviyesi olan Mayıs 2026
+kullanılır.
 
-## Important Data Assumption
+Kullanılan CPI katsayıları:
 
-The dataset contains only historical won tenders. The MVP is therefore a
-historical benchmarking and decision-support tool, not an award-likelihood
-model or supervised tender-outcome classifier.
+| Yıl | Mayıs 2026 katsayısı |
+| --- | --- |
+| 2021 | 5.9647 |
+| 2022 | 3.6309 |
+| 2023 | 2.2037 |
+| 2024 | 1.5263 |
+| 2025 | 1.1661 |
+| 2026 | 1.0000 |
 
-## Run
+Formüller:
+
+```text
+inflation_adjusted_unit_price_2026_try =
+winning_unit_price_try * cpi_factor_to_2026
+
+inflation_adjusted_contract_value_2026_try =
+contract_value_try * cpi_factor_to_2026
+```
+
+Eski 2025 normalize alanları izlenebilirlik için veri dosyasında korunur.
+
+## Model Destekli Fiyat Koridoru
+
+Uygulama yeni ihale için önce `overall_similarity_score` üretir ve en benzer
+50 kazanılmış ihaleyi seçer. Bu skor; metin benzerliği, ürün, ürün grubu, bölge,
+ihale usulü, miktar, teslim süresi ve tahmini rakip sayısını birlikte kullanır.
+
+Fiyat tahmini iki modelle desteklenir:
+
+- Linear Regression: açıklanabilir temel fiyat tahmini
+- XGBoost Regression: doğrusal olmayan ilişkilere duyarlı fiyat tahmini
+
+Modellerin hedef değişkeni:
+
+```text
+inflation_adjusted_unit_price_2026_try
+```
+
+Nihai düşük / orta / yüksek fiyat; top-k fiyat dağılımı, Linear Regression
+tahmini, XGBoost tahmini ve 5-fold backtest hata payları birleştirilerek
+hesaplanır. Bu hâlâ kazanma ihtimali modeli değildir; sadece kazanılmış ihale
+hafızasına dayalı fiyat benchmark ve tahmin desteğidir.
+
+## Başarı Metrikleri
+
+Uygulama model kontrolü için 5-fold backtest metriklerini gösterir:
+
+- MAE: Ortalama TL hata
+- MAPE: Ortalama yüzde hata
+- Coverage: Gerçek fiyatın model hata payı koridoruna düşme oranı
+
+## Çalıştırma
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-If `streamlit` is not on your PATH:
+Eğer `streamlit` komutu bulunmazsa:
 
 ```bash
 python3 -m streamlit run app.py
 ```
-
-## Local Verification
-
-The current implementation was verified locally with:
-
-```bash
-python3 -m py_compile app.py
-python3 -m streamlit run app.py --server.port 8501 --server.headless true
-```
-
-Then the app was opened at `http://localhost:8501`, `Analiz Et` was clicked,
-and the required sections rendered:
-
-- Top 10 Similar Historical Won Tenders
-- Historical Price Corridor
-- Margin Simulation
-- Tender Attractiveness Score
-- Business Explanation
