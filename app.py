@@ -34,7 +34,7 @@ REFERENCE_PRICE_FIELD = "winning_unit_price_try"
 SIMILAR_TENDER_COUNT = 50
 DISPLAY_TENDER_COUNT = 10
 PRICE_MODEL_VERSION = "2026-price-model-x-company-clean-v2"
-SUCCESS_PROFILE_VERSION = "success-profile-x-company-clean-v2"
+SUCCESS_PROFILE_VERSION = "success-profile-x-company-clean-v4-segment-clusters"
 SUCCESS_PROFILE_COUNT = 4
 MODEL_FEATURES = [
     "product_name",
@@ -65,6 +65,9 @@ PROFILE_NUMERIC_FEATURES = [
     PROFILE_PRICE_FIELD,
     PROFILE_MARGIN_FIELD,
 ]
+SUCCESS_CLUSTER_FEATURES = ["product_group", "quantity", PROFILE_PRICE_FIELD]
+SUCCESS_CLUSTER_CATEGORICAL_FEATURES = ["product_group"]
+SUCCESS_CLUSTER_NUMERIC_FEATURES = ["quantity", PROFILE_PRICE_FIELD]
 
 HISTORICAL_TEXT_FIELDS = [
     "tender_title",
@@ -680,6 +683,19 @@ def build_profile_preprocessor() -> ColumnTransformer:
     )
 
 
+def build_success_cluster_preprocessor() -> ColumnTransformer:
+    return ColumnTransformer(
+        transformers=[
+            (
+                "category",
+                OneHotEncoder(handle_unknown="ignore"),
+                SUCCESS_CLUSTER_CATEGORICAL_FEATURES,
+            ),
+            ("number", StandardScaler(), SUCCESS_CLUSTER_NUMERIC_FEATURES),
+        ]
+    )
+
+
 def build_profile_training_frame(df: pd.DataFrame) -> pd.DataFrame:
     frame = df[MODEL_FEATURES].copy()
     frame[PROFILE_PRICE_FIELD] = df[PRIMARY_PRICE_FIELD].astype(float)
@@ -698,6 +714,12 @@ def build_profile_query_frame(
     return pd.DataFrame([row])[PROFILE_FEATURES]
 
 
+def build_success_cluster_training_frame(df: pd.DataFrame) -> pd.DataFrame:
+    frame = df[["product_group", "quantity"]].copy()
+    frame[PROFILE_PRICE_FIELD] = df[PRIMARY_PRICE_FIELD].astype(float)
+    return frame[SUCCESS_CLUSTER_FEATURES]
+
+
 def volume_label(value: float, low: float, high: float) -> str:
     if value >= high:
         return "yüksek hacimli"
@@ -714,6 +736,14 @@ def margin_label(value: float) -> str:
     return "düşük kazançlı"
 
 
+def price_level_label(value: float, low: float, high: float) -> str:
+    if value >= high:
+        return "yüksek fiyatlı"
+    if value <= low:
+        return "düşük fiyatlı"
+    return "orta fiyatlı"
+
+
 def profile_mode(series: pd.Series) -> str:
     modes = series.dropna().mode()
     return str(modes.iloc[0]) if not modes.empty else "Çeşitli"
@@ -723,18 +753,23 @@ def build_cluster_profiles(df: pd.DataFrame, labels: np.ndarray) -> dict[int, di
     profiles: dict[int, dict[str, Any]] = {}
     quantity_low = float(df["quantity"].quantile(0.33))
     quantity_high = float(df["quantity"].quantile(0.67))
+    price_low = float(df[PRIMARY_PRICE_FIELD].quantile(0.33))
+    price_high = float(df[PRIMARY_PRICE_FIELD].quantile(0.67))
 
     working = df.copy()
     working["success_profile_cluster"] = labels
     for cluster_id, group in working.groupby("success_profile_cluster"):
         median_quantity = float(group["quantity"].median())
+        median_price = float(group[PRIMARY_PRICE_FIELD].median())
         median_margin = float(group["gross_margin_pct"].median())
         top_group = profile_mode(group["product_group"])
         top_region = profile_mode(group["region"])
         top_procedure = profile_mode(group["procedure_type"])
         name = (
-            f"{top_group} - {top_region} - "
-            f"{volume_label(median_quantity, quantity_low, quantity_high)} / {margin_label(median_margin)} profil"
+            f"{top_group} - "
+            f"{volume_label(median_quantity, quantity_low, quantity_high)} / "
+            f"{price_level_label(median_price, price_low, price_high)} / "
+            f"{margin_label(median_margin)} profil"
         )
         profiles[int(cluster_id)] = {
             "name": name,
@@ -743,7 +778,7 @@ def build_cluster_profiles(df: pd.DataFrame, labels: np.ndarray) -> dict[int, di
             "top_region": top_region,
             "top_procedure": top_procedure,
             "median_quantity": median_quantity,
-            "median_price": float(group[PRIMARY_PRICE_FIELD].median()),
+            "median_price": median_price,
             "median_margin": median_margin,
             "average_strategic_fit": float(group["strategic_fit_score"].mean()),
         }
@@ -759,24 +794,30 @@ def train_success_profile_models(
     _ = profile_version
     _ = data_mtime_ns
     profile_frame = build_profile_training_frame(df)
-    preprocessor = build_profile_preprocessor()
-    encoded = preprocessor.fit_transform(profile_frame)
+    one_class_preprocessor = build_profile_preprocessor()
+    one_class_encoded = one_class_preprocessor.fit_transform(profile_frame)
 
     one_class_model = IsolationForest(
         n_estimators=300,
         contamination=0.12,
         random_state=42,
     )
-    one_class_model.fit(encoded)
-    one_class_scores = one_class_model.decision_function(encoded)
+    one_class_model.fit(one_class_encoded)
+    one_class_scores = one_class_model.decision_function(one_class_encoded)
+
+    cluster_frame = build_success_cluster_training_frame(df)
+    cluster_preprocessor = build_success_cluster_preprocessor()
+    cluster_encoded = cluster_preprocessor.fit_transform(cluster_frame[SUCCESS_CLUSTER_FEATURES])
 
     cluster_model = KMeans(
         n_clusters=SUCCESS_PROFILE_COUNT,
         n_init=20,
         random_state=42,
     )
-    cluster_labels = cluster_model.fit_predict(encoded)
-    cluster_distances = cluster_model.transform(encoded)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        cluster_labels = cluster_model.fit_predict(cluster_encoded)
+        cluster_distances = cluster_model.transform(cluster_encoded)
     assigned_distances = cluster_distances[np.arange(len(cluster_labels)), cluster_labels]
     distance_by_cluster = {
         int(cluster_id): np.sort(assigned_distances[cluster_labels == cluster_id])
@@ -784,9 +825,10 @@ def train_success_profile_models(
     }
 
     return {
-        "preprocessor": preprocessor,
+        "one_class_preprocessor": one_class_preprocessor,
         "one_class_model": one_class_model,
         "one_class_scores": np.sort(one_class_scores),
+        "cluster_preprocessor": cluster_preprocessor,
         "cluster_model": cluster_model,
         "distance_by_cluster": distance_by_cluster,
         "cluster_profiles": build_cluster_profiles(df, cluster_labels),
@@ -1084,7 +1126,7 @@ def score_success_profiles(
     profile_models: dict[str, Any],
     query_frame: pd.DataFrame,
 ) -> dict[str, Any]:
-    encoded_query = profile_models["preprocessor"].transform(query_frame)
+    encoded_query = profile_models["one_class_preprocessor"].transform(query_frame)
 
     query_one_class_score = float(profile_models["one_class_model"].decision_function(encoded_query)[0])
     historical_scores = profile_models["one_class_scores"]
@@ -1101,7 +1143,11 @@ def score_success_profiles(
     else:
         one_class_label = "Geçmiş profile uzak"
 
-    cluster_distances = profile_models["cluster_model"].transform(encoded_query)[0]
+    cluster_query = query_frame[SUCCESS_CLUSTER_FEATURES].copy()
+    encoded_cluster_query = profile_models["cluster_preprocessor"].transform(cluster_query)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        cluster_distances = profile_models["cluster_model"].transform(encoded_cluster_query)[0]
     cluster_id = int(np.argmin(cluster_distances))
     cluster_distance = float(cluster_distances[cluster_id])
     cluster_reference_distances = profile_models["distance_by_cluster"][cluster_id]
