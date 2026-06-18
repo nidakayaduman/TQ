@@ -84,7 +84,9 @@ hafızasına dayalı fiyat benchmark ve tahmin desteğidir.
 ## LLM Yorum Katmanı
 
 Uygulama, model hesaplarını değiştirmeden OpenRouter üzerinden ek bir yorum
-katmanı sunar. LLM'e şu çıktılar structured context olarak gönderilir:
+katmanı sunar. LLM tabı aktif bir sohbet ekranıdır; kullanıcı analiz sonrası
+takip soruları sorabilir ve model aynı structured context üzerinden cevap verir.
+LLM'e şu çıktılar structured context olarak gönderilir:
 
 - Yeni ihale girdileri
 - Emsal p(win) ve bileşen katkıları
@@ -97,8 +99,8 @@ katmanı sunar. LLM'e şu çıktılar structured context olarak gönderilir:
 
 Varsayılan model sırası:
 
-1. `nvidia/nemotron-3-super-120b-a12b:free`
-2. `google/gemma-4-31b-it:free`
+1. `google/gemma-4-31b-it:free`
+2. `nvidia/nemotron-3-super-120b-a12b:free`
 3. `openrouter/owl-alpha`
 
 Primary model yanıt veremezse uygulama fallback zincirindeki diğer modelleri

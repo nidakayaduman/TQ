@@ -94,8 +94,8 @@ SIMILARITY_WEIGHTS = {
 }
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS = {
-    "NVIDIA: Nemotron 3 Super 120B A12B (free)": "nvidia/nemotron-3-super-120b-a12b:free",
     "Google: Gemma 4 31B IT (free)": "google/gemma-4-31b-it:free",
+    "NVIDIA: Nemotron 3 Super 120B A12B (free)": "nvidia/nemotron-3-super-120b-a12b:free",
     "OpenRouter: Owl Alpha": "openrouter/owl-alpha",
 }
 DEFAULT_OPENROUTER_MODEL_LABELS = list(OPENROUTER_MODELS.keys())
@@ -501,6 +501,50 @@ st.markdown(
             color: #7c2d12;
             font-size: 0.78rem;
             line-height: 1.45;
+        }
+
+        .chat-screen-header {
+            padding: 0.95rem 1rem;
+            margin-bottom: 0.9rem;
+            border: 1px solid rgba(37, 99, 235, 0.34);
+            border-left: 5px solid var(--blue);
+            border-radius: 8px;
+            background: linear-gradient(90deg, rgba(37, 99, 235, 0.14), rgba(8, 145, 178, 0.09));
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.60);
+        }
+
+        .chat-screen-title {
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 850;
+            margin-bottom: 0.22rem;
+        }
+
+        .chat-screen-meta {
+            color: var(--muted);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        [data-testid="stChatMessage"] {
+            padding: 0.72rem 0.8rem;
+            border: 1px solid rgba(15, 23, 42, 0.10);
+            border-radius: 8px;
+            background: #ffffff;
+            margin-bottom: 0.7rem;
+        }
+
+        [data-testid="stChatInput"] {
+            border: 1px solid rgba(37, 99, 235, 0.30);
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        [data-testid="stVerticalBlockBorderWrapper"]:has(.chat-screen-header) {
+            border: 1px solid rgba(37, 99, 235, 0.32);
+            background:
+                linear-gradient(180deg, rgba(239, 246, 255, 0.92), rgba(236, 254, 255, 0.44));
+            box-shadow: 0 16px 38px rgba(37, 99, 235, 0.12);
         }
 
         @media (max-width: 900px) {
@@ -1543,23 +1587,17 @@ Kritik bağlam:
 - Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, Mayıs 2026'ya normalize fiyat koridoru, Linear/XGBoost fiyat tahmini, IsolationForest kazanım profili yakınlığı, KMeans başarı profili eşleşmesi ve fırsat öncelik puanı.
 - Verilmeyen bilgiyi uydurma, sayısal değerleri değiştirme, sadece MODEL_CONTEXT_JSON içeriğine dayan.
 
-Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
-{{
-  "decision_summary": "2-3 cümlelik yönetici özeti",
-  "data_situation": "Veri kapsamını, kayıp veri olmadığını ve bunun modelleme sınırını açıkla",
-  "recommended_action": "Teklif / manuel inceleme / fiyat revizyonu gibi net öneri",
-  "pwin_interpretation": "p(win) skorunu ve ana sürükleyicileri açıkla",
-  "pricing_interpretation": "düşük/orta/yüksek fiyat ve model uyumunu yorumla",
-  "margin_risk": "maliyet ve marj açısından risk yorumu",
-  "learner_signals": {{
-    "isolation_forest": "one-class skorunun anlamı",
-    "kmeans": "başarı profili yorumun",
-    "regression_models": "Linear ve XGBoost sinyalleri"
-  }},
-  "supporting_evidence": ["en fazla 4 kısa kanıt maddesi"],
-  "risks": ["en fazla 4 risk maddesi"],
-  "next_actions": ["en fazla 4 uygulanabilir sonraki adım"]
-}}
+Yanıtı Türkçe, doğal sohbet diliyle ve kısa Markdown başlıklarıyla ver.
+JSON döndürme. Uzun ham veri tekrarlama. Business kullanıcısına anlatır gibi temelden başla,
+sonra teknik sinyalleri sade ama doğru açıkla. Gerektiğinde p(win), fiyat koridoru, marj,
+IsolationForest, KMeans, Linear Regression ve XGBoost çıktılarını birlikte yorumla.
+Sorunun kapsamına göre şu düzeni kullan:
+- Kısa cevap
+- İş açısından anlamı
+- Teknik dayanak
+- Fiyat / marj yorumu
+- Riskler
+- Sonraki aksiyon
 
 Kullanıcı sorusu varsa özellikle onu cevapla: {question or "Genel yönetici yorumu üret."}
 
@@ -1586,11 +1624,49 @@ def parse_llm_json_response(content: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def flatten_llm_response(result: dict[str, Any]) -> str:
+    parsed = result.get("parsed")
+    if not parsed:
+        return result.get("raw", "")
+
+    lines: list[str] = []
+    for key, label in [
+        ("decision_summary", "Yönetici Özeti"),
+        ("data_situation", "Veri Durumu"),
+        ("recommended_action", "Önerilen Aksiyon"),
+        ("pwin_interpretation", "p(win) Yorumu"),
+        ("pricing_interpretation", "Fiyat Yorumu"),
+        ("margin_risk", "Marj Riski"),
+    ]:
+        if parsed.get(key):
+            lines.append(f"**{label}**\n{parsed[key]}")
+
+    learner_signals = parsed.get("learner_signals")
+    if isinstance(learner_signals, dict) and learner_signals:
+        signal_lines = [f"- {label}: {value}" for label, value in learner_signals.items()]
+        lines.append("**Learner Sinyalleri**\n" + "\n".join(signal_lines))
+
+    for key, label in [
+        ("supporting_evidence", "Kanıtlar"),
+        ("risks", "Riskler"),
+        ("next_actions", "Sonraki Adımlar"),
+    ]:
+        values = parsed.get(key)
+        if isinstance(values, list) and values:
+            lines.append(f"**{label}**\n" + "\n".join(f"- {value}" for value in values))
+
+    model = result.get("model")
+    if model:
+        lines.append(f"`Model: {model}`")
+    return "\n\n".join(lines)
+
+
 def call_openrouter_interpretation(
     api_key: str,
     model_ids: list[str],
     context: dict[str, Any],
     user_question: str | None = None,
+    conversation_history: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -1601,7 +1677,7 @@ def call_openrouter_interpretation(
     if referer:
         headers["HTTP-Referer"] = referer
 
-    messages = [
+    messages: list[dict[str, str]] = [
         {
             "role": "system",
             "content": (
@@ -1610,19 +1686,22 @@ def call_openrouter_interpretation(
                 "dayan. Hesap yapma, sayı uydurma, veri kapsamını abartma. Veride "
                 "kaybedilmiş ihaleler olmadığı için p(win)'i gerçek kazanma olasılığı "
                 "gibi sunma; kazanılmış emsallere dayalı uygunluk göstergesi olarak "
-                "açıkla. Yöneticiye karar, risk, fiyat ve sonraki aksiyonları net, "
-                "kısa ve yapılandırılmış biçimde anlat."
+                "açıkla. Önce business anlamı sade biçimde ver, sonra teknik dayanağı "
+                "temelden ama doğru şekilde anlat. Yöneticiye karar, risk, fiyat ve "
+                "sonraki aksiyonları net, temiz ve yapılandırılmış biçimde aktar."
             ),
         },
-        {"role": "user", "content": build_llm_prompt(context, user_question)},
     ]
+    if conversation_history:
+        messages.extend(conversation_history[-8:])
+    messages.append({"role": "user", "content": build_llm_prompt(context, user_question)})
     errors: list[str] = []
     for model_id in model_ids:
         body = {
             "model": model_id,
             "messages": messages,
             "temperature": 0.2,
-            "max_tokens": 1400,
+            "max_tokens": 2600,
         }
         try:
             response = requests.post(OPENROUTER_API_URL, headers=headers, json=body, timeout=60)
@@ -1700,69 +1779,165 @@ def render_llm_chatbot(llm_context: dict[str, Any]) -> None:
     )
 
     openrouter_api_key = get_server_openrouter_api_key()
-    if openrouter_api_key:
-        st.success("LLM chatbot aktif.")
-    else:
-        st.warning("LLM chatbot için server API key tanımlı değil.")
+    if (
+        st.session_state.get("llm_model_defaults_version") != "google-primary-v1"
+        or st.session_state.get("llm_primary_label") not in DEFAULT_OPENROUTER_MODEL_LABELS
+    ):
+        st.session_state.llm_primary_label = DEFAULT_OPENROUTER_MODEL_LABELS[0]
+        st.session_state.llm_fallback_labels = DEFAULT_OPENROUTER_MODEL_LABELS[1:3]
+        st.session_state.llm_model_defaults_version = "google-primary-v1"
+    if "llm_fallback_labels" not in st.session_state:
+        st.session_state.llm_fallback_labels = DEFAULT_OPENROUTER_MODEL_LABELS[1:3]
 
-    llm_primary_label = st.selectbox(
-        "Chatbot modeli",
-        DEFAULT_OPENROUTER_MODEL_LABELS,
-        index=0,
+    context_signature = json.dumps(
+        {
+            "new_tender": llm_context.get("new_tender", {}),
+            "pwin": llm_context.get("pwin", {}),
+            "pricing": llm_context.get("pricing", {}).get("model_supported_prices_2026_try", {}),
+            "profile": llm_context.get("learner_outputs", {}).get("kmeans", {}).get("profile_name", ""),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
     )
-    fallback_default = [
-        label for label in DEFAULT_OPENROUTER_MODEL_LABELS if label != llm_primary_label
-    ][:2]
-    llm_fallback_labels = st.multiselect(
-        "Fallback modeller",
-        DEFAULT_OPENROUTER_MODEL_LABELS,
-        default=fallback_default,
-        help="Primary model cevap veremezse uygulama bu modelleri sırayla dener.",
-    )
-    llm_model_ids = selected_openrouter_model_ids(llm_primary_label, llm_fallback_labels)
-    model_chain = " -> ".join(f"`{model_id}`" for model_id in llm_model_ids)
-    st.markdown(f"**Model sırası:** {model_chain}")
+    if st.session_state.get("llm_chat_context_signature") != context_signature:
+        st.session_state.llm_chat_context_signature = context_signature
+        st.session_state.llm_pending_user_message = ""
+        st.session_state.llm_chat_messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    "Analiz bağlamı hazır. Bu ihaleyi p(win), fiyat koridoru, marj, "
+                    "IsolationForest, KMeans, Linear Regression ve XGBoost sinyalleriyle birlikte "
+                    "yorumlayabilirim. Sorunu yazabilirsin."
+                ),
+            }
+        ]
 
-    llm_question = st.text_area(
-        "Chatbot sorusu",
-        value=(
-            "Bu ihalede p(win)'i artırmak için hangi fiyat seviyesini ve hangi aksiyonları önerirsin? "
-            "Marj riskini ve model sinyallerini birlikte yorumla."
-        ),
-        height=92,
-    )
-    llm_cols = st.columns([0.9, 1.4], gap="small")
-    with llm_cols[0]:
-        generate_llm_clicked = st.button("LLM yorumu üret", width="stretch")
-    with llm_cols[1]:
-        show_context = st.checkbox("LLM'e gönderilecek structured context'i göster", value=False)
-
-    if show_context:
-        st.json(llm_context, expanded=False)
-
-    if generate_llm_clicked:
-        if not openrouter_api_key:
-            st.warning(
-                "LLM chatbot şu anda kullanılamıyor. Server tarafında OPENROUTER_API_KEY veya Streamlit secrets tanımlanmalı."
-            )
+    with st.container(border=True):
+        active_model_ids = selected_openrouter_model_ids(
+            st.session_state.llm_primary_label,
+            st.session_state.llm_fallback_labels,
+        )
+        st.markdown(
+            f"""
+            <div class="chat-screen-header">
+                <div class="chat-screen-title">Sohbet ekranı</div>
+                <div class="chat-screen-meta">
+                    Aktif primary model: {escape(OPENROUTER_MODELS[st.session_state.llm_primary_label])}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if openrouter_api_key:
+            st.caption("LLM aktif. Sorular güncel analiz context'iyle yanıtlanır.")
         else:
-            with st.spinner("OpenRouter üzerinden structured LLM yorumu alınıyor..."):
-                try:
-                    llm_result = call_openrouter_interpretation(
-                        api_key=openrouter_api_key,
-                        model_ids=llm_model_ids,
-                        context=llm_context,
-                        user_question=llm_question,
+            st.warning("LLM chatbot için server API key tanımlı değil.")
+
+        with st.container(height=430, border=False):
+            for message in st.session_state.get("llm_chat_messages", []):
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            pending_user_message = st.session_state.get("llm_pending_user_message")
+            if pending_user_message:
+                if not openrouter_api_key:
+                    assistant_message = (
+                        "LLM chatbot şu anda kullanılamıyor. Server tarafında OPENROUTER_API_KEY "
+                        "veya Streamlit secrets tanımlanmalı."
                     )
-                except requests.HTTPError as exc:
-                    response_text = exc.response.text if exc.response is not None else str(exc)
-                    st.error(f"OpenRouter isteği başarısız oldu: {response_text}")
-                except requests.RequestException as exc:
-                    st.error(f"OpenRouter bağlantı hatası: {exc}")
-                except (KeyError, IndexError, ValueError, TypeError, RuntimeError) as exc:
-                    st.error(f"LLM yorumu alınamadı veya yanıt beklenen formatta değil: {exc}")
+                    with st.chat_message("assistant"):
+                        st.warning(assistant_message)
                 else:
-                    render_llm_structured_response(llm_result)
+                    history = [
+                        {"role": item["role"], "content": item["content"]}
+                        for item in st.session_state.llm_chat_messages[:-1]
+                        if item["role"] in {"user", "assistant"}
+                    ]
+                    with st.chat_message("assistant"):
+                        with st.spinner("Cevap hazırlanıyor..."):
+                            try:
+                                llm_result = call_openrouter_interpretation(
+                                    api_key=openrouter_api_key,
+                                    model_ids=active_model_ids,
+                                    context=llm_context,
+                                    user_question=pending_user_message,
+                                    conversation_history=history,
+                                )
+                            except requests.HTTPError as exc:
+                                response_text = exc.response.text if exc.response is not None else str(exc)
+                                assistant_message = f"OpenRouter isteği başarısız oldu: {response_text}"
+                                st.error(assistant_message)
+                            except requests.RequestException as exc:
+                                assistant_message = f"OpenRouter bağlantı hatası: {exc}"
+                                st.error(assistant_message)
+                            except (KeyError, IndexError, ValueError, TypeError, RuntimeError) as exc:
+                                assistant_message = f"LLM yorumu alınamadı veya yanıt beklenen formatta değil: {exc}"
+                                st.error(assistant_message)
+                            else:
+                                assistant_message = flatten_llm_response(llm_result)
+                                st.markdown(assistant_message)
+
+                st.session_state.llm_chat_messages.append(
+                    {"role": "assistant", "content": assistant_message}
+                )
+                st.session_state.llm_pending_user_message = ""
+                st.rerun()
+
+        user_message = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
+        if user_message:
+            st.session_state.llm_chat_messages.append({"role": "user", "content": user_message})
+            st.session_state.llm_pending_user_message = user_message
+            st.rerun()
+
+    with st.container(border=True):
+        st.markdown("##### Chatbot ayarları")
+        llm_primary_label = st.selectbox(
+            "Chatbot modeli",
+            DEFAULT_OPENROUTER_MODEL_LABELS,
+            key="llm_primary_label",
+        )
+        fallback_default = [
+            label for label in DEFAULT_OPENROUTER_MODEL_LABELS if label != llm_primary_label
+        ][:2]
+        if not st.session_state.get("llm_fallback_labels"):
+            st.session_state.llm_fallback_labels = fallback_default
+        else:
+            st.session_state.llm_fallback_labels = [
+                label for label in st.session_state.llm_fallback_labels if label != llm_primary_label
+            ]
+        st.multiselect(
+            "Fallback modeller",
+            [label for label in DEFAULT_OPENROUTER_MODEL_LABELS if label != llm_primary_label],
+            key="llm_fallback_labels",
+            help="Primary model cevap veremezse uygulama bu modelleri sırayla dener.",
+        )
+        current_model_ids = selected_openrouter_model_ids(
+            st.session_state.llm_primary_label,
+            st.session_state.llm_fallback_labels,
+        )
+        model_chain = " -> ".join(f"`{model_id}`" for model_id in current_model_ids)
+        st.markdown(f"**Model sırası:** {model_chain}")
+        st.caption(
+            f"Seçim kaydedildi. Şu anda primary model `{OPENROUTER_MODELS[st.session_state.llm_primary_label]}`."
+        )
+
+        control_cols = st.columns([1.1, 1.1, 2.4], gap="small")
+        with control_cols[0]:
+            clear_chat = st.button("Konuşmayı temizle", width="stretch")
+        with control_cols[1]:
+            show_context = st.checkbox("Structured context", value=False)
+        if clear_chat:
+            st.session_state.llm_pending_user_message = ""
+            st.session_state.llm_chat_messages = [
+                {
+                    "role": "assistant",
+                    "content": "Konuşmayı sıfırladım. Bu analiz için yeni sorunuzu yazabilirsiniz.",
+                }
+            ]
+            st.rerun()
+        if show_context:
+            st.json(llm_context, expanded=False)
 
 
 def render_how_it_works_tab() -> None:
