@@ -571,7 +571,8 @@ def hybrid_similarity_score(
 
 
 @st.cache_data
-def load_dataset() -> pd.DataFrame:
+def load_dataset(data_mtime_ns: int) -> pd.DataFrame:
+    _ = data_mtime_ns
     df = pd.read_csv(DATA_PATH)
     required = [
         *HISTORICAL_TEXT_FIELDS,
@@ -596,7 +597,8 @@ def load_dataset() -> pd.DataFrame:
 
 
 @st.cache_data
-def load_dataset_download_bytes() -> bytes:
+def load_dataset_download_bytes(data_mtime_ns: int) -> bytes:
+    _ = data_mtime_ns
     return DATA_PATH.read_bytes()
 
 
@@ -1524,7 +1526,8 @@ def render_how_it_works_tab() -> None:
     )
 
 
-df = load_dataset()
+data_mtime_ns = DATA_PATH.stat().st_mtime_ns
+df = load_dataset(data_mtime_ns)
 
 with st.sidebar:
     st.markdown(
@@ -1545,7 +1548,7 @@ with st.sidebar:
     st.write("Gerçek şirket verisi değil; X İlaç Şirketi için hazırlanmış sentetik demo verisidir")
     st.download_button(
         label="Veriyi indir",
-        data=load_dataset_download_bytes(),
+        data=load_dataset_download_bytes(data_mtime_ns),
         file_name=DATA_PATH.name,
         mime="text/csv",
         width="stretch",
