@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -236,6 +237,10 @@ st.markdown(
             height: 100%;
         }
 
+        [data-testid="column"] [data-testid="stVerticalBlock"] {
+            height: 100%;
+        }
+
         [data-testid="stTextInput"] label,
         [data-testid="stNumberInput"] label,
         [data-testid="stSelectbox"] label {
@@ -262,6 +267,16 @@ st.markdown(
             color: #ffffff;
             font-weight: 850;
             margin-top: 1.6rem;
+        }
+
+        [data-testid="stDownloadButton"] button {
+            width: 100%;
+            min-height: 42px;
+            border-radius: 8px;
+            border: 1px solid rgba(37, 99, 235, 0.22);
+            background: rgba(37, 99, 235, 0.08);
+            color: #1d4ed8;
+            font-weight: 850;
         }
 
         .metric-card {
@@ -304,12 +319,12 @@ st.markdown(
             border: 1px solid rgba(22, 163, 74, 0.24);
             border-radius: 8px;
             background: linear-gradient(145deg, rgba(22, 163, 74, 0.09), rgba(37, 99, 235, 0.07));
-            min-height: 300px;
+            min-height: 220px;
         }
 
         .score-value {
             color: var(--text);
-            font-size: 4.2rem;
+            font-size: 3.7rem;
             line-height: 0.95;
             font-weight: 850;
             letter-spacing: 0;
@@ -354,6 +369,105 @@ st.markdown(
             color: #166534;
         }
 
+        .profile-summary {
+            min-height: 116px;
+            margin: 1rem 0 0.45rem 0;
+            padding: 0.95rem 1rem;
+            border-radius: 8px;
+            background: rgba(248, 250, 252, 0.82);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 0.55rem;
+        }
+
+        .profile-status {
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .profile-score {
+            color: var(--text);
+            font-size: 1.65rem;
+            font-weight: 850;
+            line-height: 1.05;
+            overflow-wrap: anywhere;
+        }
+
+        .profile-note {
+            color: var(--muted);
+            font-size: 0.78rem;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
+        .profile-card-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            margin: 0.9rem 0 1rem 0;
+            align-items: stretch;
+        }
+
+        .profile-card-panel {
+            min-height: 385px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(248, 250, 252, 0.45);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .profile-card-panel .method-badge {
+            margin-top: 0.35rem;
+        }
+
+        .profile-card-panel p {
+            color: var(--muted);
+            font-size: 0.83rem;
+            line-height: 1.55;
+            margin: 0.65rem 0 0 0;
+        }
+
+        .mini-summary {
+            min-height: 116px;
+            padding: 0.9rem 0.95rem;
+            border-radius: 8px;
+            background: rgba(248, 250, 252, 0.82);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+
+        .mini-label {
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .mini-value {
+            color: var(--text);
+            font-size: 1.05rem;
+            font-weight: 840;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .mini-note {
+            color: var(--muted);
+            font-size: 0.74rem;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
         .explain-box {
             padding: 1rem;
             border: 1px solid rgba(37, 99, 235, 0.16);
@@ -377,6 +491,8 @@ st.markdown(
         @media (max-width: 900px) {
             .scope-pill { float: none; margin-top: 1rem; }
             .score-value { font-size: 3rem; }
+            .profile-card-grid { grid-template-columns: 1fr; }
+            .profile-card-panel { min-height: auto; }
         }
     </style>
     """,
@@ -475,6 +591,11 @@ def load_dataset() -> pd.DataFrame:
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
     return df
+
+
+@st.cache_data
+def load_dataset_download_bytes() -> bytes:
+    return DATA_PATH.read_bytes()
 
 
 @st.cache_resource
@@ -1040,7 +1161,7 @@ def build_gauge(score: float) -> go.Figure:
         )
     )
     figure.update_layout(
-        height=230,
+        height=195,
         margin={"l": 8, "r": 8, "t": 8, "b": 8},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -1053,9 +1174,22 @@ def metric_card(label: str, value: str, note: str = "") -> None:
     st.markdown(
         f"""
         <div class="metric-card">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-            <div class="metric-note">{note}</div>
+            <div class="metric-label">{escape(label)}</div>
+            <div class="metric-value">{escape(value)}</div>
+            <div class="metric-note">{escape(note)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def mini_summary(label: str, value: str, note: str) -> None:
+    st.markdown(
+        f"""
+        <div class="mini-summary">
+            <div class="mini-label">{escape(label)}</div>
+            <div class="mini-value">{escape(value)}</div>
+            <div class="mini-note">{escape(note)}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1374,6 +1508,13 @@ with st.sidebar:
     st.write(f"{df['year'].min()}-{df['year'].max()} dönemini kapsar")
     st.write("Ürün, kurum, bölge, miktar, fiyat, birim kazanç ve teslim bilgileri içerir")
     st.write("Gerçek şirket verisi değil; X İlaç Şirketi için hazırlanmış sentetik demo verisidir")
+    st.download_button(
+        label="Veriyi indir",
+        data=load_dataset_download_bytes(),
+        file_name=DATA_PATH.name,
+        mime="text/csv",
+        width="stretch",
+    )
 
 header_left, header_right = st.columns([5, 1.4])
 with header_left:
@@ -1631,59 +1772,46 @@ with analysis_tab:
         "Ayrışma yükseldikçe sistem sonucu daha dikkatli yorumlamak gerekir."
     )
 
-    profile_col_1, profile_col_2 = st.columns(2, gap="medium")
-    with profile_col_1:
-        with st.container(border=True):
-            st.markdown(
-                """
+    profile = success_profile_scores["profile"]
+    st.markdown(
+        f"""
+        <div class="profile-card-grid">
+            <div class="profile-card-panel">
                 <div class="section-kicker">Profil analizi</div>
                 <div class="section-title">Kazanım Profili Yakınlığı</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            metric_card(
-                success_profile_scores["one_class_label"],
-                f"{success_profile_scores['one_class_score']:.0f}/100",
-                "Geçmiş kazanım profiline benzerlik",
-            )
-            st.markdown(
-                '<span class="method-badge">Yöntem: One-Class / Isolation Forest</span>',
-                unsafe_allow_html=True,
-            )
-            st.caption(
-                f"{success_profile_scores['one_class_score']:.0f}/100 skoru şunu anlatır: bu ihale, geçmişte kazanılmış "
-                "işlerin genel şekline ne kadar benziyor? Skor yükseldikçe ihale geçmiş kazanım profilimize daha tanıdık "
-                "görünür; skor düştükçe daha sıra dışı görünür."
-            )
-
-    with profile_col_2:
-        with st.container(border=True):
-            profile = success_profile_scores["profile"]
-            st.markdown(
-                """
+                <div class="profile-summary">
+                    <div class="profile-status">{escape(success_profile_scores["one_class_label"])}</div>
+                    <div class="profile-score">{success_profile_scores["one_class_score"]:.0f}/100</div>
+                    <div class="profile-note">Geçmiş kazanım profiline benzerlik</div>
+                </div>
+                <span class="method-badge">Yöntem: One-Class / Isolation Forest</span>
+                <p>
+                    Bu skor, yeni ihalenin geçmişte kazanılmış işlerin genel şekline ne kadar benzediğini gösterir.
+                    Skor yükseldikçe ihale daha tanıdık; skor düştükçe daha sıra dışı görünür.
+                </p>
+            </div>
+            <div class="profile-card-panel">
                 <div class="section-kicker">Profil analizi</div>
                 <div class="section-title">Başarı Profili</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            metric_card(
-                success_profile_scores["cluster_label"],
-                f"{success_profile_scores['cluster_score']:.0f}/100",
-                profile["name"],
-            )
-            st.markdown(
-                '<span class="method-badge green">Yöntem: KMeans başarı grupları</span>',
-                unsafe_allow_html=True,
-            )
-            st.caption(
-                f"Bu yöntem geçmiş kazanılmış ihaleleri 4 başarı grubuna ayırır. Bu ihale en çok şu gruba benziyor: "
-                f"{profile['name']}. Bu grup {profile['count']} kazanılmış ihale içerir; medyan fiyat "
-                f"{format_try(profile['median_price'])}, tipik birim kazanç {format_pct(profile['median_margin'])}, "
-                f"en sık ihale usulü {profile['top_procedure']}."
-            )
+                <div class="profile-summary">
+                    <div class="profile-status">{escape(success_profile_scores["cluster_label"])}</div>
+                    <div class="profile-score">{success_profile_scores["cluster_score"]:.0f}/100</div>
+                    <div class="profile-note">{escape(profile["name"])}</div>
+                </div>
+                <span class="method-badge green">Yöntem: KMeans başarı grupları</span>
+                <p>
+                    KMeans geçmiş kazanılmış ihaleleri 4 başarı grubuna ayırır. Bu ihale en çok
+                    {escape(profile["name"])} grubuna benziyor. Grup {profile["count"]} ihale içerir;
+                    tipik fiyat {escape(format_try(profile["median_price"]))}, tipik birim kazanç
+                    {escape(format_pct(profile["median_margin"]))}.
+                </p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     with st.container(border=True):
-        profile = success_profile_scores["profile"]
         st.markdown(
             """
             <div class="section-kicker">Emsal kazanım değerlendirmesi</div>
@@ -1707,36 +1835,47 @@ with analysis_tab:
             [
                 [
                     "Ortalama benzerlik",
+                    "%30",
                     f"{average_similarity:.2f}",
                     f"{pwin_similarity_contribution:.1f} puan",
                     "Yeni ihale, en benzer 50 kazanılmış ihaleye ne kadar benziyor?",
                 ],
                 [
                     "Güçlü emsal oranı",
+                    "%15",
                     f"{strong_similar_count}/{len(similar)}",
                     f"{pwin_strong_case_contribution:.1f} puan",
                     "Top-50 içinde benzerlik skoru 0.70 üstü olan güçlü emsal sayısı.",
                 ],
                 [
                     "Tarihsel fiyat bandı uyumu",
+                    "%25",
                     price_fit["label"],
                     f"{pwin_price_fit_contribution:.1f} puan",
                     "Önerilen orta fiyat, geçmişte kazanılmış benzer fiyatların içinde mi?",
                 ],
                 [
                     "Kazanım profili yakınlığı",
+                    "%15",
                     f"{success_profile_scores['one_class_label']} ({success_profile_scores['one_class_score']:.0f}/100)",
                     f"{pwin_one_class_contribution:.1f} puan",
                     "Yeni ihale, geçmişte kazandığımız işlerin genel şekline benziyor mu?",
                 ],
                 [
                     "Başarı grubu eşleşmesi",
+                    "%15",
                     f"{success_profile_scores['cluster_label']} ({success_profile_scores['cluster_score']:.0f}/100)",
                     f"{pwin_cluster_contribution:.1f} puan",
                     "Yeni ihale, geçmiş kazanılmış iş gruplarından hangisine benziyor?",
                 ],
             ],
-            columns=["Bileşen", "Bu analizde sonuç", "100 üzerinden katkı puanı", "Ne anlatır?"],
+            columns=[
+                "Bileşen",
+                "p(win) içindeki ağırlık",
+                "Bu analizde sonuç",
+                "100 üzerinden katkı puanı",
+                "Ne anlatır?",
+            ],
         )
         st.dataframe(
             pwin_rows,
@@ -1750,7 +1889,7 @@ with analysis_tab:
 
         detail_cols = st.columns(3, gap="medium")
         with detail_cols[0]:
-            metric_card(
+            mini_summary(
                 "One-Class yorumu",
                 success_profile_scores["one_class_label"],
                 f"{success_profile_scores['one_class_score']:.0f}/100 profil yakınlığı",
@@ -1760,7 +1899,7 @@ with analysis_tab:
                 "geçmiş kazanım profilimize benzer; skor düşükse bu ihale alışılmış kazanım profilimizin dışında kalır."
             )
         with detail_cols[1]:
-            metric_card(
+            mini_summary(
                 "Başarı profili",
                 success_profile_scores["cluster_label"],
                 profile["name"],
@@ -1771,7 +1910,7 @@ with analysis_tab:
                 f"{format_pct(profile['median_margin'])}."
             )
         with detail_cols[2]:
-            metric_card(
+            mini_summary(
                 "Fiyat uyumu",
                 price_fit["level"],
                 price_fit["label"],
@@ -1782,7 +1921,8 @@ with analysis_tab:
                 f"p75 {format_try(price_corridor['p75'])}, p90 {format_try(price_corridor['p90'])}."
             )
 
-    section_1, section_2 = st.columns([1.55, 1.0], gap="medium")
+    section_1 = st.container()
+    section_2 = st.container()
 
     with section_1:
         with st.container(border=True):
