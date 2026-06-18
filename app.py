@@ -33,8 +33,8 @@ PRIMARY_PRICE_FIELD = "inflation_adjusted_unit_price_2026_try"
 REFERENCE_PRICE_FIELD = "winning_unit_price_try"
 SIMILAR_TENDER_COUNT = 50
 DISPLAY_TENDER_COUNT = 10
-PRICE_MODEL_VERSION = "2026-price-model-without-year-v1"
-SUCCESS_PROFILE_VERSION = "success-profile-v1"
+PRICE_MODEL_VERSION = "2026-price-model-x-company-clean-v2"
+SUCCESS_PROFILE_VERSION = "success-profile-x-company-clean-v2"
 SUCCESS_PROFILE_COUNT = 4
 MODEL_FEATURES = [
     "product_name",
@@ -751,8 +751,13 @@ def build_cluster_profiles(df: pd.DataFrame, labels: np.ndarray) -> dict[int, di
 
 
 @st.cache_resource
-def train_success_profile_models(df: pd.DataFrame, profile_version: str) -> dict[str, Any]:
+def train_success_profile_models(
+    df: pd.DataFrame,
+    profile_version: str,
+    data_mtime_ns: int,
+) -> dict[str, Any]:
     _ = profile_version
+    _ = data_mtime_ns
     profile_frame = build_profile_training_frame(df)
     preprocessor = build_profile_preprocessor()
     encoded = preprocessor.fit_transform(profile_frame)
@@ -800,8 +805,13 @@ def residual_metrics(actual: pd.Series, predicted: np.ndarray) -> dict[str, floa
 
 
 @st.cache_resource
-def train_price_models(df: pd.DataFrame, model_version: str) -> dict[str, Any]:
+def train_price_models(
+    df: pd.DataFrame,
+    model_version: str,
+    data_mtime_ns: int,
+) -> dict[str, Any]:
     _ = model_version
+    _ = data_mtime_ns
     x = df[MODEL_FEATURES].copy()
     y = df[PRIMARY_PRICE_FIELD].astype(float)
     folds = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -1593,7 +1603,12 @@ with how_it_works_tab:
 
 with analysis_tab:
     product_names = sorted(df["product_name"].dropna().unique())
-    product_groups = sorted(df["product_group"].dropna().unique())
+    product_group_by_name = (
+        df.dropna(subset=["product_name", "product_group"])
+        .drop_duplicates("product_name")
+        .set_index("product_name")["product_group"]
+        .to_dict()
+    )
     regions = sorted(df["region"].dropna().unique())
     procedure_types = sorted(df["procedure_type"].dropna().unique())
     buyer_institutions = sorted(df["buyer_institution"].dropna().unique())
@@ -1616,10 +1631,11 @@ with analysis_tab:
                 else 0,
             )
         with row_1[1]:
-            product_group = st.selectbox(
+            product_group = product_group_by_name.get(product_name, "")
+            st.text_input(
                 "Ürün grubu",
-                product_groups,
-                index=product_groups.index("IV Solution") if "IV Solution" in product_groups else 0,
+                value=product_group,
+                disabled=True,
             )
         with row_1[2]:
             region = st.selectbox(
@@ -1695,8 +1711,8 @@ with analysis_tab:
         "competitor_count_estimate": int(competitor_count),
     }
 
-    models = train_price_models(df, PRICE_MODEL_VERSION)
-    profile_models = train_success_profile_models(df, SUCCESS_PROFILE_VERSION)
+    models = train_price_models(df, PRICE_MODEL_VERSION, data_mtime_ns)
+    profile_models = train_success_profile_models(df, SUCCESS_PROFILE_VERSION, data_mtime_ns)
     similar = retrieve_similar_tenders(df, query, top_k=SIMILAR_TENDER_COUNT)
     similar_display = similar.head(DISPLAY_TENDER_COUNT)
     price_corridor = percentile_metrics(similar[PRIMARY_PRICE_FIELD])
