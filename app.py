@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import json
+import os
 import unicodedata
 import warnings
 from html import escape
@@ -12,6 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 from sklearn.compose import ColumnTransformer
 from sklearn.cluster import KMeans
@@ -89,6 +92,13 @@ SIMILARITY_WEIGHTS = {
     "delivery_months": 0.05,
     "competitor_count": 0.05,
 }
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS = {
+    "NVIDIA: Nemotron 3 Super 120B A12B (free)": "nvidia/nemotron-3-super-120b-a12b:free",
+    "Google: Gemma 4 31B IT (free)": "google/gemma-4-31b-it:free",
+    "OpenRouter: Owl Alpha": "openrouter/owl-alpha",
+}
+DEFAULT_OPENROUTER_MODEL_LABELS = list(OPENROUTER_MODELS.keys())
 
 
 st.set_page_config(
@@ -1286,6 +1296,475 @@ def mini_summary(label: str, value: str, note: str) -> None:
     )
 
 
+def deduplicate_model_ids(model_ids: list[str]) -> list[str]:
+    ordered: list[str] = []
+    for model_id in model_ids:
+        if model_id and model_id not in ordered:
+            ordered.append(model_id)
+    return ordered
+
+
+def selected_openrouter_model_ids(primary_label: str, fallback_labels: list[str]) -> list[str]:
+    return deduplicate_model_ids(
+        [
+            OPENROUTER_MODELS[primary_label],
+            *[OPENROUTER_MODELS[label] for label in fallback_labels],
+        ]
+    )
+
+
+def get_server_openrouter_api_key() -> str:
+    env_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if env_key:
+        return env_key
+
+    try:
+        secret_key = str(st.secrets.get("OPENROUTER_API_KEY", "")).strip()
+        if secret_key:
+            return secret_key
+
+        openrouter_section = st.secrets.get("openrouter", {})
+        if hasattr(openrouter_section, "get"):
+            return str(openrouter_section.get("api_key", "")).strip()
+    except Exception:
+        return ""
+
+    return ""
+
+
+def compact_similar_tenders(similar: pd.DataFrame, limit: int = SIMILAR_TENDER_COUNT) -> list[dict[str, Any]]:
+    columns = [
+        "tender_id",
+        "year",
+        "buyer_institution",
+        "product_name",
+        "product_group",
+        "region",
+        "procedure_type",
+        "quantity",
+        "delivery_months",
+        "competitor_count_estimate",
+        "winning_unit_price_try",
+        PRIMARY_PRICE_FIELD,
+        "inflation_adjusted_contract_value_2026_try",
+        "gross_margin_pct",
+        "discount_to_estimated_cost_pct",
+        "strategic_fit_score",
+        "overall_similarity_score",
+    ]
+    records = []
+    for row in similar.head(limit)[columns].to_dict(orient="records"):
+        records.append(
+            {
+                "tender_id": row["tender_id"],
+                "year": int(row["year"]),
+                "buyer_institution": row["buyer_institution"],
+                "product_name": row["product_name"],
+                "product_group": row["product_group"],
+                "region": row["region"],
+                "procedure_type": row["procedure_type"],
+                "quantity": int(row["quantity"]),
+                "delivery_months": int(row["delivery_months"]),
+                "competitor_count_estimate": int(row["competitor_count_estimate"]),
+                "winning_unit_price_try": round(float(row["winning_unit_price_try"]), 2),
+                "unit_price_2026_try": round(float(row[PRIMARY_PRICE_FIELD]), 2),
+                "contract_value_2026_try": round(float(row["inflation_adjusted_contract_value_2026_try"]), 2),
+                "gross_margin_pct": round(float(row["gross_margin_pct"]), 2),
+                "discount_to_estimated_cost_pct": round(float(row["discount_to_estimated_cost_pct"]), 2),
+                "strategic_fit_score": round(float(row["strategic_fit_score"]), 2),
+                "overall_similarity_score": round(float(row["overall_similarity_score"]), 4),
+            }
+        )
+    return records
+
+
+def build_llm_context(
+    query: dict[str, Any],
+    estimated_unit_cost_try: float,
+    similar: pd.DataFrame,
+    price_corridor: dict[str, float],
+    nominal_reference: dict[str, float],
+    margin_benchmark: dict[str, float],
+    discount_benchmark: dict[str, float],
+    model_corridor: dict[str, float],
+    scenario_prices: dict[str, float],
+    margins: dict[str, float],
+    model_predictions: dict[str, float],
+    models: dict[str, Any],
+    model_confidence: str,
+    model_disagreement_pct: float,
+    price_fit: dict[str, Any],
+    success_profile_scores: dict[str, Any],
+    empirical_pwin: float,
+    pwin_contributions: dict[str, float],
+    final_score_components: dict[str, float],
+    final_attractiveness_score: float,
+    final_label: str,
+    strong_similar_count: int,
+) -> dict[str, Any]:
+    profile = success_profile_scores["profile"]
+    return {
+        "goal": (
+            "p(win)'i artıran, ancak sağlıksız/negatif marja düşmeyen teklif "
+            "stratejisini yorumla. p(win) gerçek kazan/kaybet olasılığı değil; "
+            "sadece kazanılmış emsal hafızasına dayalı karar destek göstergesidir."
+        ),
+        "data_scope": {
+            "dataset": "X İlaç Şirketi sentetik demo verisi",
+            "record_type": "Sadece geçmişte kazanılmış ihaleler",
+            "only_won_tenders": True,
+            "lost_tenders_available": False,
+            "classification_model_available": False,
+            "interpretation_limit": (
+                "Kaybedilmiş ihale olmadığı için gerçek kazan/kaybet olasılığı, "
+                "rakip davranışı veya sınıflandırma modeli üretilemez."
+            ),
+            "similar_tender_count": int(len(similar)),
+            "strong_similar_count": int(strong_similar_count),
+            "high_similarity_threshold": 0.70,
+            "price_basis": "Mayıs 2026 TL seviyesine normalize birim fiyat",
+        },
+        "methodology": {
+            "retrieval": (
+                "Geçmiş kazanılmış ihaleler TF-IDF + SVD tabanlı yerel embedding ve "
+                "ürün, bölge, usul, miktar, teslim süresi, rakip sayısı ağırlıklarıyla sıralanır."
+            ),
+            "pricing": (
+                "Top-k fiyat dağılımı, Linear Regression ve XGBoost tahminleri median mantığıyla "
+                "birleştirilerek düşük/orta/yüksek fiyat koridoru oluşturulur."
+            ),
+            "pwin": (
+                "Emsal p(win), kazanılmış emsallere yakınlık göstergesidir; gerçek kazanma ihtimali değildir."
+            ),
+            "profile_models": (
+                "Isolation Forest yeni ihalenin kazanılmış iş profiline normal/uzaklığını; "
+                "KMeans ise hangi geçmiş başarı kümesine benzediğini gösterir."
+            ),
+        },
+        "new_tender": {
+            **query,
+            "estimated_unit_cost_try": round(float(estimated_unit_cost_try), 2),
+        },
+        "pwin": {
+            "empirical_pwin_pct": round(float(empirical_pwin), 2),
+            "formula": (
+                "0.30*ortalama_benzerlik + 0.15*güçlü_emsal_oranı + "
+                "0.25*fiyat_bandı_uyumu + 0.15*IsolationForest + 0.15*KMeans"
+            ),
+            "contributions": {key: round(float(value), 2) for key, value in pwin_contributions.items()},
+        },
+        "pricing": {
+            "topk_price_corridor_2026_try": {
+                "min": round(float(price_corridor["min"]), 2),
+                "p25": round(float(price_corridor["p25"]), 2),
+                "median": round(float(price_corridor["median"]), 2),
+                "p75": round(float(price_corridor["p75"]), 2),
+                "p90": round(float(price_corridor["p90"]), 2),
+                "max": round(float(price_corridor["max"]), 2),
+                "average": round(float(price_corridor["average"]), 2),
+                "std": round(float(price_corridor["std"]), 2),
+            },
+            "nominal_winning_price_reference_try": {
+                key: round(float(nominal_reference[key]), 2)
+                for key in ["min", "p25", "median", "p75", "p90", "max", "average", "std"]
+            },
+            "model_supported_prices_2026_try": {
+                "low": round(float(scenario_prices["Düşük fiyat"]), 2),
+                "middle": round(float(scenario_prices["Orta fiyat"]), 2),
+                "high": round(float(scenario_prices["Yüksek fiyat"]), 2),
+            },
+            "model_corridor_internal_values_2026_try": {
+                key: round(float(model_corridor[key]), 2)
+                for key in ["linear_low", "linear_high", "xgboost_low", "xgboost_high"]
+            },
+            "margin_by_price_option_pct": {
+                key: round(float(value), 2) for key, value in margins.items()
+            },
+            "historical_margin_benchmark_pct": {
+                key: round(float(value), 2) for key, value in margin_benchmark.items()
+            },
+            "historical_discount_to_estimated_cost_benchmark_pct": {
+                key: round(float(value), 2) for key, value in discount_benchmark.items()
+            },
+            "linear_prediction_2026_try": round(float(model_predictions["linear"]), 2),
+            "xgboost_prediction_2026_try": round(float(model_predictions["xgboost"]), 2),
+            "model_confidence": model_confidence,
+            "model_disagreement_pct": round(float(model_disagreement_pct), 2),
+            "price_fit_label": price_fit["label"],
+            "price_fit_level": price_fit["level"],
+            "price_fit_explanation": price_fit["explanation"],
+        },
+        "learner_outputs": {
+            "isolation_forest": {
+                "label": success_profile_scores["one_class_label"],
+                "score_0_100": round(float(success_profile_scores["one_class_score"]), 2),
+            },
+            "kmeans": {
+                "cluster_id": int(success_profile_scores["cluster_id"]),
+                "label": success_profile_scores["cluster_label"],
+                "score_0_100": round(float(success_profile_scores["cluster_score"]), 2),
+                "profile_name": profile["name"],
+                "profile_count": int(profile["count"]),
+                "profile_median_price_2026_try": round(float(profile["median_price"]), 2),
+                "profile_median_margin_pct": round(float(profile["median_margin"]), 2),
+            },
+            "linear_regression": {
+                "prediction_2026_try": round(float(model_predictions["linear"]), 2),
+                "mae_try": round(float(models["linear_residuals"]["mae"]), 2),
+                "mape_pct": round(float(models["linear_residuals"]["mape"]), 2),
+                "coverage_pct": round(float(models["linear_residuals"]["coverage"]), 2),
+            },
+            "xgboost": {
+                "prediction_2026_try": round(float(model_predictions["xgboost"]), 2),
+                "mae_try": round(float(models["xgboost_residuals"]["mae"]), 2),
+                "mape_pct": round(float(models["xgboost_residuals"]["mape"]), 2),
+                "coverage_pct": round(float(models["xgboost_residuals"]["coverage"]), 2),
+            },
+        },
+        "opportunity_priority": {
+            "score_0_100": round(float(final_attractiveness_score), 2),
+            "label": final_label,
+            "components": {key: round(float(value), 2) for key, value in final_score_components.items()},
+        },
+        "retrieved_evidence": compact_similar_tenders(similar),
+    }
+
+
+def build_llm_prompt(context: dict[str, Any], user_question: str | None = None) -> str:
+    question = user_question.strip() if user_question else ""
+    return f"""
+Aşağıdaki JSON, bir ihale karar destek uygulamasının hesapladığı tüm ana çıktılarıdır.
+Görevin hesap yapmak değil, bu çıktıları yöneticiye doğru bağlamla yorumlamaktır.
+
+Kritik bağlam:
+- Veri sadece geçmişte kazanılmış ihalelerden oluşur; kaybedilen ihale yoktur.
+- Bu nedenle gerçek kazan/kaybet olasılığı, supervised classification veya rakip bazlı kazanma tahmini yapılamaz.
+- p(win), "bu yeni ihale geçmişte kazandığımız işlere, fiyat bandımıza ve başarı profillerimize ne kadar benziyor?" sorusunun emsal bazlı karar destek göstergesidir.
+- Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, Mayıs 2026'ya normalize fiyat koridoru, Linear/XGBoost fiyat tahmini, IsolationForest kazanım profili yakınlığı, KMeans başarı profili eşleşmesi ve fırsat öncelik puanı.
+- Verilmeyen bilgiyi uydurma, sayısal değerleri değiştirme, sadece MODEL_CONTEXT_JSON içeriğine dayan.
+
+Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
+{{
+  "decision_summary": "2-3 cümlelik yönetici özeti",
+  "data_situation": "Veri kapsamını, kayıp veri olmadığını ve bunun modelleme sınırını açıkla",
+  "recommended_action": "Teklif / manuel inceleme / fiyat revizyonu gibi net öneri",
+  "pwin_interpretation": "p(win) skorunu ve ana sürükleyicileri açıkla",
+  "pricing_interpretation": "düşük/orta/yüksek fiyat ve model uyumunu yorumla",
+  "margin_risk": "maliyet ve marj açısından risk yorumu",
+  "learner_signals": {{
+    "isolation_forest": "one-class skorunun anlamı",
+    "kmeans": "başarı profili yorumun",
+    "regression_models": "Linear ve XGBoost sinyalleri"
+  }},
+  "supporting_evidence": ["en fazla 4 kısa kanıt maddesi"],
+  "risks": ["en fazla 4 risk maddesi"],
+  "next_actions": ["en fazla 4 uygulanabilir sonraki adım"]
+}}
+
+Kullanıcı sorusu varsa özellikle onu cevapla: {question or "Genel yönetici yorumu üret."}
+
+MODEL_CONTEXT_JSON:
+{json.dumps(context, ensure_ascii=False, indent=2)}
+""".strip()
+
+
+def parse_llm_json_response(content: str) -> dict[str, Any] | None:
+    cleaned = content.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def call_openrouter_interpretation(
+    api_key: str,
+    model_ids: list[str],
+    context: dict[str, Any],
+    user_question: str | None = None,
+) -> dict[str, Any]:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "X-Title": "Tender IQ",
+    }
+    referer = os.getenv("OPENROUTER_SITE_URL")
+    if referer:
+        headers["HTTP-Referer"] = referer
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Sen kamu ihalesi fiyatlandırma ve karar destek model çıktılarını "
+                "yorumlayan kıdemli bir analistsin. Sadece verilen structured JSON'a "
+                "dayan. Hesap yapma, sayı uydurma, veri kapsamını abartma. Veride "
+                "kaybedilmiş ihaleler olmadığı için p(win)'i gerçek kazanma olasılığı "
+                "gibi sunma; kazanılmış emsallere dayalı uygunluk göstergesi olarak "
+                "açıkla. Yöneticiye karar, risk, fiyat ve sonraki aksiyonları net, "
+                "kısa ve yapılandırılmış biçimde anlat."
+            ),
+        },
+        {"role": "user", "content": build_llm_prompt(context, user_question)},
+    ]
+    errors: list[str] = []
+    for model_id in model_ids:
+        body = {
+            "model": model_id,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": 1400,
+        }
+        try:
+            response = requests.post(OPENROUTER_API_URL, headers=headers, json=body, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code in {401, 403}:
+                raise
+            response_text = exc.response.text if exc.response is not None else str(exc)
+            errors.append(f"{model_id}: {response_text}")
+            continue
+        except (KeyError, IndexError, ValueError, TypeError) as exc:
+            errors.append(f"{model_id}: beklenmeyen yanıt formatı ({exc})")
+            continue
+
+        return {
+            "model": data.get("model", model_id),
+            "attempted_models": model_ids,
+            "raw": content,
+            "parsed": parse_llm_json_response(content),
+        }
+
+    raise RuntimeError("Tüm OpenRouter modelleri başarısız oldu: " + " | ".join(errors))
+
+
+def render_llm_structured_response(result: dict[str, Any]) -> None:
+    parsed = result.get("parsed")
+    if not parsed:
+        st.markdown(result.get("raw", ""))
+        return
+
+    st.markdown(f"**Kullanılan model:** `{result.get('model', 'bilinmiyor')}`")
+    for key, label in [
+        ("decision_summary", "Yönetici Özeti"),
+        ("data_situation", "Veri Durumu"),
+        ("recommended_action", "Önerilen Aksiyon"),
+        ("pwin_interpretation", "p(win) Yorumu"),
+        ("pricing_interpretation", "Fiyat Yorumu"),
+        ("margin_risk", "Marj Riski"),
+    ]:
+        if parsed.get(key):
+            st.markdown(f"**{label}**")
+            st.write(parsed[key])
+
+    learner_signals = parsed.get("learner_signals")
+    if isinstance(learner_signals, dict):
+        st.markdown("**Learner Sinyalleri**")
+        st.json(learner_signals, expanded=False)
+
+    for key, label in [
+        ("supporting_evidence", "Kanıtlar"),
+        ("risks", "Riskler"),
+        ("next_actions", "Sonraki Adımlar"),
+    ]:
+        values = parsed.get(key)
+        if isinstance(values, list) and values:
+            st.markdown(f"**{label}**")
+            for value in values:
+                st.write(f"- {value}")
+
+
+def render_llm_chatbot(llm_context: dict[str, Any]) -> None:
+    st.markdown(
+        """
+        <div class="section-kicker">LLM yorum katmanı</div>
+        <div class="section-title">OpenRouter Analist Chatbotu</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Bu bölüm yeni hesap yapmaz. Analizdeki p(win), fiyat koridoru, benzer ihaleler, "
+        "IsolationForest, KMeans, Linear Regression ve XGBoost çıktılarını LLM'e structured context "
+        "olarak gönderir ve yönetici yorumu üretir."
+    )
+
+    openrouter_api_key = get_server_openrouter_api_key()
+    if openrouter_api_key:
+        st.success("LLM chatbot aktif.")
+    else:
+        st.warning("LLM chatbot için server API key tanımlı değil.")
+
+    llm_primary_label = st.selectbox(
+        "Chatbot modeli",
+        DEFAULT_OPENROUTER_MODEL_LABELS,
+        index=0,
+    )
+    fallback_default = [
+        label for label in DEFAULT_OPENROUTER_MODEL_LABELS if label != llm_primary_label
+    ][:2]
+    llm_fallback_labels = st.multiselect(
+        "Fallback modeller",
+        DEFAULT_OPENROUTER_MODEL_LABELS,
+        default=fallback_default,
+        help="Primary model cevap veremezse uygulama bu modelleri sırayla dener.",
+    )
+    llm_model_ids = selected_openrouter_model_ids(llm_primary_label, llm_fallback_labels)
+    model_chain = " -> ".join(f"`{model_id}`" for model_id in llm_model_ids)
+    st.markdown(f"**Model sırası:** {model_chain}")
+
+    llm_question = st.text_area(
+        "Chatbot sorusu",
+        value=(
+            "Bu ihalede p(win)'i artırmak için hangi fiyat seviyesini ve hangi aksiyonları önerirsin? "
+            "Marj riskini ve model sinyallerini birlikte yorumla."
+        ),
+        height=92,
+    )
+    llm_cols = st.columns([0.9, 1.4], gap="small")
+    with llm_cols[0]:
+        generate_llm_clicked = st.button("LLM yorumu üret", width="stretch")
+    with llm_cols[1]:
+        show_context = st.checkbox("LLM'e gönderilecek structured context'i göster", value=False)
+
+    if show_context:
+        st.json(llm_context, expanded=False)
+
+    if generate_llm_clicked:
+        if not openrouter_api_key:
+            st.warning(
+                "LLM chatbot şu anda kullanılamıyor. Server tarafında OPENROUTER_API_KEY veya Streamlit secrets tanımlanmalı."
+            )
+        else:
+            with st.spinner("OpenRouter üzerinden structured LLM yorumu alınıyor..."):
+                try:
+                    llm_result = call_openrouter_interpretation(
+                        api_key=openrouter_api_key,
+                        model_ids=llm_model_ids,
+                        context=llm_context,
+                        user_question=llm_question,
+                    )
+                except requests.HTTPError as exc:
+                    response_text = exc.response.text if exc.response is not None else str(exc)
+                    st.error(f"OpenRouter isteği başarısız oldu: {response_text}")
+                except requests.RequestException as exc:
+                    st.error(f"OpenRouter bağlantı hatası: {exc}")
+                except (KeyError, IndexError, ValueError, TypeError, RuntimeError) as exc:
+                    st.error(f"LLM yorumu alınamadı veya yanıt beklenen formatta değil: {exc}")
+                else:
+                    render_llm_structured_response(llm_result)
+
+
 def render_how_it_works_tab() -> None:
     st.markdown(
         """
@@ -1642,7 +2121,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-analysis_tab, how_it_works_tab = st.tabs(["Analiz", "Nasıl çalışır?"])
+analysis_tab, how_it_works_tab, llm_tab = st.tabs(["Analiz", "Nasıl çalışır?", "LLM yorum katmanı"])
 
 with how_it_works_tab:
     render_how_it_works_tab()
@@ -1744,693 +2223,741 @@ with analysis_tab:
 
     if not st.session_state.analysis_ready:
         st.info("İhale bilgilerini girin ve geçmiş kazanımlara göre fiyat aralığını görmek için Analiz Et'e tıklayın.")
-        st.stop()
+    else:
+        query = {
+            "product_name": product_name,
+            "product_group": product_group,
+            "region": region,
+            "procedure_type": procedure_type,
+            "buyer_institution": buyer_institution,
+            "quantity": int(quantity),
+            "delivery_months": int(delivery_months),
+            "competitor_count_estimate": int(competitor_count),
+        }
 
-    query = {
-        "product_name": product_name,
-        "product_group": product_group,
-        "region": region,
-        "procedure_type": procedure_type,
-        "buyer_institution": buyer_institution,
-        "quantity": int(quantity),
-        "delivery_months": int(delivery_months),
-        "competitor_count_estimate": int(competitor_count),
-    }
+        models = train_price_models(df, PRICE_MODEL_VERSION, data_mtime_ns)
+        profile_models = train_success_profile_models(df, SUCCESS_PROFILE_VERSION, data_mtime_ns)
+        similar = retrieve_similar_tenders(df, query, top_k=SIMILAR_TENDER_COUNT)
+        similar_display = similar.head(DISPLAY_TENDER_COUNT)
+        price_corridor = percentile_metrics(similar[PRIMARY_PRICE_FIELD])
+        nominal_reference = percentile_metrics(similar[REFERENCE_PRICE_FIELD])
+        margin_benchmark = {
+            "average": float(similar["gross_margin_pct"].mean()),
+            "median": float(similar["gross_margin_pct"].median()),
+            "p25": float(similar["gross_margin_pct"].quantile(0.25)),
+            "p75": float(similar["gross_margin_pct"].quantile(0.75)),
+        }
+        discount_benchmark = {
+            "average": float(similar["discount_to_estimated_cost_pct"].mean()),
+            "median": float(similar["discount_to_estimated_cost_pct"].median()),
+        }
 
-    models = train_price_models(df, PRICE_MODEL_VERSION, data_mtime_ns)
-    profile_models = train_success_profile_models(df, SUCCESS_PROFILE_VERSION, data_mtime_ns)
-    similar = retrieve_similar_tenders(df, query, top_k=SIMILAR_TENDER_COUNT)
-    similar_display = similar.head(DISPLAY_TENDER_COUNT)
-    price_corridor = percentile_metrics(similar[PRIMARY_PRICE_FIELD])
-    nominal_reference = percentile_metrics(similar[REFERENCE_PRICE_FIELD])
-    margin_benchmark = {
-        "average": float(similar["gross_margin_pct"].mean()),
-        "median": float(similar["gross_margin_pct"].median()),
-        "p25": float(similar["gross_margin_pct"].quantile(0.25)),
-        "p75": float(similar["gross_margin_pct"].quantile(0.75)),
-    }
-    discount_benchmark = {
-        "average": float(similar["discount_to_estimated_cost_pct"].mean()),
-        "median": float(similar["discount_to_estimated_cost_pct"].median()),
-    }
-
-    model_predictions = predict_model_prices(models, query)
-    model_corridor = build_model_supported_corridor(price_corridor, model_predictions, models)
-    scenario_prices = {
-        "Düşük fiyat": model_corridor["low"],
-        "Orta fiyat": model_corridor["middle"],
-        "Yüksek fiyat": model_corridor["high"],
-    }
-    model_confidence = model_confidence_level(
-        float(similar["overall_similarity_score"].mean()),
-        price_corridor["median"],
-        model_predictions["linear"],
-        model_predictions["xgboost"],
-    )
-    model_center_values = np.array(
-        [price_corridor["median"], model_predictions["linear"], model_predictions["xgboost"]],
-        dtype=float,
-    )
-    model_disagreement_pct = (
-        (model_center_values.max() - model_center_values.min())
-        / max(float(model_center_values.mean()), 1.0)
-        * 100
-    )
-    margins = scenario_margins(model_corridor, estimated_unit_cost_try)
-    average_similarity = float(similar["overall_similarity_score"].mean())
-    confidence = confidence_level(len(similar), average_similarity)
-    balanced_margin = margins["Orta fiyat"]
-    price_fit = historical_price_fit(
-        scenario_prices["Orta fiyat"],
-        price_corridor,
-        balanced_margin,
-    )
-    profile_query_frame = build_profile_query_frame(
-        query,
-        scenario_prices["Orta fiyat"],
-        balanced_margin,
-    )
-    success_profile_scores = score_success_profiles(profile_models, profile_query_frame)
-    high_similarity_share = float((similar["overall_similarity_score"] >= 0.70).mean() * 100)
-    strong_similar_count = int((similar["overall_similarity_score"] >= 0.70).sum())
-    empirical_pwin = empirical_pwin_score(
-        average_similarity,
-        high_similarity_share,
-        float(price_fit["score"]),
-        float(success_profile_scores["one_class_score"]),
-        float(success_profile_scores["cluster_score"]),
-    )
-    pwin_similarity_contribution = 0.30 * average_similarity * 100
-    pwin_strong_case_contribution = 0.15 * high_similarity_share
-    pwin_price_fit_contribution = 0.25 * float(price_fit["score"])
-    pwin_one_class_contribution = 0.15 * float(success_profile_scores["one_class_score"])
-    pwin_cluster_contribution = 0.15 * float(success_profile_scores["cluster_score"])
-
-    similarity_component = average_similarity * 100
-    margin_component = margin_score(balanced_margin)
-    strategic_fit_component = float(similar["strategic_fit_score"].mean())
-    competition_component = competition_score(int(competitor_count))
-    delivery_component = delivery_score(int(delivery_months))
-    similarity_contribution = 0.25 * similarity_component
-    margin_contribution = 0.30 * margin_component
-    strategic_fit_contribution = 0.20 * strategic_fit_component
-    competition_contribution = 0.15 * competition_component
-    delivery_contribution = 0.10 * delivery_component
-
-    final_attractiveness_score = (
-        similarity_contribution
-        + margin_contribution
-        + strategic_fit_contribution
-        + competition_contribution
-        + delivery_contribution
-    )
-    final_label = attractiveness_label(final_attractiveness_score)
-
-    st.markdown("---")
-    st.markdown(
-        """
-        <div class="section-kicker">Bulguların özeti</div>
-        <div class="section-title">Yönetici Özeti</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    top_metrics = st.columns(3, gap="medium")
-    with top_metrics[0]:
-        metric_card("Emsal p(win)", format_pct(empirical_pwin), "Emsal bazlı oran")
-    with top_metrics[1]:
-        metric_card("Model orta fiyat", format_try(scenario_prices["Orta fiyat"]), "Mayıs 2026 seviyesinde")
-    with top_metrics[2]:
-        metric_card("Orta fiyat kazancı", format_pct(balanced_margin), "Birim fiyat ve maliyete göre")
-
-    support_metrics = st.columns(2, gap="medium")
-    with support_metrics[0]:
-        metric_card("Emsal havuzu", f"{len(similar)} ihale", f"Güçlü emsal: {strong_similar_count}")
-    with support_metrics[1]:
-        metric_card("Model güveni", model_confidence, f"Ortalama benzerlik: {average_similarity:.2f}")
-    st.caption(
-        "Bu bölüm bulguların kısa özetidir. Emsal havuzu, fiyat hesabında kullanılan en benzer 50 kazanılmış ihaleyi gösterir. "
-        f"Güçlü emsal sayısı, bu 50 ihale içinde benzerlik skoru 0.70 ve üzeri olan kayıt adedidir; bu analizde {strong_similar_count}. "
-        "Emsal p(win), geçmişte kazanılmış emsallere dayanarak üretilen oran formatında bir karar destek göstergesidir. "
-        "Ortalama benzerlik, güçlü emsal sayısı, fiyatın tarihsel kazanım bandına uyumu, One-Class profil yakınlığı "
-        "ve başarı profili eşleşmesi birlikte değerlendirilir."
-    )
-    st.caption(
-        "Ortalama benzerlik şöyle bulunur: sistem önce veri tabanındaki her geçmiş ihaleye 0-1 arası benzerlik skoru verir, "
-        "sonra en yüksek skorlu 50 ihalenin ortalamasını alır. Metin tarafında bu sürüm yerel embedding kullanır: "
-        "ihale metinleri dense vektöre çevrilir ve cosine similarity ile karşılaştırılır. Ürün grubu, ürün adı, bölge, "
-        "usul, miktar, teslim süresi ve rakip sayısı da ayrıca ağırlıklandırılır."
-    )
-    st.caption(
-        f"Model güveni {model_confidence.lower()} çünkü benzer ihale medyanı, Linear tahmin ve "
-        f"XGBoost tahmin arasındaki ayrışma yaklaşık %{model_disagreement_pct:.1f}. "
-        "Ayrışma yükseldikçe sistem sonucu daha dikkatli yorumlamak gerekir."
-    )
-
-    section_1 = st.container()
-
-    with section_1:
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="section-kicker">1. Emsal bulma</div>
-                <div class="section-title">En Benzer 10 Kazanılmış İhale</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            table = similar_display[
-                [
-                    "tender_id",
-                    "year",
-                    "product_name",
-                    "product_group",
-                    "region",
-                    "procedure_type",
-                    "winning_unit_price_try",
-                    PRIMARY_PRICE_FIELD,
-                    "gross_margin_pct",
-                    "discount_to_estimated_cost_pct",
-                    "overall_similarity_score",
-                ]
-            ].copy()
-            table.columns = [
-                "İhale ID",
-                "Yıl",
-                "Ürün",
-                "Grup",
-                "Bölge",
-                "Usul",
-                "O günkü fiyat",
-                "Mayıs 2026 fiyatı",
-                "Birim kazanç %",
-                "Yaklaşık maliyet altı %",
-                "Benzerlik",
-            ]
-            st.dataframe(
-                table,
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    "O günkü fiyat": st.column_config.NumberColumn(format="%.2f TL"),
-                    "Mayıs 2026 fiyatı": st.column_config.NumberColumn(format="%.2f TL"),
-                    "Birim kazanç %": st.column_config.NumberColumn(format="%.2f"),
-                    "Yaklaşık maliyet altı %": st.column_config.NumberColumn(format="%.2f"),
-                    "Benzerlik": st.column_config.NumberColumn(format="%.3f"),
-                },
-            )
-            st.caption(
-                "Benzerlik skoru; metin benzerliği, ürün grubu, ürün adı, bölge, ihale usulü, "
-                "miktar, teslim süresi ve tahmini rakip sayısını birlikte ölçer. "
-                "Bu sürümde metin tarafı yerel embedding ile hesaplanır: ihale metinleri vektöre çevrilir ve "
-                "cosine similarity ile karşılaştırılır. Üretim versiyonunda bu katman transformer tabanlı embedding "
-                "modeliyle daha da güçlendirilebilir. Mevcut ağırlıklar: 0.45 metin embedding benzerliği, "
-                "0.12 ürün grubu, 0.10 ürün adı, 0.08 bölge, 0.05 ihale usulü, 0.10 miktar, "
-                "0.05 teslim süresi, 0.05 rakip sayısı."
-            )
-
-    section_3 = st.container()
-    section_4 = st.container()
-
-    with section_3:
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="section-title">2. Fiyat Aralığı - Model Destekli Fiyat Aralığı</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            corridor_rows = pd.DataFrame(
-                [
-                    [
-                        "Benzer ihale medyanı",
-                        price_corridor["median"],
-                        "En benzer 50 kazanılmış ihalenin Mayıs 2026 seviyesindeki orta fiyatı.",
-                    ],
-                    [
-                        "Linear Regression tahmini",
-                        model_predictions["linear"],
-                        "Basit ve açıklanabilir fiyat modeli tahmini.",
-                    ],
-                    [
-                        "XGBoost tahmini",
-                        model_predictions["xgboost"],
-                        "Ürün, bölge, miktar ve usul kombinasyonlarını yakalayan model tahmini.",
-                    ],
-                    [
-                        "Model destekli düşük",
-                        scenario_prices["Düşük fiyat"],
-                        "Geçmiş fiyat alt bandı ve model düşük sınırları birlikte değerlendirilir.",
-                    ],
-                    [
-                        "Model destekli orta",
-                        scenario_prices["Orta fiyat"],
-                        "Ana referans fiyat; birim kazanç ve toplam tutar hesaplarında kullanılır.",
-                    ],
-                    [
-                        "Model destekli yüksek",
-                        scenario_prices["Yüksek fiyat"],
-                        "Geçmiş fiyat üst bandı ve model yüksek sınırları birlikte değerlendirilir.",
-                    ],
-                    [
-                        "Top-k p90 üst eşiği",
-                        price_corridor["p90"],
-                        "Benzer kazanılmış ihalelerde fiyatların %90'ının altında kaldığı eşik.",
-                    ],
-                    [
-                        "Top-k dağılım",
-                        price_corridor["std"],
-                        "Benzer ihalelerde fiyatların birbirinden ne kadar ayrıştığını gösterir.",
-                    ],
-                ],
-                columns=["Gösterge", "Mayıs 2026 değeri", "Açıklama"],
-            )
-            st.dataframe(
-                corridor_rows,
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    "Mayıs 2026 değeri": st.column_config.NumberColumn(format="%.2f TL"),
-                },
-            )
-            st.caption(
-                "Buradaki üç öneri tek bir modelden gelmez. Düşük fiyat; en benzer 50 ihalenin "
-                "p25 fiyatı, Linear modelin düşük sınırı ve XGBoost modelin düşük sınırı arasından "
-                "ortadaki değer seçilerek hesaplanır. Orta fiyat; top-k medyan, Linear tahmin ve "
-                "XGBoost tahmin arasından ortadaki değerdir. Yüksek fiyat; top-k p75, Linear yüksek "
-                "sınır ve XGBoost yüksek sınır arasından ortadaki değerdir."
-            )
-            st.markdown(
-                f'<span class="confidence">Model güveni: {model_confidence}</span>',
-                unsafe_allow_html=True,
-            )
-            st.caption(
-                f"Bu analizde model güvenini belirleyen üç merkez değer: benzer ihale medyanı "
-                f"{format_try(price_corridor['median'])}, Linear tahmin "
-                f"{format_try(model_predictions['linear'])}, XGBoost tahmin "
-                f"{format_try(model_predictions['xgboost'])}. Bu değerler birbirinden uzaklaştığında "
-                "güven düşer; yakınlaştığında güven artar."
-            )
-            st.caption(
-                f"Tarihsel kazanım fiyat uyumu: {price_fit['label']} ({price_fit['level']}). "
-                f"Model destekli orta fiyat {format_try(scenario_prices['Orta fiyat'])}; "
-                f"top-k p25 {format_try(price_corridor['p25'])}, p75 {format_try(price_corridor['p75'])}, "
-                f"p90 {format_try(price_corridor['p90'])}. {price_fit['explanation']}"
-            )
-            st.markdown("##### Önerilen fiyat seçenekleri")
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        ["Düşük fiyat", scenario_prices["Düşük fiyat"]],
-                        ["Orta fiyat", scenario_prices["Orta fiyat"]],
-                        ["Yüksek fiyat", scenario_prices["Yüksek fiyat"]],
-                    ],
-                    columns=["Seçenek", "Önerilen birim fiyat"],
-                ),
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    "Önerilen birim fiyat": st.column_config.NumberColumn(format="%.2f TL")
-                },
-            )
-            st.caption(
-                f"Bu analizde düşük fiyat {format_try(scenario_prices['Düşük fiyat'])}, "
-                f"orta fiyat {format_try(scenario_prices['Orta fiyat'])}, "
-                f"yüksek fiyat {format_try(scenario_prices['Yüksek fiyat'])} olarak oluştu."
-            )
-
-    with section_4:
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="section-title">3. Maliyet ve Kazanç - Birim Fiyata Göre Kazanç Oranı</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        ["Düşük fiyat", scenario_prices["Düşük fiyat"], margins["Düşük fiyat"]],
-                        ["Orta fiyat", scenario_prices["Orta fiyat"], margins["Orta fiyat"]],
-                        ["Yüksek fiyat", scenario_prices["Yüksek fiyat"], margins["Yüksek fiyat"]],
-                    ],
-                columns=["Seçenek", "Birim fiyat", "Birim kazanç %"],
-            ),
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    "Birim fiyat": st.column_config.NumberColumn(format="%.2f TL"),
-                    "Birim kazanç %": st.column_config.NumberColumn(format="%.2f"),
-                },
-            )
-            st.caption(
-                f"Birim kazanç oranı, satış fiyatından tahmini birim maliyet çıkarıldıktan sonra "
-                f"fiyatın yüzde kaçının kazanç olarak kaldığını gösterir. Bu analizde tahmini birim "
-                f"maliyet {format_try(estimated_unit_cost_try)}."
-            )
-            st.markdown("##### Geçmiş ihalelerde birim kazanç")
-            st.caption(
-                "Birim kazanç oranı, geçmiş ihalede kazanan fiyat ile iç maliyet arasındaki yüzde ilişkiyi gösterir."
-            )
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        ["Ortalama birim kazanç", margin_benchmark["average"]],
-                        ["Orta birim kazanç", margin_benchmark["median"]],
-                        ["Düşük seviye", margin_benchmark["p25"]],
-                        ["Yüksek seviye", margin_benchmark["p75"]],
-                    ],
-                    columns=["Gösterge", "Değer"],
-                ),
-                hide_index=True,
-                width="stretch",
-                column_config={"Değer": st.column_config.NumberColumn(format="%.2f")},
-            )
-
-    with st.container(border=True):
-        st.markdown(
-            """
-            <div class="section-kicker">3. Maliyet ve kazanç</div>
-            <div class="section-title">Yaklaşık Maliyete Göre Geçmiş Teklif Seviyesi</div>
-            """,
-            unsafe_allow_html=True,
+        model_predictions = predict_model_prices(models, query)
+        model_corridor = build_model_supported_corridor(price_corridor, model_predictions, models)
+        scenario_prices = {
+            "Düşük fiyat": model_corridor["low"],
+            "Orta fiyat": model_corridor["middle"],
+            "Yüksek fiyat": model_corridor["high"],
+        }
+        model_confidence = model_confidence_level(
+            float(similar["overall_similarity_score"].mean()),
+            price_corridor["median"],
+            model_predictions["linear"],
+            model_predictions["xgboost"],
         )
-        st.markdown(
-            """
-            <div class="explain-box">
-                Kamu ihalelerinde “yaklaşık maliyet”, alıcının ihale öncesi tahmini maliyet seviyesidir.
-                Bu bölüm, benzer kazanılmış
-                ihalelerde kazanan fiyatların bu yaklaşık maliyetin ortalama ne kadar altında kaldığını
-                gösterir. Amaç, geçmişte kazanılan tekliflerin ne kadar agresif veya normal fiyatlandığını okumaktır.
-            </div>
-            """,
-            unsafe_allow_html=True,
+        model_center_values = np.array(
+            [price_corridor["median"], model_predictions["linear"], model_predictions["xgboost"]],
+            dtype=float,
         )
-        cost_cols = st.columns(3, gap="medium")
-        with cost_cols[0]:
-            metric_card(
-                "Ortalama yaklaşık maliyet altı",
-                format_pct(discount_benchmark["average"]),
-                f"Benzer {len(similar)} kazanılmış ihale",
-            )
-        with cost_cols[1]:
-            metric_card(
-                "Orta yaklaşık maliyet altı",
-                format_pct(discount_benchmark["median"]),
-                "Benzer ihalelerin orta seviyesi",
-            )
-        with cost_cols[2]:
-            metric_card(
-                "Tahmini toplam ihale tutarı",
-                format_try(scenario_prices["Orta fiyat"] * quantity),
-                "Birim fiyat x miktar",
-            )
-        st.caption(
-            f"Tahmini toplam ihale tutarı, bu ihalenin yaklaşık parasal büyüklüğünü gösterir. "
-            f"Hesap: model destekli orta birim fiyat ({format_try(scenario_prices['Orta fiyat'])}) "
-            f"x girilen miktar ({int(quantity):,}).".replace(",", ".")
+        model_disagreement_pct = (
+            (model_center_values.max() - model_center_values.min())
+            / max(float(model_center_values.mean()), 1.0)
+            * 100
         )
+        margins = scenario_margins(model_corridor, estimated_unit_cost_try)
+        average_similarity = float(similar["overall_similarity_score"].mean())
+        confidence = confidence_level(len(similar), average_similarity)
+        balanced_margin = margins["Orta fiyat"]
+        price_fit = historical_price_fit(
+            scenario_prices["Orta fiyat"],
+            price_corridor,
+            balanced_margin,
+        )
+        profile_query_frame = build_profile_query_frame(
+            query,
+            scenario_prices["Orta fiyat"],
+            balanced_margin,
+        )
+        success_profile_scores = score_success_profiles(profile_models, profile_query_frame)
+        high_similarity_share = float((similar["overall_similarity_score"] >= 0.70).mean() * 100)
+        strong_similar_count = int((similar["overall_similarity_score"] >= 0.70).sum())
+        empirical_pwin = empirical_pwin_score(
+            average_similarity,
+            high_similarity_share,
+            float(price_fit["score"]),
+            float(success_profile_scores["one_class_score"]),
+            float(success_profile_scores["cluster_score"]),
+        )
+        pwin_similarity_contribution = 0.30 * average_similarity * 100
+        pwin_strong_case_contribution = 0.15 * high_similarity_share
+        pwin_price_fit_contribution = 0.25 * float(price_fit["score"])
+        pwin_one_class_contribution = 0.15 * float(success_profile_scores["one_class_score"])
+        pwin_cluster_contribution = 0.15 * float(success_profile_scores["cluster_score"])
+        pwin_contributions = {
+            "average_similarity": pwin_similarity_contribution,
+            "strong_similar_share": pwin_strong_case_contribution,
+            "historical_price_fit": pwin_price_fit_contribution,
+            "isolation_forest_profile_fit": pwin_one_class_contribution,
+            "kmeans_success_profile_fit": pwin_cluster_contribution,
+        }
 
-    profile = success_profile_scores["profile"]
-    st.markdown(
-        """
-        <div class="section-kicker">4. Kazanım profili analizi</div>
-        <div class="section-title">One-Class ve KMeans Profil Modelleri</div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "Bu bölüm fiyat tahmini yapmaz. Buradaki amaç, yeni ihalenin geçmişte kazanılmış iş tiplerine "
-        "ne kadar benzediğini ve hangi başarı profiline yakın durduğunu göstermektir."
-    )
-    st.markdown(
-        f"""
-        <div class="profile-card-grid">
-            <div class="profile-card-panel">
-                <div class="section-kicker">One-Class modeli</div>
-                <div class="section-title">Kazanım Profili Yakınlığı</div>
-                <div class="profile-summary">
-                    <div class="profile-status">{escape(success_profile_scores["one_class_label"])}</div>
-                    <div class="profile-score">{success_profile_scores["one_class_score"]:.0f}/100</div>
-                    <div class="profile-note">Geçmiş kazanım profiline benzerlik</div>
-                </div>
-                <span class="method-badge">Yöntem: One-Class / Isolation Forest</span>
-                <p>
-                    Bu skor, yeni ihalenin geçmişte kazanılmış işlerin genel şekline ne kadar benzediğini gösterir.
-                    Skor yükseldikçe ihale daha tanıdık; skor düştükçe daha sıra dışı görünür.
-                </p>
-            </div>
-            <div class="profile-card-panel">
-                <div class="section-kicker">Kümeleme modeli</div>
-                <div class="section-title">Başarı Profili</div>
-                <div class="profile-summary">
-                    <div class="profile-status">En yakın başarı grubu</div>
-                    <div class="profile-score">{escape(success_profile_scores["cluster_label"])}</div>
-                    <div class="profile-note">{escape(profile["name"])}</div>
-                </div>
-                <span class="method-badge green">Yöntem: KMeans başarı grupları</span>
-                <p>
-                    KMeans geçmiş kazanılmış ihaleleri 4 başarı grubuna ayırır. Bu ihale en çok
-                    {escape(profile["name"])} grubuna benziyor. Grup {profile["count"]} ihale içerir;
-                    tipik fiyat {escape(format_try(profile["median_price"]))}, tipik birim kazanç
-                    {escape(format_pct(profile["median_margin"]))}. Eşleşme gücü
-                    {success_profile_scores["cluster_score"]:.0f}/100 olduğu için bu sonuç
-                    {escape(success_profile_scores["cluster_label"].lower())} olarak yorumlanır.
-                </p>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        similarity_component = average_similarity * 100
+        margin_component = margin_score(balanced_margin)
+        strategic_fit_component = float(similar["strategic_fit_score"].mean())
+        competition_component = competition_score(int(competitor_count))
+        delivery_component = delivery_score(int(delivery_months))
+        similarity_contribution = 0.25 * similarity_component
+        margin_contribution = 0.30 * margin_component
+        strategic_fit_contribution = 0.20 * strategic_fit_component
+        competition_contribution = 0.15 * competition_component
+        delivery_contribution = 0.10 * delivery_component
 
-    with st.container(border=True):
-        st.markdown(
-            """
-            <div class="section-kicker">5. Emsal kazanım değerlendirmesi</div>
-            <div class="section-title">Emsal p(win) - Karar Destek Oranı</div>
-            """,
-            unsafe_allow_html=True,
+        final_attractiveness_score = (
+            similarity_contribution
+            + margin_contribution
+            + strategic_fit_contribution
+            + competition_contribution
+            + delivery_contribution
         )
-        st.markdown(
-            f"""
-            <div class="explain-box">
-                <b>Emsal p(win): {format_pct(empirical_pwin)}</b><br>
-                Bu yüzde, “bu ihale geçmişte kazandığımız işlere ve fiyat davranışımıza ne kadar yakın?”
-                sorusunun özetidir. 100'e yaklaştıkça yeni ihale, geçmiş kazanılmış emsallere daha çok benzer
-                ve önerilen fiyat geçmiş kazanım bandına daha iyi oturur. Veri setinde kaybedilen ihaleler
-                olmadığı için bu değer gerçek kazan/kaybet olasılığı değil, emsal bazlı kazanım göstergesidir.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        pwin_rows = pd.DataFrame(
-            [
-                [
-                    "Ortalama benzerlik",
-                    "%30",
-                    f"{average_similarity:.2f}",
-                    f"{pwin_similarity_contribution:.1f} puan",
-                    "Yeni ihale, en benzer 50 kazanılmış ihaleye ne kadar benziyor?",
-                ],
-                [
-                    "Güçlü emsal oranı",
-                    "%15",
-                    f"{strong_similar_count}/{len(similar)}",
-                    f"{pwin_strong_case_contribution:.1f} puan",
-                    "Top-50 içinde benzerlik skoru 0.70 üstü olan güçlü emsal sayısı.",
-                ],
-                [
-                    "Tarihsel fiyat bandı uyumu",
-                    "%25",
-                    price_fit["label"],
-                    f"{pwin_price_fit_contribution:.1f} puan",
-                    "Önerilen orta fiyat, geçmişte kazanılmış benzer fiyatların içinde mi?",
-                ],
-                [
-                    "Kazanım profili yakınlığı",
-                    "%15",
-                    f"{success_profile_scores['one_class_label']} ({success_profile_scores['one_class_score']:.0f}/100)",
-                    f"{pwin_one_class_contribution:.1f} puan",
-                    "Yeni ihale, geçmişte kazandığımız işlerin genel şekline benziyor mu?",
-                ],
-                [
-                    "Başarı grubu eşleşmesi",
-                    "%15",
-                    success_profile_scores["cluster_label"],
-                    f"{pwin_cluster_contribution:.1f} puan",
-                    "Yeni ihale, geçmiş kazanılmış iş gruplarından hangisine benziyor?",
-                ],
-            ],
-            columns=[
-                "Bileşen",
-                "p(win) içindeki ağırlık",
-                "Bu analizde sonuç",
-                "100 üzerinden katkı puanı",
-                "Ne anlatır?",
-            ],
-        )
-        st.dataframe(
-            pwin_rows,
-            hide_index=True,
-            width="stretch",
-        )
-
-        detail_cols = st.columns(3, gap="medium")
-        with detail_cols[0]:
-            mini_summary(
-                "One-Class yorumu",
-                success_profile_scores["one_class_label"],
-                f"{success_profile_scores['one_class_score']:.0f}/100 profil yakınlığı",
-            )
-            st.caption(
-                "One-Class / Isolation Forest modeli sadece kazanılmış ihalelerden öğrenir. Skor yüksekse yeni ihale "
-                "geçmiş kazanım profilimize benzer; skor düşükse bu ihale alışılmış kazanım profilimizin dışında kalır."
-            )
-        with detail_cols[1]:
-            mini_summary(
-                "Başarı profili",
-                success_profile_scores["cluster_label"],
-                profile["name"],
-            )
-            st.caption(
-                f"Geçmiş kazanılmış ihaleler 4 başarı grubuna ayrılır. Seçilen grup {profile['count']} "
-                f"ihale içerir; tipik fiyat {format_try(profile['median_price'])}, tipik birim kazanç oranı "
-                f"{format_pct(profile['median_margin'])}."
-            )
-        with detail_cols[2]:
-            mini_summary(
-                "Fiyat uyumu",
-                price_fit["level"],
-                price_fit["label"],
-            )
-            st.caption(
-                f"Model destekli orta fiyat {format_try(scenario_prices['Orta fiyat'])}. "
-                f"Benzer kazanılmış ihalelerde p25 {format_try(price_corridor['p25'])}, "
-                f"p75 {format_try(price_corridor['p75'])}, p90 {format_try(price_corridor['p90'])}."
-            )
-
-    with st.container(border=True):
-        st.markdown(
-            """
-            <div class="section-kicker">6. Fırsat önceliği</div>
-            <div class="section-title">İhale Öncelik Puanı</div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.plotly_chart(
-            build_gauge(final_attractiveness_score),
-            config={"displayModeBar": False, "staticPlot": True},
-        )
-        st.markdown(
-            f"""
-            <div class="score-card">
-                <div class="score-value">{final_attractiveness_score:.0f}</div>
-                <div class="score-label">{final_label}</div>
-                <p class="metric-note">
-                    Bu puan, ihalenin teklif sürecinde ne kadar öncelikli ele alınabileceğini gösterir.
-                    Fiyat tahmini veya kazanma olasılığı değildir.
-                </p>
-                <span class="confidence">Güven: {confidence}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.caption(
-            f"Bu puan, satış/ihale ekibinin fırsatı önceliklendirmesi için kullanılır. "
-            f"Katkılar: geçmiş emsale benzerlik {similarity_contribution:.1f} puan, "
-            f"birim kazanç sağlığı {margin_contribution:.1f} puan, stratejik uyum "
-            f"{strategic_fit_contribution:.1f} puan, rekabet koşulu "
-            f"{competition_contribution:.1f} puan, teslim süresi "
-            f"{delivery_contribution:.1f} puan. Toplam {final_attractiveness_score:.0f}/100."
-        )
-
-    with st.container(border=True):
-        st.markdown(
-            """
-            <div class="section-kicker">7. Model kontrolü</div>
-            <div class="section-title">5-Fold Backtest Metrikleri</div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    [
-                        "Linear Regression",
-                        models["linear_residuals"]["mae"],
-                        models["linear_residuals"]["mape"],
-                        models["linear_residuals"]["coverage"],
-                    ],
-                    [
-                        "XGBoost",
-                        models["xgboost_residuals"]["mae"],
-                        models["xgboost_residuals"]["mape"],
-                        models["xgboost_residuals"]["coverage"],
-                    ],
-                ],
-                columns=["Model", "MAE", "MAPE %", "Koridor coverage %"],
-            ),
-            hide_index=True,
-            width="stretch",
-            column_config={
-                "MAE": st.column_config.NumberColumn(format="%.2f TL"),
-                "MAPE %": st.column_config.NumberColumn(format="%.2f"),
-                "Koridor coverage %": st.column_config.NumberColumn(format="%.1f"),
+        final_label = attractiveness_label(final_attractiveness_score)
+        llm_context = build_llm_context(
+            query=query,
+            estimated_unit_cost_try=float(estimated_unit_cost_try),
+            similar=similar,
+            price_corridor=price_corridor,
+            nominal_reference=nominal_reference,
+            margin_benchmark=margin_benchmark,
+            discount_benchmark=discount_benchmark,
+            model_corridor=model_corridor,
+            scenario_prices=scenario_prices,
+            margins=margins,
+            model_predictions=model_predictions,
+            models=models,
+            model_confidence=model_confidence,
+            model_disagreement_pct=model_disagreement_pct,
+            price_fit=price_fit,
+            success_profile_scores=success_profile_scores,
+            empirical_pwin=empirical_pwin,
+            pwin_contributions=pwin_contributions,
+            final_score_components={
+                "similarity_component_raw": similarity_component,
+                "similarity_contribution": similarity_contribution,
+                "margin_component_raw": margin_component,
+                "margin_contribution": margin_contribution,
+                "strategic_fit_component_raw": strategic_fit_component,
+                "strategic_fit_contribution": strategic_fit_contribution,
+                "competition_component_raw": competition_component,
+                "competition_contribution": competition_contribution,
+                "delivery_component_raw": delivery_component,
+                "delivery_contribution": delivery_contribution,
             },
+            final_attractiveness_score=final_attractiveness_score,
+            final_label=final_label,
+            strong_similar_count=strong_similar_count,
         )
-        st.caption(
-            "MAE ortalama TL hatasını, MAPE ortalama yüzde hatayı, coverage ise geçmiş testlerde "
-            "gerçek fiyatın model hata payı koridoruna düşme oranını gösterir."
-        )
+        st.session_state.latest_llm_context = llm_context
 
-    with st.container(border=True):
+        st.markdown("---")
         st.markdown(
             """
-            <div class="section-kicker">8. Kısa açıklama</div>
-            <div class="section-title">Bu Sonuç Ne Anlama Geliyor?</div>
+            <div class="section-kicker">Bulguların özeti</div>
+            <div class="section-title">Yönetici Özeti</div>
             """,
             unsafe_allow_html=True,
         )
-        model_note = (
-            "Model tahminleri benzer ihale medyanıyla uyumlu görünüyor."
-            if model_confidence == "Yüksek"
-            else "Model tahminleri ile benzer ihale medyanı ayrışıyor; manuel inceleme önerilir."
-            if model_confidence == "Düşük"
-            else "Model tahminleri ve benzer ihale koridoru orta seviyede uyumlu."
+
+        top_metrics = st.columns(3, gap="medium")
+        with top_metrics[0]:
+            metric_card("Emsal p(win)", format_pct(empirical_pwin), "Emsal bazlı oran")
+        with top_metrics[1]:
+            metric_card("Model orta fiyat", format_try(scenario_prices["Orta fiyat"]), "Mayıs 2026 seviyesinde")
+        with top_metrics[2]:
+            metric_card("Orta fiyat kazancı", format_pct(balanced_margin), "Birim fiyat ve maliyete göre")
+
+        support_metrics = st.columns(2, gap="medium")
+        with support_metrics[0]:
+            metric_card("Emsal havuzu", f"{len(similar)} ihale", f"Güçlü emsal: {strong_similar_count}")
+        with support_metrics[1]:
+            metric_card("Model güveni", model_confidence, f"Ortalama benzerlik: {average_similarity:.2f}")
+        st.caption(
+            "Bu bölüm bulguların kısa özetidir. Emsal havuzu, fiyat hesabında kullanılan en benzer 50 kazanılmış ihaleyi gösterir. "
+            f"Güçlü emsal sayısı, bu 50 ihale içinde benzerlik skoru 0.70 ve üzeri olan kayıt adedidir; bu analizde {strong_similar_count}. "
+            "Emsal p(win), geçmişte kazanılmış emsallere dayanarak üretilen oran formatında bir karar destek göstergesidir. "
+            "Ortalama benzerlik, güçlü emsal sayısı, fiyatın tarihsel kazanım bandına uyumu, One-Class profil yakınlığı "
+            "ve başarı profili eşleşmesi birlikte değerlendirilir."
         )
-        corridor_calculation_note = (
-            f"Düşük fiyat hesabında üç değer karşılaştırıldı: top-k p25 "
-            f"({format_try(price_corridor['p25'])}), Linear düşük sınır "
-            f"({format_try(model_corridor['linear_low'])}) ve XGBoost düşük sınır "
-            f"({format_try(model_corridor['xgboost_low'])}). Bu üç değerin ortadaki değeri "
-            f"{format_try(scenario_prices['Düşük fiyat'])} olduğu için nihai düşük fiyat bu oldu. "
-            f"Orta fiyat hesabında top-k medyan ({format_try(price_corridor['median'])}), "
-            f"Linear tahmin ({format_try(model_predictions['linear'])}) ve XGBoost tahmin "
-            f"({format_try(model_predictions['xgboost'])}) karşılaştırıldı. Ortadaki değer "
-            f"{format_try(scenario_prices['Orta fiyat'])} olduğu için nihai orta fiyat bu oldu. "
-            f"Yüksek fiyat hesabında top-k p75 ({format_try(price_corridor['p75'])}), "
-            f"Linear yüksek sınır ({format_try(model_corridor['linear_high'])}) ve XGBoost yüksek sınır "
-            f"({format_try(model_corridor['xgboost_high'])}) karşılaştırıldı. Ortadaki değer "
-            f"{format_try(scenario_prices['Yüksek fiyat'])} olduğu için nihai yüksek fiyat bu oldu."
+        st.caption(
+            "Ortalama benzerlik şöyle bulunur: sistem önce veri tabanındaki her geçmiş ihaleye 0-1 arası benzerlik skoru verir, "
+            "sonra en yüksek skorlu 50 ihalenin ortalamasını alır. Metin tarafında bu sürüm yerel embedding kullanır: "
+            "ihale metinleri dense vektöre çevrilir ve cosine similarity ile karşılaştırılır. Ürün grubu, ürün adı, bölge, "
+            "usul, miktar, teslim süresi ve rakip sayısı da ayrıca ağırlıklandırılır."
         )
-        explanation = (
-            f"Emsal p(win) {format_pct(empirical_pwin)}. Bu oran; ortalama benzerlik "
-            f"{average_similarity:.2f}, güçlü emsal sayısı {strong_similar_count}/{len(similar)}, "
-            f"fiyat uyumu {price_fit['label'].lower()}, kazanım profili yakınlığı "
-            f"{success_profile_scores['one_class_score']:.0f}/100 ve başarı profili yakınlığı "
-            f"{success_profile_scores['cluster_score']:.0f}/100 sinyallerinden oluşur. "
-            f"{len(similar)} benzer kazanılmış ihale bulundu. Güven seviyesi {confidence.lower()}. "
-            f"Benzer ihale medyanı, en benzer 50 geçmiş ihalenin orta fiyatıdır ve bu analizde "
-            f"{format_try(price_corridor['median'])}. Linear Regression modeli aynı ihale için "
-            f"{format_try(model_predictions['linear'])} tahmin etti; bu model daha basit ve açıklanabilir "
-            f"bir fiyat referansı verir. XGBoost modeli {format_try(model_predictions['xgboost'])} tahmin etti; "
-            f"bu model ürün, bölge, miktar ve usul gibi değişkenlerin kombinasyon etkilerini yakalamaya çalışır. "
-            f"Cluster analizi bu ihaleyi '{success_profile_scores['profile']['name']}' tipindeki geçmiş başarı "
-            f"profiline en yakın buldu. One-Class model ise ihalenin genel kazanım profiline "
-            f"{success_profile_scores['one_class_label'].lower()} olduğunu gösterdi. "
-            f"Bu üç kaynak birlikte değerlendirildiğinde model destekli orta fiyat "
-            f"{format_try(scenario_prices['Orta fiyat'])} oldu. Girilen "
-            f"{format_try(estimated_unit_cost_try)} birim maliyete göre orta fiyat birim kazanç oranı "
-            f"{format_pct(balanced_margin)}. İhale puanı {final_attractiveness_score:.0f}/100 ve sonuç "
-            f"{final_label}. {model_note} {corridor_calculation_note}"
+        st.caption(
+            f"Model güveni {model_confidence.lower()} çünkü benzer ihale medyanı, Linear tahmin ve "
+            f"XGBoost tahmin arasındaki ayrışma yaklaşık %{model_disagreement_pct:.1f}. "
+            "Ayrışma yükseldikçe sistem sonucu daha dikkatli yorumlamak gerekir."
         )
-        st.markdown(f'<div class="explain-box">{explanation}</div>', unsafe_allow_html=True)
+
+        section_1 = st.container()
+
+        with section_1:
+            with st.container(border=True):
+                st.markdown(
+                    """
+                    <div class="section-kicker">1. Emsal bulma</div>
+                    <div class="section-title">En Benzer 10 Kazanılmış İhale</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                table = similar_display[
+                    [
+                        "tender_id",
+                        "year",
+                        "product_name",
+                        "product_group",
+                        "region",
+                        "procedure_type",
+                        "winning_unit_price_try",
+                        PRIMARY_PRICE_FIELD,
+                        "gross_margin_pct",
+                        "discount_to_estimated_cost_pct",
+                        "overall_similarity_score",
+                    ]
+                ].copy()
+                table.columns = [
+                    "İhale ID",
+                    "Yıl",
+                    "Ürün",
+                    "Grup",
+                    "Bölge",
+                    "Usul",
+                    "O günkü fiyat",
+                    "Mayıs 2026 fiyatı",
+                    "Birim kazanç %",
+                    "Yaklaşık maliyet altı %",
+                    "Benzerlik",
+                ]
+                st.dataframe(
+                    table,
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "O günkü fiyat": st.column_config.NumberColumn(format="%.2f TL"),
+                        "Mayıs 2026 fiyatı": st.column_config.NumberColumn(format="%.2f TL"),
+                        "Birim kazanç %": st.column_config.NumberColumn(format="%.2f"),
+                        "Yaklaşık maliyet altı %": st.column_config.NumberColumn(format="%.2f"),
+                        "Benzerlik": st.column_config.NumberColumn(format="%.3f"),
+                    },
+                )
+                st.caption(
+                    "Benzerlik skoru; metin benzerliği, ürün grubu, ürün adı, bölge, ihale usulü, "
+                    "miktar, teslim süresi ve tahmini rakip sayısını birlikte ölçer. "
+                    "Bu sürümde metin tarafı yerel embedding ile hesaplanır: ihale metinleri vektöre çevrilir ve "
+                    "cosine similarity ile karşılaştırılır. Üretim versiyonunda bu katman transformer tabanlı embedding "
+                    "modeliyle daha da güçlendirilebilir. Mevcut ağırlıklar: 0.45 metin embedding benzerliği, "
+                    "0.12 ürün grubu, 0.10 ürün adı, 0.08 bölge, 0.05 ihale usulü, 0.10 miktar, "
+                    "0.05 teslim süresi, 0.05 rakip sayısı."
+                )
+
+        section_3 = st.container()
+        section_4 = st.container()
+
+        with section_3:
+            with st.container(border=True):
+                st.markdown(
+                    """
+                    <div class="section-title">2. Fiyat Aralığı - Model Destekli Fiyat Aralığı</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                corridor_rows = pd.DataFrame(
+                    [
+                        [
+                            "Benzer ihale medyanı",
+                            price_corridor["median"],
+                            "En benzer 50 kazanılmış ihalenin Mayıs 2026 seviyesindeki orta fiyatı.",
+                        ],
+                        [
+                            "Linear Regression tahmini",
+                            model_predictions["linear"],
+                            "Basit ve açıklanabilir fiyat modeli tahmini.",
+                        ],
+                        [
+                            "XGBoost tahmini",
+                            model_predictions["xgboost"],
+                            "Ürün, bölge, miktar ve usul kombinasyonlarını yakalayan model tahmini.",
+                        ],
+                        [
+                            "Model destekli düşük",
+                            scenario_prices["Düşük fiyat"],
+                            "Geçmiş fiyat alt bandı ve model düşük sınırları birlikte değerlendirilir.",
+                        ],
+                        [
+                            "Model destekli orta",
+                            scenario_prices["Orta fiyat"],
+                            "Ana referans fiyat; birim kazanç ve toplam tutar hesaplarında kullanılır.",
+                        ],
+                        [
+                            "Model destekli yüksek",
+                            scenario_prices["Yüksek fiyat"],
+                            "Geçmiş fiyat üst bandı ve model yüksek sınırları birlikte değerlendirilir.",
+                        ],
+                        [
+                            "Top-k p90 üst eşiği",
+                            price_corridor["p90"],
+                            "Benzer kazanılmış ihalelerde fiyatların %90'ının altında kaldığı eşik.",
+                        ],
+                        [
+                            "Top-k dağılım",
+                            price_corridor["std"],
+                            "Benzer ihalelerde fiyatların birbirinden ne kadar ayrıştığını gösterir.",
+                        ],
+                    ],
+                    columns=["Gösterge", "Mayıs 2026 değeri", "Açıklama"],
+                )
+                st.dataframe(
+                    corridor_rows,
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Mayıs 2026 değeri": st.column_config.NumberColumn(format="%.2f TL"),
+                    },
+                )
+                st.caption(
+                    "Buradaki üç öneri tek bir modelden gelmez. Düşük fiyat; en benzer 50 ihalenin "
+                    "p25 fiyatı, Linear modelin düşük sınırı ve XGBoost modelin düşük sınırı arasından "
+                    "ortadaki değer seçilerek hesaplanır. Orta fiyat; top-k medyan, Linear tahmin ve "
+                    "XGBoost tahmin arasından ortadaki değerdir. Yüksek fiyat; top-k p75, Linear yüksek "
+                    "sınır ve XGBoost yüksek sınır arasından ortadaki değerdir."
+                )
+                st.markdown(
+                    f'<span class="confidence">Model güveni: {model_confidence}</span>',
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    f"Bu analizde model güvenini belirleyen üç merkez değer: benzer ihale medyanı "
+                    f"{format_try(price_corridor['median'])}, Linear tahmin "
+                    f"{format_try(model_predictions['linear'])}, XGBoost tahmin "
+                    f"{format_try(model_predictions['xgboost'])}. Bu değerler birbirinden uzaklaştığında "
+                    "güven düşer; yakınlaştığında güven artar."
+                )
+                st.caption(
+                    f"Tarihsel kazanım fiyat uyumu: {price_fit['label']} ({price_fit['level']}). "
+                    f"Model destekli orta fiyat {format_try(scenario_prices['Orta fiyat'])}; "
+                    f"top-k p25 {format_try(price_corridor['p25'])}, p75 {format_try(price_corridor['p75'])}, "
+                    f"p90 {format_try(price_corridor['p90'])}. {price_fit['explanation']}"
+                )
+                st.markdown("##### Önerilen fiyat seçenekleri")
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            ["Düşük fiyat", scenario_prices["Düşük fiyat"]],
+                            ["Orta fiyat", scenario_prices["Orta fiyat"]],
+                            ["Yüksek fiyat", scenario_prices["Yüksek fiyat"]],
+                        ],
+                        columns=["Seçenek", "Önerilen birim fiyat"],
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Önerilen birim fiyat": st.column_config.NumberColumn(format="%.2f TL")
+                    },
+                )
+                st.caption(
+                    f"Bu analizde düşük fiyat {format_try(scenario_prices['Düşük fiyat'])}, "
+                    f"orta fiyat {format_try(scenario_prices['Orta fiyat'])}, "
+                    f"yüksek fiyat {format_try(scenario_prices['Yüksek fiyat'])} olarak oluştu."
+                )
+
+        with section_4:
+            with st.container(border=True):
+                st.markdown(
+                    """
+                    <div class="section-title">3. Maliyet ve Kazanç - Birim Fiyata Göre Kazanç Oranı</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            ["Düşük fiyat", scenario_prices["Düşük fiyat"], margins["Düşük fiyat"]],
+                            ["Orta fiyat", scenario_prices["Orta fiyat"], margins["Orta fiyat"]],
+                            ["Yüksek fiyat", scenario_prices["Yüksek fiyat"], margins["Yüksek fiyat"]],
+                        ],
+                    columns=["Seçenek", "Birim fiyat", "Birim kazanç %"],
+                ),
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Birim fiyat": st.column_config.NumberColumn(format="%.2f TL"),
+                        "Birim kazanç %": st.column_config.NumberColumn(format="%.2f"),
+                    },
+                )
+                st.caption(
+                    f"Birim kazanç oranı, satış fiyatından tahmini birim maliyet çıkarıldıktan sonra "
+                    f"fiyatın yüzde kaçının kazanç olarak kaldığını gösterir. Bu analizde tahmini birim "
+                    f"maliyet {format_try(estimated_unit_cost_try)}."
+                )
+                st.markdown("##### Geçmiş ihalelerde birim kazanç")
+                st.caption(
+                    "Birim kazanç oranı, geçmiş ihalede kazanan fiyat ile iç maliyet arasındaki yüzde ilişkiyi gösterir."
+                )
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            ["Ortalama birim kazanç", margin_benchmark["average"]],
+                            ["Orta birim kazanç", margin_benchmark["median"]],
+                            ["Düşük seviye", margin_benchmark["p25"]],
+                            ["Yüksek seviye", margin_benchmark["p75"]],
+                        ],
+                        columns=["Gösterge", "Değer"],
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                    column_config={"Değer": st.column_config.NumberColumn(format="%.2f")},
+                )
+
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div class="section-kicker">3. Maliyet ve kazanç</div>
+                <div class="section-title">Yaklaşık Maliyete Göre Geçmiş Teklif Seviyesi</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                """
+                <div class="explain-box">
+                    Kamu ihalelerinde “yaklaşık maliyet”, alıcının ihale öncesi tahmini maliyet seviyesidir.
+                    Bu bölüm, benzer kazanılmış
+                    ihalelerde kazanan fiyatların bu yaklaşık maliyetin ortalama ne kadar altında kaldığını
+                    gösterir. Amaç, geçmişte kazanılan tekliflerin ne kadar agresif veya normal fiyatlandığını okumaktır.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            cost_cols = st.columns(3, gap="medium")
+            with cost_cols[0]:
+                metric_card(
+                    "Ortalama yaklaşık maliyet altı",
+                    format_pct(discount_benchmark["average"]),
+                    f"Benzer {len(similar)} kazanılmış ihale",
+                )
+            with cost_cols[1]:
+                metric_card(
+                    "Orta yaklaşık maliyet altı",
+                    format_pct(discount_benchmark["median"]),
+                    "Benzer ihalelerin orta seviyesi",
+                )
+            with cost_cols[2]:
+                metric_card(
+                    "Tahmini toplam ihale tutarı",
+                    format_try(scenario_prices["Orta fiyat"] * quantity),
+                    "Birim fiyat x miktar",
+                )
+            st.caption(
+                f"Tahmini toplam ihale tutarı, bu ihalenin yaklaşık parasal büyüklüğünü gösterir. "
+                f"Hesap: model destekli orta birim fiyat ({format_try(scenario_prices['Orta fiyat'])}) "
+                f"x girilen miktar ({int(quantity):,}).".replace(",", ".")
+            )
+
+        profile = success_profile_scores["profile"]
+        st.markdown(
+            """
+            <div class="section-kicker">4. Kazanım profili analizi</div>
+            <div class="section-title">One-Class ve KMeans Profil Modelleri</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Bu bölüm fiyat tahmini yapmaz. Buradaki amaç, yeni ihalenin geçmişte kazanılmış iş tiplerine "
+            "ne kadar benzediğini ve hangi başarı profiline yakın durduğunu göstermektir."
+        )
+        st.markdown(
+            f"""
+            <div class="profile-card-grid">
+                <div class="profile-card-panel">
+                    <div class="section-kicker">One-Class modeli</div>
+                    <div class="section-title">Kazanım Profili Yakınlığı</div>
+                    <div class="profile-summary">
+                        <div class="profile-status">{escape(success_profile_scores["one_class_label"])}</div>
+                        <div class="profile-score">{success_profile_scores["one_class_score"]:.0f}/100</div>
+                        <div class="profile-note">Geçmiş kazanım profiline benzerlik</div>
+                    </div>
+                    <span class="method-badge">Yöntem: One-Class / Isolation Forest</span>
+                    <p>
+                        Bu skor, yeni ihalenin geçmişte kazanılmış işlerin genel şekline ne kadar benzediğini gösterir.
+                        Skor yükseldikçe ihale daha tanıdık; skor düştükçe daha sıra dışı görünür.
+                    </p>
+                </div>
+                <div class="profile-card-panel">
+                    <div class="section-kicker">Kümeleme modeli</div>
+                    <div class="section-title">Başarı Profili</div>
+                    <div class="profile-summary">
+                        <div class="profile-status">En yakın başarı grubu</div>
+                        <div class="profile-score">{escape(success_profile_scores["cluster_label"])}</div>
+                        <div class="profile-note">{escape(profile["name"])}</div>
+                    </div>
+                    <span class="method-badge green">Yöntem: KMeans başarı grupları</span>
+                    <p>
+                        KMeans geçmiş kazanılmış ihaleleri 4 başarı grubuna ayırır. Bu ihale en çok
+                        {escape(profile["name"])} grubuna benziyor. Grup {profile["count"]} ihale içerir;
+                        tipik fiyat {escape(format_try(profile["median_price"]))}, tipik birim kazanç
+                        {escape(format_pct(profile["median_margin"]))}. Eşleşme gücü
+                        {success_profile_scores["cluster_score"]:.0f}/100 olduğu için bu sonuç
+                        {escape(success_profile_scores["cluster_label"].lower())} olarak yorumlanır.
+                    </p>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div class="section-kicker">5. Emsal kazanım değerlendirmesi</div>
+                <div class="section-title">Emsal p(win) - Karar Destek Oranı</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+                <div class="explain-box">
+                    <b>Emsal p(win): {format_pct(empirical_pwin)}</b><br>
+                    Bu yüzde, “bu ihale geçmişte kazandığımız işlere ve fiyat davranışımıza ne kadar yakın?”
+                    sorusunun özetidir. 100'e yaklaştıkça yeni ihale, geçmiş kazanılmış emsallere daha çok benzer
+                    ve önerilen fiyat geçmiş kazanım bandına daha iyi oturur. Veri setinde kaybedilen ihaleler
+                    olmadığı için bu değer gerçek kazan/kaybet olasılığı değil, emsal bazlı kazanım göstergesidir.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            pwin_rows = pd.DataFrame(
+                [
+                    [
+                        "Ortalama benzerlik",
+                        "%30",
+                        f"{average_similarity:.2f}",
+                        f"{pwin_similarity_contribution:.1f} puan",
+                        "Yeni ihale, en benzer 50 kazanılmış ihaleye ne kadar benziyor?",
+                    ],
+                    [
+                        "Güçlü emsal oranı",
+                        "%15",
+                        f"{strong_similar_count}/{len(similar)}",
+                        f"{pwin_strong_case_contribution:.1f} puan",
+                        "Top-50 içinde benzerlik skoru 0.70 üstü olan güçlü emsal sayısı.",
+                    ],
+                    [
+                        "Tarihsel fiyat bandı uyumu",
+                        "%25",
+                        price_fit["label"],
+                        f"{pwin_price_fit_contribution:.1f} puan",
+                        "Önerilen orta fiyat, geçmişte kazanılmış benzer fiyatların içinde mi?",
+                    ],
+                    [
+                        "Kazanım profili yakınlığı",
+                        "%15",
+                        f"{success_profile_scores['one_class_label']} ({success_profile_scores['one_class_score']:.0f}/100)",
+                        f"{pwin_one_class_contribution:.1f} puan",
+                        "Yeni ihale, geçmişte kazandığımız işlerin genel şekline benziyor mu?",
+                    ],
+                    [
+                        "Başarı grubu eşleşmesi",
+                        "%15",
+                        success_profile_scores["cluster_label"],
+                        f"{pwin_cluster_contribution:.1f} puan",
+                        "Yeni ihale, geçmiş kazanılmış iş gruplarından hangisine benziyor?",
+                    ],
+                ],
+                columns=[
+                    "Bileşen",
+                    "p(win) içindeki ağırlık",
+                    "Bu analizde sonuç",
+                    "100 üzerinden katkı puanı",
+                    "Ne anlatır?",
+                ],
+            )
+            st.dataframe(
+                pwin_rows,
+                hide_index=True,
+                width="stretch",
+            )
+
+            detail_cols = st.columns(3, gap="medium")
+            with detail_cols[0]:
+                mini_summary(
+                    "One-Class yorumu",
+                    success_profile_scores["one_class_label"],
+                    f"{success_profile_scores['one_class_score']:.0f}/100 profil yakınlığı",
+                )
+                st.caption(
+                    "One-Class / Isolation Forest modeli sadece kazanılmış ihalelerden öğrenir. Skor yüksekse yeni ihale "
+                    "geçmiş kazanım profilimize benzer; skor düşükse bu ihale alışılmış kazanım profilimizin dışında kalır."
+                )
+            with detail_cols[1]:
+                mini_summary(
+                    "Başarı profili",
+                    success_profile_scores["cluster_label"],
+                    profile["name"],
+                )
+                st.caption(
+                    f"Geçmiş kazanılmış ihaleler 4 başarı grubuna ayrılır. Seçilen grup {profile['count']} "
+                    f"ihale içerir; tipik fiyat {format_try(profile['median_price'])}, tipik birim kazanç oranı "
+                    f"{format_pct(profile['median_margin'])}."
+                )
+            with detail_cols[2]:
+                mini_summary(
+                    "Fiyat uyumu",
+                    price_fit["level"],
+                    price_fit["label"],
+                )
+                st.caption(
+                    f"Model destekli orta fiyat {format_try(scenario_prices['Orta fiyat'])}. "
+                    f"Benzer kazanılmış ihalelerde p25 {format_try(price_corridor['p25'])}, "
+                    f"p75 {format_try(price_corridor['p75'])}, p90 {format_try(price_corridor['p90'])}."
+                )
+
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div class="section-kicker">6. Fırsat önceliği</div>
+                <div class="section-title">İhale Öncelik Puanı</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(
+                build_gauge(final_attractiveness_score),
+                config={"displayModeBar": False, "staticPlot": True},
+            )
+            st.markdown(
+                f"""
+                <div class="score-card">
+                    <div class="score-value">{final_attractiveness_score:.0f}</div>
+                    <div class="score-label">{final_label}</div>
+                    <p class="metric-note">
+                        Bu puan, ihalenin teklif sürecinde ne kadar öncelikli ele alınabileceğini gösterir.
+                        Fiyat tahmini veya kazanma olasılığı değildir.
+                    </p>
+                    <span class="confidence">Güven: {confidence}</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                f"Bu puan, satış/ihale ekibinin fırsatı önceliklendirmesi için kullanılır. "
+                f"Katkılar: geçmiş emsale benzerlik {similarity_contribution:.1f} puan, "
+                f"birim kazanç sağlığı {margin_contribution:.1f} puan, stratejik uyum "
+                f"{strategic_fit_contribution:.1f} puan, rekabet koşulu "
+                f"{competition_contribution:.1f} puan, teslim süresi "
+                f"{delivery_contribution:.1f} puan. Toplam {final_attractiveness_score:.0f}/100."
+            )
+
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div class="section-kicker">7. Model kontrolü</div>
+                <div class="section-title">5-Fold Backtest Metrikleri</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        [
+                            "Linear Regression",
+                            models["linear_residuals"]["mae"],
+                            models["linear_residuals"]["mape"],
+                            models["linear_residuals"]["coverage"],
+                        ],
+                        [
+                            "XGBoost",
+                            models["xgboost_residuals"]["mae"],
+                            models["xgboost_residuals"]["mape"],
+                            models["xgboost_residuals"]["coverage"],
+                        ],
+                    ],
+                    columns=["Model", "MAE", "MAPE %", "Koridor coverage %"],
+                ),
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "MAE": st.column_config.NumberColumn(format="%.2f TL"),
+                    "MAPE %": st.column_config.NumberColumn(format="%.2f"),
+                    "Koridor coverage %": st.column_config.NumberColumn(format="%.1f"),
+                },
+            )
+            st.caption(
+                "MAE ortalama TL hatasını, MAPE ortalama yüzde hatayı, coverage ise geçmiş testlerde "
+                "gerçek fiyatın model hata payı koridoruna düşme oranını gösterir."
+            )
+
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div class="section-kicker">8. Kısa açıklama</div>
+                <div class="section-title">Bu Sonuç Ne Anlama Geliyor?</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            model_note = (
+                "Model tahminleri benzer ihale medyanıyla uyumlu görünüyor."
+                if model_confidence == "Yüksek"
+                else "Model tahminleri ile benzer ihale medyanı ayrışıyor; manuel inceleme önerilir."
+                if model_confidence == "Düşük"
+                else "Model tahminleri ve benzer ihale koridoru orta seviyede uyumlu."
+            )
+            corridor_calculation_note = (
+                f"Düşük fiyat hesabında üç değer karşılaştırıldı: top-k p25 "
+                f"({format_try(price_corridor['p25'])}), Linear düşük sınır "
+                f"({format_try(model_corridor['linear_low'])}) ve XGBoost düşük sınır "
+                f"({format_try(model_corridor['xgboost_low'])}). Bu üç değerin ortadaki değeri "
+                f"{format_try(scenario_prices['Düşük fiyat'])} olduğu için nihai düşük fiyat bu oldu. "
+                f"Orta fiyat hesabında top-k medyan ({format_try(price_corridor['median'])}), "
+                f"Linear tahmin ({format_try(model_predictions['linear'])}) ve XGBoost tahmin "
+                f"({format_try(model_predictions['xgboost'])}) karşılaştırıldı. Ortadaki değer "
+                f"{format_try(scenario_prices['Orta fiyat'])} olduğu için nihai orta fiyat bu oldu. "
+                f"Yüksek fiyat hesabında top-k p75 ({format_try(price_corridor['p75'])}), "
+                f"Linear yüksek sınır ({format_try(model_corridor['linear_high'])}) ve XGBoost yüksek sınır "
+                f"({format_try(model_corridor['xgboost_high'])}) karşılaştırıldı. Ortadaki değer "
+                f"{format_try(scenario_prices['Yüksek fiyat'])} olduğu için nihai yüksek fiyat bu oldu."
+            )
+            explanation = (
+                f"Emsal p(win) {format_pct(empirical_pwin)}. Bu oran; ortalama benzerlik "
+                f"{average_similarity:.2f}, güçlü emsal sayısı {strong_similar_count}/{len(similar)}, "
+                f"fiyat uyumu {price_fit['label'].lower()}, kazanım profili yakınlığı "
+                f"{success_profile_scores['one_class_score']:.0f}/100 ve başarı profili yakınlığı "
+                f"{success_profile_scores['cluster_score']:.0f}/100 sinyallerinden oluşur. "
+                f"{len(similar)} benzer kazanılmış ihale bulundu. Güven seviyesi {confidence.lower()}. "
+                f"Benzer ihale medyanı, en benzer 50 geçmiş ihalenin orta fiyatıdır ve bu analizde "
+                f"{format_try(price_corridor['median'])}. Linear Regression modeli aynı ihale için "
+                f"{format_try(model_predictions['linear'])} tahmin etti; bu model daha basit ve açıklanabilir "
+                f"bir fiyat referansı verir. XGBoost modeli {format_try(model_predictions['xgboost'])} tahmin etti; "
+                f"bu model ürün, bölge, miktar ve usul gibi değişkenlerin kombinasyon etkilerini yakalamaya çalışır. "
+                f"Cluster analizi bu ihaleyi '{success_profile_scores['profile']['name']}' tipindeki geçmiş başarı "
+                f"profiline en yakın buldu. One-Class model ise ihalenin genel kazanım profiline "
+                f"{success_profile_scores['one_class_label'].lower()} olduğunu gösterdi. "
+                f"Bu üç kaynak birlikte değerlendirildiğinde model destekli orta fiyat "
+                f"{format_try(scenario_prices['Orta fiyat'])} oldu. Girilen "
+                f"{format_try(estimated_unit_cost_try)} birim maliyete göre orta fiyat birim kazanç oranı "
+                f"{format_pct(balanced_margin)}. İhale puanı {final_attractiveness_score:.0f}/100 ve sonuç "
+                f"{final_label}. {model_note} {corridor_calculation_note}"
+            )
+            st.markdown(f'<div class="explain-box">{explanation}</div>', unsafe_allow_html=True)
+with llm_tab:
+    latest_llm_context = st.session_state.get("latest_llm_context")
+    if not latest_llm_context:
+        st.info("LLM yorumu için önce Analiz tabında ihale bilgilerini girip Analiz Et'e tıklayın.")
+    else:
+        render_llm_chatbot(latest_llm_context)

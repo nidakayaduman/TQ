@@ -16,6 +16,8 @@ oluşturulmuş sentetik veridir.
 - Benzer kazanılmış ihaleleri bulur.
 - Geçmiş fiyatları Mayıs 2026 seviyesine taşır.
 - Top-k benzer ihaleler, Linear Regression ve XGBoost ile model destekli fiyat aralığı gösterir.
+- Isolation Forest ve KMeans ile geçmiş kazanım profiline yakınlığı yorumlar.
+- OpenRouter üzerinden LLM tabanlı structured yönetici yorumu üretir.
 - Girilen maliyete göre marj hesaplar.
 - İhaleyi basit bir 0-100 puanla özetler.
 
@@ -78,6 +80,50 @@ Nihai düşük / orta / yüksek fiyat; top-k fiyat dağılımı, Linear Regressi
 tahmini, XGBoost tahmini ve 5-fold backtest hata payları birleştirilerek
 hesaplanır. Bu hâlâ kazanma ihtimali modeli değildir; sadece kazanılmış ihale
 hafızasına dayalı fiyat benchmark ve tahmin desteğidir.
+
+## LLM Yorum Katmanı
+
+Uygulama, model hesaplarını değiştirmeden OpenRouter üzerinden ek bir yorum
+katmanı sunar. LLM'e şu çıktılar structured context olarak gönderilir:
+
+- Yeni ihale girdileri
+- Emsal p(win) ve bileşen katkıları
+- En benzer ihaleler
+- Model destekli fiyat koridoru
+- Linear Regression ve XGBoost fiyat tahminleri
+- Isolation Forest kazanım profili yakınlığı
+- KMeans başarı profili eşleşmesi
+- Marj ve fırsat öncelik puanı
+
+Varsayılan model sırası:
+
+1. `nvidia/nemotron-3-super-120b-a12b:free`
+2. `google/gemma-4-31b-it:free`
+3. `openrouter/owl-alpha`
+
+Primary model yanıt veremezse uygulama fallback zincirindeki diğer modelleri
+sırayla dener.
+
+Ziyaretçilerin key girmeden chatbotu kullanması için API anahtarı koda
+gömülmez; server tarafında tutulur. Uygulama önce `OPENROUTER_API_KEY` ortam
+değişkenini, sonra Streamlit secrets dosyasını okur. Kullanıcıdan API key
+istenmez.
+
+```bash
+export OPENROUTER_API_KEY="..."
+streamlit run app.py
+```
+
+Alternatif olarak yerelde şu dosyayı oluşturabilirsiniz:
+
+```toml
+# .streamlit/secrets.toml
+OPENROUTER_API_KEY = "..."
+```
+
+`.streamlit/secrets.toml` `.gitignore` içindedir; gerçek anahtar repo'ya
+commit edilmemelidir. Örnek format için `.streamlit/secrets.example.toml`
+kullanılabilir.
 
 ## Başarı Metrikleri
 
