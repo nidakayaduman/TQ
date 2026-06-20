@@ -481,6 +481,10 @@ def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
         "leakage_masked_fields_count": 0,
         "top_similar_tenders_summary": "",
         "reveal_status": "revealed_for_backtest",
+        "soft_penalty_explanations": "",
+        "hard_constraint_status": "",
+        "caveat": "",
+        "failure_reason": "",
     }
     for column, default in defaults.items():
         if column not in fixed.columns:
@@ -1940,6 +1944,7 @@ def render_scenario_analysis() -> None:
     tender = current_tender() or {}
     corridor = result["corridor"]
     weights = load_scenario_weights()
+    valid_scenarios = scenarios[scenarios["hard_constraints_valid"].astype(bool)].copy()
 
     c1, c2, c3 = st.columns(3, gap="medium")
     with c1:
@@ -1962,20 +1967,40 @@ def render_scenario_analysis() -> None:
         "Senaryo skoru nasıl okunur?",
     )
     render_formula_card()
+    with st.expander("Senaryo kuralları nasıl çalışır?", expanded=False):
+        info_callout(
+            "Hard constraint kesin kuraldır; ihlal edilirse senaryo önerilmez. Soft penalty ise uyarıdır; senaryoyu tamamen engellemez ama skorunu düşürür.",
+            "Hard constraint ve soft penalty",
+        )
+        render_method_grid(
+            [
+                ("Değiştirilemeyen alanlar", "Kurum, ürün grubu, ihale tipi, miktar ve tarih ihale dokümanından gelir; profil analizi için kullanılır."),
+                ("Değiştirilebilir alanlar", "Birim teklif fiyatı, hedef marj, teslim planı ve strateji modu teklif senaryosu olarak denenebilir."),
+                ("Sistemin hesapladıkları", "Beklenen marj, fiyat bandı uyumu, profil uyumu, risk, güven ve senaryo skoru sistem tarafından hesaplanır."),
+                ("Domine edilmeyen seçenekler", "Sistem yalnızca tek skoru büyütmez; fiyat, marj, risk ve güven arasında farklı dengeler kuran uygulanabilir seçenekleri karşılaştırır."),
+                ("Geçersiz senaryo", "Hard constraint ihlal eden seçenek ana öneri olarak gösterilmez; nedeni tabloda ve export içinde görünür."),
+                ("Manuel inceleme", "Geçerli senaryo üretilemezse teklif komitesi incelemesi önerilir."),
+            ],
+            colors=["blue", "purple", "green", "amber", "cyan", "blue"],
+        )
 
     section_header("Öne Çıkan Senaryolar", "Her kart teklif fiyatı, karlılık, katkı kârı, risk, kural durumu ve senaryo skorunu birlikte gösterir.", "Senaryo kartları")
+    if valid_scenarios.empty:
+        st.warning(result.get("failure_reason") or "Geçerli öneri üretilemedi. Manuel teklif komitesi incelemesi önerilir.")
     strategy_targets = [
-        ("Agresif Senaryo", corridor["predicted_low_price"], "Daha rekabetçi fiyat verir. Kazanım profiline daha yakın olabilir ancak karlılığı düşürebilir."),
-        ("Dengeli Senaryo", corridor["predicted_mid_price"], "Fiyat ve karlılık arasında orta yol arar."),
-        ("Muhafazakâr Senaryo", corridor["predicted_high_price"], "Karlılığı korumaya daha yakındır ancak fiyat rekabeti açısından daha riskli olabilir."),
+        ("aggressive_fit", "Agresif Uyum Senaryosu", "Bu senaryo, geçmiş kazanılmış ihale profiline ve fiyat bandına daha yakın kalmaya çalışır. Daha rekabetçi olabilir ancak marjı düşürebilir."),
+        ("balanced", "Dengeli Senaryo", "Bu senaryo, fiyat rekabeti ile marjı dengede tutmaya çalışır. Genellikle ana karşılaştırma senaryosu olarak kullanılabilir."),
+        ("margin_protect", "Marj Koruma Senaryosu", "Bu senaryo, karlılığı korumaya daha fazla önem verir. Ancak fiyat geçmiş emsal bandından uzaklaşabilir ve rekabet riski artabilir."),
     ]
-    selected_indices: set[int] = set()
     selected_cards = []
-    for label, target, description in strategy_targets:
-        candidates = scenarios.loc[~scenarios.index.isin(selected_indices)].copy()
+    selected_indices: set[int] = set()
+    for strategy_mode, label, description in strategy_targets:
+        candidates = valid_scenarios[valid_scenarios.get("strategy_mode", "") == strategy_mode].copy()
         if candidates.empty:
-            break
-        idx = (candidates["proposed_unit_price"].astype(float) - float(target)).abs().idxmin()
+            candidates = valid_scenarios.loc[~valid_scenarios.index.isin(selected_indices)].copy()
+        if candidates.empty:
+            continue
+        idx = candidates["scenario_score"].astype(float).idxmax()
         selected_indices.add(int(idx))
         selected_cards.append((label, description, scenarios.loc[idx]))
     scenario_cards_html = ""
@@ -1988,7 +2013,7 @@ def render_scenario_analysis() -> None:
         contribution = total_offer * float(scenario["computed_margin_pct"]) / 100
         risk_value = max(0.0, 100 - float(scenario["risk_penalty_score"]))
         risk_label = "Düşük" if risk_value >= 75 else "Orta" if risk_value >= 55 else "Yüksek"
-        violations = scenario["risk_flags"] if isinstance(scenario["risk_flags"], list) else []
+        soft_text = str(scenario.get("soft_penalty_explanations", "")) or "Belirgin soft penalty yok"
         scenario_cards_html += premium_card_html(
             title=label,
             value=format_try(scenario["proposed_unit_price"]),
@@ -2001,16 +2026,22 @@ def render_scenario_analysis() -> None:
                 ("Toplam teklif", format_try(total_offer)),
                 ("Karlılık oranı", format_pct(scenario["computed_margin_pct"])),
                 ("Katkı kârı", format_try(contribution)),
+                ("Profil uyumu", format_score(scenario.get("won_profile_fit_score"))),
+                ("Fiyat bandı uyumu", format_score(scenario.get("price_band_fit_score"))),
+                ("Model güveni", format_score(scenario.get("model_confidence_score"))),
                 ("Risk seviyesi", risk_label),
                 ("Senaryo skoru", f"{scenario['scenario_score']:.0f}/100"),
                 ("Kural kontrolü", invalid_reason if invalid_reason else "Uygun"),
+                ("Soft penalty", soft_text[:160]),
             ],
         )
-    st.markdown(f"<div class='card-grid three-col'>{scenario_cards_html}</div>", unsafe_allow_html=True)
+    if scenario_cards_html:
+        st.markdown(f"<div class='card-grid three-col'>{scenario_cards_html}</div>", unsafe_allow_html=True)
 
     table = scenarios[
         [
             "scenario_id",
+            "strategy_label",
             "proposed_unit_price",
             "price_anchor",
             "computed_margin_pct",
@@ -2022,11 +2053,15 @@ def render_scenario_analysis() -> None:
             "scenario_score",
             "hard_constraints_valid",
             "invalid_reason",
+            "soft_penalty_explanations",
+            "is_pareto_efficient",
+            "explainability",
             "risk_flags",
         ]
     ].copy()
     table.columns = [
         "Senaryo ID",
+        "Strateji Modu",
         "Önerilen Birim Fiyat",
         "Referans Fiyat",
         "Beklenen Karlılık Oranı",
@@ -2038,6 +2073,9 @@ def render_scenario_analysis() -> None:
         "Senaryo Skoru",
         "Kural Durumu",
         "Geçersiz Senaryo Açıklaması",
+        "Soft Penalty Uyarıları",
+        "Dengeli Seçenek Havuzunda mı?",
+        "Nasıl Yorumlanmalı?",
         "Kural / Risk Notları",
     ]
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
@@ -2051,6 +2089,37 @@ def render_scenario_analysis() -> None:
             "Senaryo Skoru": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=100),
         },
     )
+    recommendation_columns = [
+        "strategy_label",
+        "changed_parameter",
+        "current_value",
+        "recommended_value",
+        "score_delta",
+        "margin_impact",
+        "risk_impact",
+        "confidence",
+        "evidence_from_similar_tenders",
+        "hard_constraint_status",
+        "caveat",
+    ]
+    with st.expander("Öneri detayları", expanded=False):
+        recommendation_display = scenarios[[column for column in recommendation_columns if column in scenarios.columns]].copy()
+        recommendation_display = recommendation_display.rename(
+            columns={
+                "strategy_label": "Senaryo",
+                "changed_parameter": "Değişen alan",
+                "current_value": "Mevcut değer",
+                "recommended_value": "Önerilen değer",
+                "score_delta": "Skor etkisi",
+                "margin_impact": "Marj etkisi",
+                "risk_impact": "Risk etkisi",
+                "confidence": "Güven seviyesi",
+                "evidence_from_similar_tenders": "Benzer ihalelerden kanıt",
+                "hard_constraint_status": "Kural durumu",
+                "caveat": "Not / uyarı",
+            }
+        )
+        st.dataframe(recommendation_display, hide_index=True, width="stretch")
 
 
 def render_reveal_compare() -> None:

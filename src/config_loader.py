@@ -40,6 +40,8 @@ DEFAULT_HARD_CONSTRAINTS: dict[str, Any] = {
     "maximum_delivery_months": 36,
     "allow_product_alternative_default": False,
     "max_deviation_above_historical_p90_pct": 30.0,
+    "max_price_over_p90_multiplier": 1.30,
+    "min_price_under_p10_multiplier": 0.70,
     "minimum_quantity": 1,
     "minimum_unit_cost": 0.01,
     "required_fields": [

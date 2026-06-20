@@ -16,6 +16,26 @@ from .scenario_scorer import score_scenario
 from .scenario_validator import validate_scenario
 
 
+def mark_pareto_frontier(scored_df: pd.DataFrame) -> pd.DataFrame:
+    output = scored_df.copy()
+    output["risk_suitability_score"] = 100 - output["risk_penalty_score"].astype(float)
+    output["is_pareto_efficient"] = False
+    valid = output[output["hard_constraints_valid"].astype(bool)].copy()
+    if valid.empty:
+        return output
+    objectives = valid[["won_profile_fit_score", "margin_score", "risk_suitability_score", "model_confidence_score"]].astype(float)
+    pareto_indices: list[int] = []
+    for idx, row in objectives.iterrows():
+        dominated = (
+            (objectives >= row).all(axis=1)
+            & (objectives > row).any(axis=1)
+        ).any()
+        if not dominated:
+            pareto_indices.append(idx)
+    output.loc[pareto_indices, "is_pareto_efficient"] = True
+    return output
+
+
 def rank_scenarios(
     train_df: pd.DataFrame,
     tender: dict[str, Any],
@@ -50,7 +70,25 @@ def rank_scenarios(
                 soft_penalties=soft_penalties,
             )
         )
-    scored_df = pd.DataFrame(scored).sort_values("scenario_score", ascending=False).reset_index(drop=True)
+    scored_df = pd.DataFrame(scored)
+    scored_df = mark_pareto_frontier(scored_df).sort_values(
+        ["hard_constraints_valid", "is_pareto_efficient", "scenario_score"],
+        ascending=[False, False, False],
+    ).reset_index(drop=True)
+    valid_count = int(scored_df["hard_constraints_valid"].astype(bool).sum()) if "hard_constraints_valid" in scored_df else 0
+    failure_reason = ""
+    if valid_count == 0:
+        failure_reason = (
+            "Geçerli öneri üretilemedi. Tanımlı hard constraint'ler içinde fiyat, marj veya teslim planı "
+            "geçmiş kazanılmış profil bandına yaklaştırılamıyor. Manuel teklif komitesi incelemesi önerilir."
+        )
+    evidence = (
+        f"Top-{len(similar)} emsal içinde ortalama benzerlik {avg_similarity:.2f}; "
+        f"ürün grubu eşleşmesi %{retrieval['product_group_match_rate'] * 100:.0f}, "
+        f"bölge eşleşmesi %{retrieval['region_match_rate'] * 100:.0f}."
+    )
+    if not scored_df.empty:
+        scored_df["evidence_from_similar_tenders"] = evidence
     return {
         "similar": similar,
         "retrieval_quality": retrieval,
@@ -59,4 +97,6 @@ def rank_scenarios(
         "corridor": corridor,
         "model_confidence_score": confidence_score,
         "scenarios": scored_df,
+        "valid_scenario_count": valid_count,
+        "failure_reason": failure_reason,
     }

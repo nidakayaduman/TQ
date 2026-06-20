@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..config_loader import DEFAULT_HARD_CONSTRAINTS, load_hard_constraints
+from ..config_loader import load_hard_constraints
 
 
 def margin_pct(unit_price: float, unit_cost: float) -> float:
@@ -29,6 +29,9 @@ def validate_scenario(
         if tender.get(field) in (None, "") and scenario.get(field) in (None, ""):
             violations.append(f"Eksik zorunlu alan: {field}")
 
+    min_margin_price = unit_cost * (1 + float(cfg["minimum_margin_pct"]) / 100)
+    if unit_price < min_margin_price:
+        violations.append("Önerilen fiyat, tahmini maliyetin ve minimum marj eşiğinin altında kalamaz.")
     if unit_price <= 0:
         violations.append("Önerilen fiyat sıfır veya negatif olamaz.")
     if unit_cost < float(cfg["minimum_unit_cost"]):
@@ -47,15 +50,31 @@ def validate_scenario(
         violations.append("Teslim süresi belirlenen üst sınırı aşıyor.")
 
     p90 = float(corridor.get("p90", corridor.get("predicted_high_price", unit_price)))
-    max_price = p90 * (1 + float(cfg["max_deviation_above_historical_p90_pct"]) / 100)
+    p10 = float(corridor.get("p10", corridor.get("predicted_low_price", unit_price)))
+    max_multiplier = float(cfg.get("max_price_over_p90_multiplier", 1 + float(cfg["max_deviation_above_historical_p90_pct"]) / 100))
+    max_price = p90 * max_multiplier
     if unit_price > max_price and not scenario.get("explicit_override", False):
         violations.append("Fiyat, geçmiş emsal koridorunun çok dışında.")
+    min_price = p10 * float(cfg.get("min_price_under_p10_multiplier", 0.70))
+    if unit_price < min_price and not scenario.get("explicit_override", False):
+        violations.append("Önerilen fiyat, benzer geçmiş ihalelerdeki alt fiyat seviyesinin çok altına düşemez.")
 
     if scenario.get("product_alternative") and not scenario.get("product_alternative_allowed", False):
         violations.append("Ürün alternatifi şartname tarafından izinli değil.")
 
+    explainability = (
+        "Senaryo geçerli. Hard constraint ihlali yok; soft penalty ve risk sinyalleri ayrıca skorlamada değerlendirilir."
+        if not violations
+        else "Senaryo geçersiz: " + "; ".join(violations)
+    )
     return {
+        "scenario_id": scenario.get("scenario_id", ""),
         "valid": not violations,
+        "is_valid": not violations,
         "violations": violations,
+        "hard_constraint_violations": violations,
+        "soft_penalties": [],
+        "risk_flags": violations,
+        "explainability": explainability,
         "computed_margin_pct": computed_margin,
     }

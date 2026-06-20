@@ -7,3 +7,7 @@ high_risk_flag_penalty: 10.0
 low_model_confidence_penalty: 10.0
 unusual_profile_penalty: 10.0
 high_delivery_penalty: 6.0
+wide_band_penalty: 6.0
+model_disagreement_penalty: 6.5
+competitor_pressure_penalty: 5.0
+data_completeness_penalty: 8.0

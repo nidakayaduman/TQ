@@ -20,12 +20,20 @@ def generate_candidate_scenarios(
     multipliers = [0.95, 1.0, 1.05]
     unit_cost = float(tender.get("estimated_unit_cost", tender.get("estimated_unit_cost_try", 0)))
     scenarios: list[dict[str, Any]] = []
-    for anchor in anchors:
+    strategy_by_anchor = {
+        0: ("aggressive_fit", "Agresif Uyum Senaryosu"),
+        1: ("balanced", "Dengeli Senaryo"),
+        2: ("margin_protect", "Marj Koruma Senaryosu"),
+    }
+    for anchor_idx, anchor in enumerate(anchors):
+        strategy_mode, strategy_label = strategy_by_anchor[anchor_idx]
         for multiplier in multipliers:
             price = float(max(0.01, anchor * multiplier))
             scenarios.append(
                 {
                     "scenario_id": f"S{len(scenarios)+1:03d}",
+                    "strategy_mode": strategy_mode,
+                    "strategy_label": strategy_label,
                     "proposed_unit_price": round(price, 4),
                     "estimated_unit_cost": unit_cost,
                     "delivery_months": int(tender.get("delivery_months", 0)),
@@ -39,6 +47,8 @@ def generate_candidate_scenarios(
         scenarios.append(
             {
                 "scenario_id": "S_ACTUAL_HISTORICAL_CONFIG",
+                "strategy_mode": "historical_reference",
+                "strategy_label": "Gerçek Tarihsel Referans",
                 "proposed_unit_price": round(actual_price, 4),
                 "estimated_unit_cost": unit_cost,
                 "delivery_months": int(tender.get("delivery_months", 0)),
@@ -48,4 +58,3 @@ def generate_candidate_scenarios(
             }
         )
     return scenarios
-
