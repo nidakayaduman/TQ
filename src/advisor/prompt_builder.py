@@ -24,9 +24,17 @@ Kritik bağlam:
 
 Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
 {{
+  "executive_summary": "2-3 cümlelik yönetici özeti",
   "decision_summary": "2-3 cümlelik yönetici özeti",
   "data_situation": "Veri kapsamını, kayıp veri olmadığını ve bunun modelleme sınırını açıkla",
   "recommended_action": "Teklif / manuel inceleme / fiyat revizyonu gibi net öneri",
+  "scenario_rationale": "senaryo skorunu ve ana bileşenleri açıkla",
+  "evidence_used": ["MODEL_CONTEXT_JSON içindeki evidence_items listesinden evidence_id değerleri"],
+  "risk_warnings": ["en fazla 4 risk uyarısı"],
+  "human_checks_required": ["en fazla 4 insan kontrol maddesi"],
+  "forbidden_claims_check": false,
+  "confidence_rationale": "model güveninin neden yüksek/orta/düşük olduğunu açıkla",
+  "limitations": "gerçek kazanma olasılığı, rakip davranışı ve reveal edilmemiş gerçek sonuç verilmediğini kısa açıkla",
   "pwin_interpretation": "profil uyum göstergesini ve ana sürükleyicileri açıkla; pwin veya gerçek olasılık gibi anlatma",
   "pricing_interpretation": "düşük/orta/yüksek fiyat ve model uyumunu yorumla",
   "margin_risk": "maliyet ve karlılık açısından risk yorumu",

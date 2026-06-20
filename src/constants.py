@@ -80,6 +80,11 @@ FORBIDDEN_CLAIM_TERMS = [
     "garanti",
     "kazanım garantisi",
     "award is guaranteed",
+    "probability of winning",
+    "competitor will bid",
+    "rakip şu fiyatı verecek",
+    "bu teklif kazanır",
+    "ihale kesin kazanılır",
 ]
 
 SAFE_SCORE_COLUMNS = [

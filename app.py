@@ -485,6 +485,12 @@ def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
         "hard_constraint_status": "",
         "caveat": "",
         "failure_reason": "",
+        "llm_validation_status": "pass",
+        "advisor_schema_valid": True,
+        "advisor_forbidden_claims_detected": False,
+        "advisor_grounding_score": 1.0,
+        "advisor_prompt_injection_detected": False,
+        "advisor_fallback_used": True,
     }
     for column, default in defaults.items():
         if column not in fixed.columns:
@@ -863,6 +869,34 @@ def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, A
     baseline = predict_baseline_prices(get_history_frame(), tender) if tender else pd.DataFrame()
     quality = retrieval_quality_from_result(result, tender)
     scenario_weights = load_scenario_weights()
+    corridor = result["corridor"]
+    evidence_items = [
+        {
+            "evidence_id": "E_PRICE_001",
+            "type": "price_band",
+            "content": f"Top-K fiyat koridoru: düşük {format_try(corridor.get('predicted_low_price'))}, orta {format_try(corridor.get('predicted_mid_price'))}, yüksek {format_try(corridor.get('predicted_high_price'))}.",
+        },
+        {
+            "evidence_id": "E_PROFILE_001",
+            "type": "profile_fit",
+            "content": f"Kazanılmış profil uyumu {float(best.get('won_profile_fit_score', 0)):.1f}/100.",
+        },
+        {
+            "evidence_id": "E_CONF_001",
+            "type": "model_confidence",
+            "content": f"Model güven skoru {float(result.get('model_confidence_score', 0)):.1f}/100.",
+        },
+        {
+            "evidence_id": "E_RISK_001",
+            "type": "risk_flags",
+            "content": "Risk bayrakları: " + (", ".join(best.get("risk_flags", [])) if best.get("risk_flags") else "belirgin risk bayrağı yok."),
+        },
+        {
+            "evidence_id": "E_SIMILAR_001",
+            "type": "similar_tenders",
+            "content": f"Benzer ihale sayısı {len(result['similar'])}; top-10 ortalama benzerlik {float(result.get('top10_avg_similarity', 0)):.2f}.",
+        },
+    ]
     context = {
         **best,
         "tender_id": tender.get("tender_id"),
@@ -872,7 +906,7 @@ def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, A
         "quantity": tender.get("quantity"),
         "delivery_months": tender.get("delivery_months"),
         "estimated_unit_cost": tender.get("estimated_unit_cost"),
-        "corridor": result["corridor"],
+        "corridor": corridor,
         "price_methods": {
             "similarity_corridor": result["corridor"],
             "baseline_predictions": baseline.to_dict(orient="records") if not baseline.empty else [],
@@ -916,6 +950,7 @@ def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, A
         "revealed": bool(st.session_state.get("revealed", False)),
         "method_limit": TURKISH_WARNING,
         "leakage_audit": st.session_state.get("leakage_audit", {"audit_status": "pass"}),
+        "evidence_items": evidence_items,
     }
     if st.session_state.get("revealed", False):
         row = selected_test_tender()
@@ -948,7 +983,6 @@ def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[s
     similar_count = int(context.get("similar_tender_count", 0) or 0)
     cluster_name = context.get("cluster_name", "Kazanılmış profil grubu")
     isolation_status = context.get("isolation_forest", {}).get("status", "Profil kontrolü hesaplandı")
-    base_warning = "Bu yorum gerçek kazanma olasılığı değildir; geçmiş kazanılmış ihale profiline uyumu açıklar."
     if "fiyat" in q or "koridor" in q:
         answer = (
             "Fiyat yorumu üç katmanla okunmalı:\n\n"
@@ -996,7 +1030,7 @@ def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[s
             f"Karlılık ve risk: {advisor.get('margin_risk', '')}\n\n"
             "Detaylı okumada profil uyumu, fiyat bandı uyumu, beklenen karlılık, model güveni ve risk bayrakları birlikte değerlendirilmelidir."
         )
-    return f"{answer}\n\n{base_warning}"
+    return answer
 
 
 def normalize_llm_payload(content: str) -> dict[str, Any] | None:
@@ -1081,7 +1115,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
     if not parsed:
         return None
     validation = validate_advisor_output(parsed)
-    grounding = validate_grounding(parsed, context)
+    grounding = validate_grounding(parsed, safe_context)
     support = validate_supported_claims(parsed, safe_context)
     forbidden = detect_forbidden_claims(" ".join(str(value) for value in parsed.values()))
     if (
@@ -1090,7 +1124,28 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         or not support["supported"]
         or forbidden["forbidden_claims_detected"]
     ):
+        write_audit_event(
+            {
+                "event_type": "advisor_response_validation_failed",
+                "user_action": "advisor_question",
+                "tender_id": safe_context.get("tender_id"),
+                "module": "advisor",
+                "input_summary": question[:240],
+                "output_summary": str(parsed.get("executive_summary", parsed.get("decision_summary", "")))[:240],
+                "validation_status": "fail",
+                "leakage_status": safe_context.get("leakage_audit", {}).get("audit_status", "unknown"),
+                "advisor_guardrail_status": grounding["grounding_validation_status"],
+            }
+        )
         return None
+    parsed["validation_result"] = {
+        "llm_validation_status": "pass",
+        "schema_valid": validation["schema_valid"],
+        "forbidden_claims_detected": False,
+        "grounding_score": grounding["grounding_score"],
+        "prompt_injection_detected": False,
+        "fallback_used": False,
+    }
     write_audit_event(
         {
             "event_type": "advisor_response_validated",
@@ -1101,7 +1156,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
             "output_summary": str(parsed.get("decision_summary", ""))[:240],
             "validation_status": validation["advisor_validation_status"],
             "leakage_status": safe_context.get("leakage_audit", {}).get("audit_status", "unknown"),
-            "advisor_guardrail_status": support["support_validation_status"],
+            "advisor_guardrail_status": grounding["grounding_validation_status"],
         }
     )
     return parsed
@@ -1110,9 +1165,11 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
 def advisor_payload_to_chat_text(payload: dict[str, Any]) -> str:
     learner = payload.get("learner_signals", {}) if isinstance(payload.get("learner_signals"), dict) else {}
     parts = [
-        ("Yönetici özeti", payload.get("decision_summary")),
+        ("Yönetici özeti", payload.get("executive_summary") or payload.get("decision_summary")),
         ("Veri durumu", payload.get("data_situation")),
         ("Önerilen aksiyon", payload.get("recommended_action")),
+        ("Senaryo gerekçesi", payload.get("scenario_rationale")),
+        ("Güven gerekçesi", payload.get("confidence_rationale")),
         ("Profil uyum yorumu", payload.get("pwin_interpretation")),
         ("Fiyat yorumu", payload.get("pricing_interpretation")),
         ("Karlılık ve risk", payload.get("margin_risk")),
@@ -1121,10 +1178,18 @@ def advisor_payload_to_chat_text(payload: dict[str, Any]) -> str:
         ("Regresyon modelleri", learner.get("regression_models")),
     ]
     text = "\n\n".join(f"**{title}:** {value}" for title, value in parts if value)
-    for title, key in [("Kanıtlar", "supporting_evidence"), ("Riskler", "risks"), ("Sonraki adımlar", "next_actions")]:
+    for title, key in [
+        ("Kanıtlar", "supporting_evidence"),
+        ("Riskler", "risk_warnings"),
+        ("İnsan kontrol listesi", "human_checks_required"),
+        ("Sonraki adımlar", "next_actions"),
+        ("Sınırlar", "limitations"),
+    ]:
         values = payload.get(key)
         if isinstance(values, list) and values:
             text += "\n\n" + f"**{title}:**\n" + "\n".join(f"- {item}" for item in values[:4])
+        elif isinstance(values, str) and values:
+            text += "\n\n" + f"**{title}:** {values}"
     return text
 
 
@@ -2669,6 +2734,7 @@ def render_advisor() -> None:
     context = advisor_context(result, best)
     advisor = build_fallback_advisor(context)
     validation = validate_advisor_output(advisor)
+    validation["fallback_used"] = True
     st.session_state.advisor_output = advisor
     st.session_state.advisor_validation = validation
 
@@ -2703,6 +2769,10 @@ def render_advisor() -> None:
     ]
 
     section_header("Bağlam Paneli", "Danışman yalnızca bu yapılandırılmış çıktıları yorumlar.", "Güvenli bağlam")
+    info_callout(
+        "AI Danışman karar vermez. Sadece model çıktılarını açıklar. Bu skor gerçek kazanma olasılığı değildir.",
+        "Güvenli kullanım notu",
+    )
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
     risk_status = "Uyarı var" if risk_flags else "Düşük"
@@ -2728,6 +2798,34 @@ def render_advisor() -> None:
         ),
         unsafe_allow_html=True,
     )
+    current_validation = st.session_state.get("advisor_validation", validation)
+    validation_cards = [
+        {
+            "icon": "OK",
+            "title": "Yanıt doğrulama",
+            "value": "Yanıt doğrulandı" if current_validation.get("advisor_validation_status") == "pass" else "Kontrol gerekiyor",
+            "body": "Schema, yasak iddia ve grounding kontrolleri izlenir.",
+            "pill": str(current_validation.get("advisor_validation_status", "-")),
+            "color": "green" if current_validation.get("advisor_validation_status") == "pass" else "amber",
+        },
+        {
+            "icon": "ID",
+            "title": "Yasak iddia kontrolü",
+            "value": "Bulunmadı" if not current_validation.get("forbidden_claims_detected") else "Tespit edildi",
+            "body": "Kesin sonuç, garanti veya rakip davranışı iddiaları engellenir.",
+            "pill": "Guardrail",
+            "color": "green" if not current_validation.get("forbidden_claims_detected") else "red",
+        },
+        {
+            "icon": "FB",
+            "title": "Fallback durumu",
+            "value": "Kullanıldı" if current_validation.get("fallback_used") else "Kullanılmadı",
+            "body": "LLM yoksa veya doğrulama geçmezse güvenli deterministik yanıt döner.",
+            "pill": "Fallback",
+            "color": "purple" if current_validation.get("fallback_used") else "blue",
+        },
+    ]
+    render_premium_grid(validation_cards, columns=3, size="metric-size")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Sohbet", "Sorular, seçili ihale bağlamı ve model çıktıları üzerinden yanıtlanır.", "AI Danışman")
@@ -2770,6 +2868,12 @@ def render_advisor() -> None:
                 st.session_state.advisor_validation = {
                     "valid": False,
                     "advisor_validation_status": "blocked",
+                    "llm_validation_status": "blocked",
+                    "schema_valid": False,
+                    "forbidden_claims_detected": False,
+                    "grounding_score": 0.0,
+                    "prompt_injection_detected": True,
+                    "fallback_used": True,
                     "prompt_injection": injection,
                 }
                 write_audit_event(
@@ -2790,10 +2894,23 @@ def render_advisor() -> None:
                 if llm_payload:
                     assistant_text = advisor_payload_to_chat_text(llm_payload)
                     st.session_state.advisor_output = llm_payload
-                    st.session_state.advisor_validation = validate_advisor_output(llm_payload)
+                    llm_validation = validate_advisor_output(llm_payload)
+                    llm_validation.update(llm_payload.get("validation_result", {}))
+                    st.session_state.advisor_validation = llm_validation
                 else:
                     assistant_text = fallback_chat_answer(user_question, context, advisor)
-                    st.session_state.advisor_validation = validation
+                    fallback_validation = dict(validation)
+                    fallback_validation.update(
+                        {
+                            "llm_validation_status": "fallback",
+                            "schema_valid": validation.get("schema_valid", False),
+                            "forbidden_claims_detected": validation.get("forbidden_claims_detected", False),
+                            "grounding_score": 1.0,
+                            "prompt_injection_detected": False,
+                            "fallback_used": True,
+                        }
+                    )
+                    st.session_state.advisor_validation = fallback_validation
         st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text})
         st.rerun()
 

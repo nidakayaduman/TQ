@@ -19,7 +19,14 @@ REQUIRED_CONTEXT_KEYS = [
 
 
 def sanitize_advisor_context(context: dict[str, Any]) -> dict[str, Any]:
-    safe = dict(context)
+    def scrub(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: scrub(item) for key, item in value.items() if key not in ACTUAL_RESULT_FIELDS}
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        return value
+
+    safe = scrub(dict(context))
     if not safe.get("revealed", False):
         safe.pop("revealed_actual", None)
         for field in ACTUAL_RESULT_FIELDS:
