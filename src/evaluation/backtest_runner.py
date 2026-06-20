@@ -99,6 +99,11 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int = 50)
                 "top10_avg_similarity": float(similar.head(10)["overall_similarity_score"].mean()),
                 "top50_avg_similarity": avg_similarity,
                 "won_profile_fit_score": profile["won_profile_fit_score"],
+                "is_inlier": profile["is_inlier"],
+                "inlier_score": profile["inlier_score"],
+                "isolation_contamination": profile["isolation_contamination"],
+                "training_anomaly_rate": profile["training_anomaly_rate"],
+                "segment_anomaly_rate": profile["segment_anomaly_rate"],
                 "price_band_fit_score": best["price_band_fit_score"],
                 "margin_score": best["margin_score"],
                 "risk_score": 100 - best["risk_penalty_score"],
@@ -119,4 +124,3 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int = 50)
         avg_width = (output["band_width"] / output["predicted_mid_price"].replace(0, pd.NA).abs()).fillna(0).mean()
         output["coverage_adjusted_band_score"] = output["actual_inside_band"].astype(float) * (1 - min(float(avg_width), 1.0))
     return output
-

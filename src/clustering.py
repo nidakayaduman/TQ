@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+import yaml
 from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import IsolationForest
@@ -17,6 +19,17 @@ from .schema import normalize_schema
 
 CATEGORICAL = ["product_group", "region", "procedure_type", "buyer_institution_type"]
 NUMERIC = ["quantity", "delivery_months", "competitor_count_estimate", "estimated_unit_cost"]
+DEFAULT_CONTAMINATION = 0.05
+
+
+def _configured_contamination() -> float:
+    config_path = Path(__file__).resolve().parents[1] / "config" / "app_config.yaml"
+    try:
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        value = float(config.get("profile_fit", {}).get("isolation_contamination", DEFAULT_CONTAMINATION))
+    except Exception:
+        value = DEFAULT_CONTAMINATION
+    return float(np.clip(value, 0.01, 0.20))
 
 
 def _feature_frame(df: pd.DataFrame) -> pd.DataFrame:
@@ -46,18 +59,30 @@ class ProfileFitModel:
     cluster_model: KMeans
     cluster_profiles: dict[int, dict[str, Any]]
     cluster_distances: dict[int, np.ndarray]
+    contamination: float
+    training_inlier_rate: float
+    training_anomaly_rate: float
+    segment_anomaly_rates: dict[str, float]
 
     @classmethod
-    def fit(cls, df: pd.DataFrame, n_clusters: int = 4) -> "ProfileFitModel":
+    def fit(cls, df: pd.DataFrame, n_clusters: int = 4, contamination: float | None = None) -> "ProfileFitModel":
         data = normalize_schema(df).reset_index(drop=True)
         features = _feature_frame(data)
+        contamination_value = _configured_contamination() if contamination is None else float(np.clip(contamination, 0.01, 0.20))
         preprocessor = ColumnTransformer(
             [("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL), ("num", StandardScaler(), NUMERIC)]
         )
         encoded = preprocessor.fit_transform(features)
-        isolation_model = IsolationForest(n_estimators=200, contamination=0.12, random_state=42)
+        isolation_model = IsolationForest(n_estimators=200, contamination=contamination_value, random_state=42)
         isolation_model.fit(encoded)
         historical_scores = np.sort(isolation_model.decision_function(encoded))
+        training_predictions = isolation_model.predict(encoded)
+        training_inlier_rate = float((training_predictions == 1).mean())
+        training_anomaly_rate = float((training_predictions == -1).mean())
+        segment_anomaly_rates = {
+            str(segment): float((training_predictions[group.index.to_numpy()] == -1).mean())
+            for segment, group in data.groupby("product_group")
+        }
 
         cluster_columns = ["product_group", "quantity", CANONICAL_PRICE_COLUMN, CANONICAL_MARGIN_COLUMN]
         cluster_frame = data[cluster_columns].copy()
@@ -84,6 +109,11 @@ class ProfileFitModel:
                 "cluster_name": _profile_name(group),
                 "count": int(len(group)),
                 "dominant_product_group": str(group["product_group"].mode().iloc[0]) if not group["product_group"].mode().empty else "Karma",
+                "dominant_institution_type": str(group["buyer_institution_type"].mode().iloc[0]) if not group["buyer_institution_type"].mode().empty else "Karma",
+                "dominant_region": str(group["region"].mode().iloc[0]) if not group["region"].mode().empty else "Karma",
+                "average_quantity": float(group["quantity"].mean()),
+                "average_price": float(group[CANONICAL_PRICE_COLUMN].mean()),
+                "average_margin": float(group[CANONICAL_MARGIN_COLUMN].mean()),
                 "median_price": float(group[CANONICAL_PRICE_COLUMN].median()),
                 "median_margin": float(group[CANONICAL_MARGIN_COLUMN].median()),
             }
@@ -96,6 +126,10 @@ class ProfileFitModel:
             cluster_model=cluster_model,
             cluster_profiles=profiles,
             cluster_distances=distance_map,
+            contamination=contamination_value,
+            training_inlier_rate=training_inlier_rate,
+            training_anomaly_rate=training_anomaly_rate,
+            segment_anomaly_rates=segment_anomaly_rates,
         )
 
     def score(self, query: pd.Series | dict[str, Any], proposed_price: float | None = None, margin_pct: float | None = None) -> dict[str, Any]:
@@ -138,6 +172,15 @@ class ProfileFitModel:
             "cluster_score": cluster_score,
             "cluster_count": profile.get("count"),
             "cluster_dominant_product_group": profile.get("dominant_product_group"),
+            "cluster_dominant_institution_type": profile.get("dominant_institution_type"),
+            "cluster_dominant_region": profile.get("dominant_region"),
+            "cluster_average_quantity": profile.get("average_quantity"),
+            "cluster_average_price": profile.get("average_price"),
+            "cluster_average_margin": profile.get("average_margin"),
             "cluster_median_price": profile.get("median_price"),
             "cluster_median_margin": profile.get("median_margin"),
+            "isolation_contamination": self.contamination,
+            "training_inlier_rate": self.training_inlier_rate,
+            "training_anomaly_rate": self.training_anomaly_rate,
+            "segment_anomaly_rate": self.segment_anomaly_rates.get(str(features["product_group"].iloc[0])),
         }

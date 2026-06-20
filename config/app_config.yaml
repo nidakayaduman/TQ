@@ -3,6 +3,10 @@ app:
   language: tr
   default_top_k: 50
 
+profile_fit:
+  isolation_contamination: 0.05
+  aggressive_anomaly_rate_threshold: 0.25
+
 scenario_scoring:
   won_profile_fit_score: 0.30
   price_band_fit_score: 0.25
@@ -14,4 +18,3 @@ backtest:
   train_end_year: 2023
   validation_year: 2024
   test_year: 2025
-

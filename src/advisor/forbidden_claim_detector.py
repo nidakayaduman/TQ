@@ -12,6 +12,11 @@ def detect_forbidden_claims(text: str) -> dict[str, object]:
     detected: list[str] = []
     for term in FORBIDDEN_CLAIM_TERMS:
         if term.casefold() in lowered:
+            if term == "kazanma olasılığı":
+                idx = lowered.find(term)
+                window = lowered[max(0, idx - 30) : idx + len(term) + 40]
+                if any(safe in window for safe in ["değil", "hesaplamaz", "üretmez", "yoktur"]):
+                    continue
             detected.append(term)
 
     certainty_patterns = [
@@ -28,4 +33,3 @@ def detect_forbidden_claims(text: str) -> dict[str, object]:
         "forbidden_claims_detected": bool(detected),
         "detected_terms": sorted(set(detected)),
     }
-

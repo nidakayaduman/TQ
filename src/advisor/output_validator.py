@@ -8,13 +8,16 @@ from ..constants import DISCLAIMER
 from .forbidden_claim_detector import detect_forbidden_claims
 
 REQUIRED_ADVISOR_FIELDS = [
-    "summary",
-    "profile_fit_explanation",
-    "price_corridor_explanation",
-    "margin_explanation",
-    "risk_explanation",
-    "confidence_explanation",
-    "similar_tenders_summary",
+    "decision_summary",
+    "data_situation",
+    "recommended_action",
+    "pwin_interpretation",
+    "pricing_interpretation",
+    "margin_risk",
+    "learner_signals",
+    "supporting_evidence",
+    "risks",
+    "next_actions",
     "manual_review_required",
     "forbidden_claims_detected",
     "disclaimer",
@@ -34,4 +37,3 @@ def validate_advisor_output(output: dict[str, Any]) -> dict[str, Any]:
         "disclaimer_ok": disclaimer_ok,
         "advisor_validation_status": "pass" if valid else "fail",
     }
-

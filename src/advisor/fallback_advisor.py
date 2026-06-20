@@ -16,25 +16,60 @@ def build_fallback_advisor(context: dict[str, Any]) -> dict[str, Any]:
     cluster_name = context.get("cluster_name", "Bilinmeyen profil")
     similar_count = int(context.get("similar_tender_count", 0))
     manual_review = confidence_score < 50 or profile_score < 45 or bool(risk_flags)
+    corridor = context.get("corridor", {})
+    baselines = context.get("baseline_model_predictions", [])
+    low = corridor.get("predicted_low_price")
+    mid = corridor.get("predicted_mid_price")
+    high = corridor.get("predicted_high_price")
+    baseline_text = "; ".join(
+        f"{item.get('method')}: {float(item.get('prediction', 0)):.2f}"
+        for item in baselines[:4]
+        if item.get("prediction") is not None
+    )
     return {
-        "summary": (
-            f"Kazanılmış profil uyum skoru {profile_score:.1f}/100. "
-            f"Senaryo fiyat bandı uyumu {price_score:.1f}/100, marj skoru {margin_score:.1f}/100."
+        "decision_summary": (
+            f"Seçili ihale {profile_score:.1f}/100 profil uyumu ve {confidence_score:.1f}/100 veri güveniyle "
+            f"orta düzey karar desteği üretiyor. Fiyat bandı uyumu {price_score:.1f}/100; "
+            f"{'manuel inceleme önerilir' if manual_review else 'mevcut çıktılar teklif çalışması için kullanılabilir'}."
         ),
-        "profile_fit_explanation": (
-            f"İhale geçmiş kazanılmış kayıtlar içinde '{cluster_name}' kümesine yakın değerlendirildi."
+        "data_situation": (
+            "Veri seti geçmişte kazanılmış ihalelerden oluşur; kaybedilmiş ihale sınıfı olmadığı için gerçek kazan/kaybet modeli kurulmaz."
         ),
-        "price_corridor_explanation": (
-            "Fiyat koridoru benzer kazanılmış ihalelerin tarihsel fiyat dağılımından türetilmiştir."
+        "recommended_action": (
+            "Fiyatı dengeli koridor çevresinde tutup risk bayraklarını manuel kontrol edin."
+            if manual_review
+            else "Dengeli fiyat seviyesini ana referans alıp teklif senaryolarını karlılık hedefiyle karşılaştırın."
         ),
-        "margin_explanation": "Marj skoru önerilen fiyat ve tahmini birim maliyet ilişkisinden hesaplanır.",
-        "risk_explanation": "Risk bayrakları: " + (", ".join(risk_flags) if risk_flags else "kritik bayrak yok."),
-        "confidence_explanation": (
-            f"Model güven skoru {confidence_score:.1f}/100; benzer ihale sayısı {similar_count}."
+        "pwin_interpretation": (
+            f"pwin burada olasılık değil, geçmiş kazanılmış profile uyum göstergesidir. Skoru profil yakınlığı, "
+            f"fiyat bandı uyumu, karlılık, risk ve model güveni sürüklüyor."
         ),
-        "similar_tenders_summary": f"Yorum {similar_count} benzer kazanılmış ihale üzerinden oluşturuldu.",
+        "pricing_interpretation": (
+            f"Benzer ihalelerden oluşan fiyat koridoru düşük {low}, orta {mid}, yüksek {high} seviyelerini verir. "
+            f"Baz model sinyalleri: {baseline_text or 'baz model çıktısı yok'}."
+        ),
+        "margin_risk": (
+            f"Karlılık skoru {margin_score:.1f}/100. Risk bayrakları: "
+            + (", ".join(risk_flags) if risk_flags else "kritik bayrak yok.")
+        ),
+        "learner_signals": {
+            "isolation_forest": "Seçili ihale geçmiş kazanılmış dağılım içinde normal veya daha az tipik profil olarak işaretlenir; bu kayıp tahmini değildir.",
+            "kmeans": f"İhale '{cluster_name}' başarı profiline yakın değerlendirildi.",
+            "regression_models": baseline_text or "Linear/Tree baz model çıktısı mevcut değil.",
+        },
+        "supporting_evidence": [
+            f"Benzer ihale sayısı: {similar_count}",
+            f"Profil uyumu: {profile_score:.1f}/100",
+            f"Fiyat bandı uyumu: {price_score:.1f}/100",
+            f"Model güveni: {confidence_score:.1f}/100",
+        ],
+        "risks": risk_flags[:4] if risk_flags else ["Belirgin risk bayrağı yok."],
+        "next_actions": [
+            "Düşük, dengeli ve yüksek fiyat senaryolarını karlılık hedefiyle karşılaştırın.",
+            "Benzer ihale listesindeki ürün grubu, bölge ve miktar eşleşmelerini kontrol edin.",
+            "Sıra dışılık sinyali varsa fiyat ve teslim koşullarını manuel inceleyin.",
+        ],
         "manual_review_required": manual_review,
         "forbidden_claims_detected": False,
         "disclaimer": DISCLAIMER,
     }
-

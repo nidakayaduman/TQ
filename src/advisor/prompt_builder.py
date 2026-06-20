@@ -10,17 +10,41 @@ from ..constants import DISCLAIMER
 
 def build_advisor_prompt(context: dict[str, Any]) -> str:
     safe_context = dict(context)
-    return f"""Türkçe yanıt ver. Sadece aşağıdaki yapılandırılmış model çıktısını yorumla.
+    question = safe_context.pop("user_question", "") or "Genel yönetici yorumu üret."
+    return f"""Aşağıdaki JSON, bir ihale karar destek uygulamasının hesapladığı tüm ana çıktılarıdır.
+Görevin hesap yapmak değil, bu çıktıları yöneticiye doğru bağlamla yorumlamaktır.
 
-Zorunlu uyarı:
-{DISCLAIMER}
+Kritik bağlam:
+- Veri sadece geçmişte kazanılmış ihalelerden oluşur; kaybedilen ihale yoktur.
+- Bu nedenle gerçek kazan/kaybet olasılığı, supervised classification veya rakip bazlı kazanma tahmini yapılamaz.
+- pwin, "bu yeni ihale geçmişte kazandığımız işlere, fiyat bandımıza ve başarı profillerimize ne kadar benziyor?" sorusunun emsal bazlı karar destek göstergesidir.
+- Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, normalize fiyat koridoru, Linear/Tree fiyat tahmini, Isolation Forest kazanım profili yakınlığı, K-Means başarı profili eşleşmesi ve senaryo skoru.
+- Verilmeyen bilgiyi uydurma, sayısal değerleri değiştirme, sadece MODEL_CONTEXT_JSON içeriğine dayan.
+- {DISCLAIMER}
 
-Kurallar:
-- Gizli veya reveal edilmemiş gerçek sonuçları kullanma.
-- Rakip davranışı, kesin sonuç veya unsupported finansal etki uydurma.
-- Çıktıyı JSON olarak şu alanlarla döndür: summary, profile_fit_explanation, price_corridor_explanation, margin_explanation, risk_explanation, confidence_explanation, similar_tenders_summary, manual_review_required, forbidden_claims_detected, disclaimer.
+Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
+{{
+  "decision_summary": "2-3 cümlelik yönetici özeti",
+  "data_situation": "Veri kapsamını, kayıp veri olmadığını ve bunun modelleme sınırını açıkla",
+  "recommended_action": "Teklif / manuel inceleme / fiyat revizyonu gibi net öneri",
+  "pwin_interpretation": "pwin skorunu ve ana sürükleyicileri açıkla",
+  "pricing_interpretation": "düşük/orta/yüksek fiyat ve model uyumunu yorumla",
+  "margin_risk": "maliyet ve karlılık açısından risk yorumu",
+  "learner_signals": {{
+    "isolation_forest": "one-class skorunun anlamı",
+    "kmeans": "başarı profili yorumun",
+    "regression_models": "Linear ve Tree-Based/XGBoost sinyalleri"
+  }},
+  "supporting_evidence": ["en fazla 4 kısa kanıt maddesi"],
+  "risks": ["en fazla 4 risk maddesi"],
+  "next_actions": ["en fazla 4 uygulanabilir sonraki adım"],
+  "manual_review_required": true,
+  "forbidden_claims_detected": false,
+  "disclaimer": "{DISCLAIMER}"
+}}
 
-MODEL_OUTPUT_JSON:
+Kullanıcı sorusu varsa özellikle onu cevapla: {question}
+
+MODEL_CONTEXT_JSON:
 {json.dumps(safe_context, ensure_ascii=False, indent=2)}
 """
-

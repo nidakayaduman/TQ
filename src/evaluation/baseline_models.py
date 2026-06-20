@@ -60,3 +60,45 @@ def baseline_predictions(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFram
         )
     return pd.DataFrame(rows)
 
+
+def predict_baseline_prices(train: pd.DataFrame, tender: dict[str, object]) -> pd.DataFrame:
+    train_data = normalize_schema(train)
+    tender_df = normalize_schema(pd.DataFrame([dict(tender)]))
+    product_medians = train_data.groupby("product_group")[CANONICAL_PRICE_COLUMN].median()
+    global_median = float(train_data[CANONICAL_PRICE_COLUMN].median())
+    product_group = tender_df["product_group"].iloc[0]
+    median_prediction = float(product_medians.get(product_group, global_median))
+    estimated_cost = float(pd.to_numeric(tender_df["estimated_unit_cost"], errors="coerce").fillna(global_median * 0.8).iloc[0])
+    predictions: list[dict[str, object]] = [
+        {
+            "method": "Median Baseline",
+            "prediction": median_prediction,
+            "description": "Ürün grubu medyanı; yeterli ürün grubu yoksa genel medyan kullanılır.",
+            "confidence": "Orta",
+        },
+        {
+            "method": "Cost Plus Margin",
+            "prediction": estimated_cost / 0.80,
+            "description": "Tahmini maliyet üzerine yaklaşık %20 hedef marj eklenmiş referans fiyat.",
+            "confidence": "Orta",
+        },
+    ]
+    models = {
+        "Linear Regression": _pipeline(LinearRegression()),
+        "Tree-Based Model": _pipeline(RandomForestRegressor(n_estimators=120, random_state=42, min_samples_leaf=3)),
+    }
+    for name, model in models.items():
+        model.fit(train_data[FEATURES], train_data[CANONICAL_PRICE_COLUMN].astype(float))
+        predictions.append(
+            {
+                "method": name,
+                "prediction": float(model.predict(tender_df[FEATURES])[0]),
+                "description": (
+                    "Sayısal ve kategorik alanlardan doğrusal fiyat referansı."
+                    if name == "Linear Regression"
+                    else "Ağaç tabanlı model; miktar, bölge ve ürün grubu ilişkilerini daha esnek okur."
+                ),
+                "confidence": "Orta",
+            }
+        )
+    return pd.DataFrame(predictions)

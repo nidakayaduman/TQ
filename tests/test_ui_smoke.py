@@ -36,17 +36,21 @@ def test_no_html_sent_to_plain_streamlit_renderers():
 def test_turkish_pages_and_chatbot_exist():
     for label in [
         "Ana Sayfa",
-        "Veri Yükleme ve Kalite Kontrol",
+        "Veri Seti ve Kalite Kontrol",
         "Metodoloji",
-        "Test İhalesi Simülatörü",
-        "Senaryo Analizi",
+        "Test için İhale Seç",
+        "Emsal İhale Analizi",
+        "Profil Uyum Analizi",
+        "Fiyat Koridoru ve Model Karşılaştırması",
+        "Teklif Senaryoları",
         "Gerçek Sonuçla Karşılaştır",
         "Backtest Sonuçları",
-        "Benzer İhaleler",
         "AI Danışman",
-        "Raporlar ve Audit",
+        "Raporlar ve Kontroller",
     ]:
         assert label in APP_TEXT
+    for removed_label in ["Test İhalesi Simülatörü", "Senaryo Analizi", "Benzer İhaleler", "Raporlar ve Audit"]:
+        assert removed_label not in APP_TEXT
     assert "st.chat_input" in APP_TEXT
     assert "st.chat_message" in APP_TEXT
 
@@ -62,4 +66,3 @@ def test_methodology_terms_are_present():
         "Sızıntı Kontrolü",
     ]:
         assert term in APP_TEXT
-
