@@ -52,6 +52,11 @@ def rank_scenarios(
     confidence_score = confidence_from_similarity_and_count(avg_similarity, len(similar))
     profile_model = ProfileFitModel.fit(train_df)
     profile = profile_model.score(tender)
+    profile_for_score = {
+        **profile,
+        "topk_avg_similarity": avg_similarity,
+        "retrieval_quality": retrieval,
+    }
     weights = load_scenario_weights()
     soft_penalties = load_soft_penalties()
     scenarios = generate_candidate_scenarios(tender, corridor, include_actual=include_actual)
@@ -63,7 +68,7 @@ def rank_scenarios(
                 scenario,
                 tender,
                 corridor,
-                profile,
+                profile_for_score,
                 confidence_score,
                 validation,
                 weights=weights,
@@ -79,7 +84,7 @@ def rank_scenarios(
     failure_reason = ""
     if valid_count == 0:
         failure_reason = (
-            "Geçerli öneri üretilemedi. Tanımlı hard constraint'ler içinde fiyat, marj veya teslim planı "
+            "Geçerli öneri üretilemedi. Tanımlı kesin kurallar içinde fiyat, marj veya teslim planı "
             "geçmiş kazanılmış profil bandına yaklaştırılamıyor. Manuel teklif komitesi incelemesi önerilir."
         )
     evidence = (

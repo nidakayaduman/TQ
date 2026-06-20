@@ -1,3 +1,45 @@
+margin:
+  min_margin_pct: 0.08
+  block_if_price_below_cost_plus_margin: true
+
+price:
+  max_price_over_topk_p90_multiplier: 1.15
+  min_price_under_topk_p10_multiplier: 0.85
+  require_override_for_outside_historical_band: true
+
+delivery:
+  operational_min_delivery_days: 15
+  block_if_below_operational_minimum: true
+  respect_mandatory_tender_deadline: true
+
+product_alternative:
+  require_spec_allows_alternative: true
+  block_if_spec_flag_missing: true
+
+data_quality:
+  required_fields:
+    - tender_id
+    - tender_date
+    - product_name
+    - product_group
+    - buyer_institution
+    - region
+    - procedure_type
+    - quantity
+    - estimated_unit_cost
+  block_if_required_fields_missing: true
+
+leakage:
+  blocked_fields_before_reveal:
+    - won_unit_price
+    - won_total_amount
+    - actual_margin_pct
+    - actual_unit_margin
+    - final_contract_amount
+    - actual_delivery_result
+    - actual_award_result
+  fail_if_blocked_field_used: true
+
 minimum_margin_pct: 8.0
 minimum_delivery_months: 3
 maximum_delivery_months: 36

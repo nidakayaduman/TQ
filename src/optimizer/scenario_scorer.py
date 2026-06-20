@@ -13,6 +13,43 @@ from .scenario_validator import margin_pct
 DEFAULT_SCORING_WEIGHTS = DEFAULT_APP_CONFIG["scenario_scoring"]
 
 
+def _penalty_section(cfg: dict[str, Any], name: str) -> dict[str, Any]:
+    value = cfg.get(name, {})
+    return value if isinstance(value, dict) else {}
+
+
+def _penalty_item(rule: str, penalty: float, message_tr: str, risk_flag: str) -> dict[str, Any]:
+    return {
+        "rule": rule,
+        "penalty": float(penalty),
+        "message_tr": message_tr,
+        "message": message_tr,
+        "risk_flag": risk_flag,
+        "score_impact": -float(penalty),
+    }
+
+
+def _prediction_spread_ratio(scenario: dict[str, Any], corridor: dict[str, float]) -> float:
+    predictions = scenario.get("baseline_predictions") or corridor.get("baseline_predictions") or []
+    values: list[float] = []
+    if isinstance(predictions, list):
+        for item in predictions:
+            if isinstance(item, dict) and item.get("prediction") is not None:
+                values.append(float(item["prediction"]))
+            elif isinstance(item, (int, float)):
+                values.append(float(item))
+    if not values:
+        values = [
+            float(corridor.get(key))
+            for key in ["predicted_low_price", "predicted_mid_price", "predicted_high_price"]
+            if corridor.get(key) is not None
+        ]
+    if len(values) < 2:
+        return 0.0
+    midpoint = max(float(np.median(values)), 1.0)
+    return (max(values) - min(values)) / midpoint
+
+
 def margin_score_from_pct(value: float, target_margin_pct: float = 20.0) -> float:
     if value < 0:
         return 0.0
@@ -33,22 +70,133 @@ def soft_penalty_items(
     proposed_price = float(scenario["proposed_unit_price"])
     mid = max(float(corridor.get("predicted_mid_price", proposed_price)), 0.01)
     band_width_ratio = float(corridor.get("band_width", 0)) / mid
+    low_similarity = _penalty_section(cfg, "low_similarity")
+    wide_band = _penalty_section(cfg, "wide_band")
+    model_disagreement = _penalty_section(cfg, "model_disagreement")
+    cluster_distance = _penalty_section(cfg, "cluster_distance")
+    delivery_pressure = _penalty_section(cfg, "delivery_pressure")
+    high_competition = _penalty_section(cfg, "high_competition")
+    missing_optional_data = _penalty_section(cfg, "missing_optional_data")
+    cost_uncertainty = _penalty_section(cfg, "cost_uncertainty")
+
     if proposed_price < corridor["predicted_low_price"] or proposed_price > corridor["predicted_high_price"]:
-        items.append({"rule": "price_outside_band", "penalty": float(cfg["price_outside_band_penalty"]), "message": "Fiyat tarihsel fiyat bandının dışında."})
+        items.append(
+            _penalty_item(
+                "price_outside_band",
+                float(cfg["price_outside_band_penalty"]),
+                "Fiyat koridoru dışında kalan teklif manuel kontrol gerektirir.",
+                "outside_price_band",
+            )
+        )
+    topk_similarity = float(profile_output.get("topk_avg_similarity", model_confidence_score / 100) or 0)
+    if topk_similarity < float(low_similarity.get("threshold", 0.55)):
+        items.append(
+            _penalty_item(
+                "low_similarity",
+                float(low_similarity.get("penalty_points", cfg["low_similarity_penalty"])),
+                "Bu senaryoda emsal ihale benzerliği düşük. Geçmiş kazanılmış ihalelerle yakınlık zayıf olduğu için model güveni azalır.",
+                "low_similarity",
+            )
+        )
     if model_confidence_score < 45:
-        items.append({"rule": "low_model_confidence", "penalty": float(cfg["low_model_confidence_penalty"]), "message": "Model güveni düşük; emsal sinyali zayıf okunmalı."})
-    if not bool(profile_output.get("is_inlier", True)) or float(profile_output.get("won_profile_fit_score", 0)) < 45:
-        items.append({"rule": "unusual_profile", "penalty": float(cfg["unusual_profile_penalty"]), "message": "Profil geçmiş kazanılmış örneklere göre sıra dışı görünüyor."})
-    if band_width_ratio > 0.60:
-        items.append({"rule": "wide_price_band", "penalty": float(cfg["wide_band_penalty"]), "message": "Fiyat bandı geniş; karar desteği daha temkinli okunmalı."})
-    if int(tender.get("competitor_count_estimate", 0) or 0) >= 8:
-        items.append({"rule": "competitor_pressure_high", "penalty": float(cfg["competitor_pressure_penalty"]), "message": "Tahmini rakip sayısı yüksek; rekabet baskısı artabilir."})
-    required = ["product_group", "region", "procedure_type", "quantity", "delivery_months", "estimated_unit_cost"]
-    missing = [field for field in required if tender.get(field) in (None, "")]
+        items.append(
+            _penalty_item(
+                "low_model_confidence",
+                float(cfg["low_model_confidence_penalty"]),
+                "Model güveni düşük; emsal sinyali zayıf okunmalı.",
+                "low_model_confidence",
+            )
+        )
+    cluster_distance_value = 1 - (float(profile_output.get("cluster_score", 100) or 0) / 100)
+    if (
+        not bool(profile_output.get("is_inlier", True))
+        or float(profile_output.get("won_profile_fit_score", 0)) < 45
+        or cluster_distance_value > float(cluster_distance.get("threshold", 0.75))
+    ):
+        items.append(
+            _penalty_item(
+                "cluster_distance",
+                float(cluster_distance.get("penalty_points", cfg["unusual_profile_penalty"])),
+                "Bu ihale, geçmiş kazanılmış başarı grubunun tipik örneklerinden uzak görünüyor. Manuel inceleme önerilir.",
+                "high_cluster_distance",
+            )
+        )
+    if band_width_ratio > float(wide_band.get("normalized_band_width_threshold", 0.35)):
+        items.append(
+            _penalty_item(
+                "wide_band",
+                float(wide_band.get("penalty_points", cfg["wide_band_penalty"])),
+                "Fiyat koridoru geniş. Gerçek fiyatı kapsama ihtimali artsa da karar desteği zayıflar.",
+                "wide_price_band",
+            )
+        )
+    spread_ratio = _prediction_spread_ratio(scenario, corridor)
+    if spread_ratio > float(model_disagreement.get("prediction_spread_threshold_pct", 0.20)):
+        items.append(
+            _penalty_item(
+                "model_disagreement",
+                float(model_disagreement.get("penalty_points", cfg.get("model_disagreement_penalty", 6.0))),
+                "Farklı fiyat modelleri arasında belirgin fark var. Bu nedenle fiyat önerisinin güveni düşürülür.",
+                "medium_model_disagreement",
+            )
+        )
+    delivery_days = int(scenario.get("delivery_days", int(scenario.get("delivery_months", tender.get("delivery_months", 0)) or 0) * 30))
+    if delivery_days <= int(delivery_pressure.get("warning_days", 30)):
+        items.append(
+            _penalty_item(
+                "delivery_pressure",
+                float(delivery_pressure.get("penalty_points", cfg["high_delivery_penalty"])),
+                "Teslimat süresi baskılı görünüyor. Operasyonel uygulanabilirlik ayrıca kontrol edilmelidir.",
+                "delivery_pressure",
+            )
+        )
+    if int(tender.get("competitor_count_estimate", 0) or 0) >= int(high_competition.get("competitor_count_threshold", 5)):
+        items.append(
+            _penalty_item(
+                "high_competition",
+                float(high_competition.get("penalty_points", cfg.get("competitor_pressure_penalty", 5.0))),
+                "Tahmini rekabet seviyesi yüksek. Fiyat ve marj varsayımları daha dikkatli değerlendirilmelidir.",
+                "high_competition",
+            )
+        )
+    optional_fields = missing_optional_data.get(
+        "optional_fields",
+        ["competitor_count_estimate", "buyer_institution_type", "quantity_bucket", "delivery_bucket"],
+    )
+    missing = [field for field in optional_fields if tender.get(field) in (None, "")]
     if missing:
-        items.append({"rule": "data_completeness_low", "penalty": float(cfg["data_completeness_penalty"]), "message": "Bazı zorunlu veri alanları eksik."})
+        penalty = min(
+            float(missing_optional_data.get("max_penalty_points", cfg.get("data_completeness_penalty", 6.0))),
+            len(missing) * float(missing_optional_data.get("penalty_per_missing_field", 1)),
+        )
+        items.append(
+            _penalty_item(
+                "missing_optional_data",
+                penalty,
+                "Bazı destekleyici veri alanları eksik. Bu durum model güvenini sınırlayabilir.",
+                "missing_optional_data",
+            )
+        )
+    uncertainty = str(tender.get("cost_uncertainty", scenario.get("cost_uncertainty", "low"))).casefold()
+    threshold = str(cost_uncertainty.get("threshold", "medium")).casefold()
+    if (threshold == "medium" and uncertainty in {"medium", "high"}) or (threshold == "high" and uncertainty == "high"):
+        items.append(
+            _penalty_item(
+                "cost_uncertainty",
+                float(cost_uncertainty.get("penalty_points", 5)),
+                "Tahmini maliyet belirsiz görünüyor. Marj ve katkı kârı hesabı manuel olarak doğrulanmalıdır.",
+                "cost_uncertainty",
+            )
+        )
     if validation.get("valid", False) and float(validation.get("computed_margin_pct", 0)) < 12:
-        items.append({"rule": "low_margin_buffer", "penalty": float(cfg["low_margin_penalty"]), "message": "Marj minimum eşiğe yakın; maliyet oynaklığına duyarlı."})
+        items.append(
+            _penalty_item(
+                "low_margin_buffer",
+                float(cfg["low_margin_penalty"]),
+                "Marj minimum eşiğe yakın; maliyet oynaklığına duyarlı.",
+                "low_margin_buffer",
+            )
+        )
     return items
 
 
@@ -103,6 +251,9 @@ def score_scenario(
         message = str(item["message"])
         if message not in risk_flags:
             risk_flags.append(message)
+        risk_flag = str(item.get("risk_flag", ""))
+        if risk_flag and risk_flag not in risk_flags:
+            risk_flags.append(risk_flag)
     unusual_profile = not bool(profile_output.get("is_inlier", True)) or float(profile_output.get("won_profile_fit_score", 0)) < 45
     high_delivery = int(scenario.get("delivery_months", tender.get("delivery_months", 0)) or 0) > int(tender.get("delivery_months", 0) or 0)
 
@@ -130,7 +281,7 @@ def score_scenario(
     hard_valid = bool(validation.get("valid", False))
     soft_summary = "; ".join(str(item["message"]) for item in detailed_soft_penalties)
     explainability = (
-        "Senaryo geçerli. " + (f"Dikkat edilmesi gereken soft penalty: {soft_summary}" if soft_summary else "Belirgin soft penalty yok.")
+        "Senaryo geçerli. " + (f"Dikkat edilmesi gereken risk uyarısı: {soft_summary}" if soft_summary else "Belirgin risk uyarısı yok.")
         if hard_valid
         else "Senaryo geçersiz: " + "; ".join(validation.get("violations", []))
     )
@@ -147,7 +298,7 @@ def score_scenario(
         "confidence": float(np.clip(model_confidence_score, 0, 100)),
         "evidence_from_similar_tenders": "Benzer ihalelerin fiyat koridoru ve profil uyumu referans alındı.",
         "hard_constraint_status": hard_status,
-        "caveat": "Hard constraint ihlali varsa ana öneri olarak kullanılmamalıdır." if not hard_valid else "Soft penalty varsa manuel kontrolle değerlendirilmelidir.",
+        "caveat": "Kesin kural ihlali varsa ana öneri olarak kullanılmamalıdır." if not hard_valid else "Risk uyarısı varsa manuel kontrolle değerlendirilmelidir.",
     }
     return {
         **scenario,

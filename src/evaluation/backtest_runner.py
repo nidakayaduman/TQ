@@ -57,6 +57,10 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
         avg_similarity = float(similar["overall_similarity_score"].mean()) if not similar.empty else 0.0
         confidence_score = confidence_from_similarity_and_count(avg_similarity, len(similar))
         profile = profile_model.score(masked)
+        profile_for_score = {
+            **profile,
+            "topk_avg_similarity": avg_similarity,
+        }
         scenarios = generate_candidate_scenarios(
             masked,
             corridor,
@@ -70,7 +74,7 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
                     scenario,
                     masked,
                     corridor,
-                    profile,
+                    profile_for_score,
                     confidence_score,
                     validation,
                     weights=weights,

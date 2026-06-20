@@ -1586,14 +1586,14 @@ def render_methodology() -> None:
         summary = active_config_summary()
         config_rows = [
             ("App config", summary["app_config"]),
-            ("Hard constraints", summary["hard_constraints"]),
-            ("Soft penalties", summary["soft_penalties"]),
+            ("Kesin kural config", summary["hard_constraints"]),
+            ("Risk uyarısı config", summary["soft_penalties"]),
             ("Top-K emsal sayısı", str(summary["default_top_k"])),
             ("Isolation Forest hassasiyet ayarı", format_pct(summary["isolation_contamination"] * 100)),
             ("Agresif anomaly uyarı eşiği", format_pct(summary["aggressive_anomaly_rate_threshold"] * 100)),
             ("Senaryo skor ağırlıkları", json.dumps(summary["scenario_weights"], ensure_ascii=False)),
-            ("Sert kural config anahtarları", ", ".join(summary["hard_constraint_keys"])),
-            ("Soft penalty config anahtarları", ", ".join(summary["soft_penalty_keys"])),
+            ("Kesin kural config anahtarları", ", ".join(summary["hard_constraint_keys"])),
+            ("Risk uyarısı config anahtarları", ", ".join(summary["soft_penalty_keys"])),
         ]
         st.dataframe(pd.DataFrame(config_rows, columns=["Config", "Aktif değer"]), hide_index=True, width="stretch")
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
@@ -2205,8 +2205,8 @@ def render_scenario_analysis() -> None:
     render_formula_card()
     with st.expander("Senaryo kuralları nasıl çalışır?", expanded=False):
         info_callout(
-            "Hard constraint kesin kuraldır; ihlal edilirse senaryo önerilmez. Soft penalty ise uyarıdır; senaryoyu tamamen engellemez ama skorunu düşürür.",
-            "Hard constraint ve soft penalty",
+            "Kesin kurallar ihlal edilirse senaryo önerilmez. Risk uyarıları ise senaryoyu engellemez; ancak skorunu düşürür ve manuel kontrol ihtiyacını artırır.",
+            "Kesin kurallar ve risk uyarıları",
         )
         render_method_grid(
             [
@@ -2214,7 +2214,7 @@ def render_scenario_analysis() -> None:
                 ("Değiştirilebilir alanlar", "Birim teklif fiyatı, hedef marj, teslim planı ve strateji modu teklif senaryosu olarak denenebilir."),
                 ("Sistemin hesapladıkları", "Beklenen marj, fiyat bandı uyumu, profil uyumu, risk, güven ve senaryo skoru sistem tarafından hesaplanır."),
                 ("Domine edilmeyen seçenekler", "Sistem yalnızca tek skoru büyütmez; fiyat, marj, risk ve güven arasında farklı dengeler kuran uygulanabilir seçenekleri karşılaştırır."),
-                ("Geçersiz senaryo", "Hard constraint ihlal eden seçenek ana öneri olarak gösterilmez; nedeni tabloda ve export içinde görünür."),
+                ("Geçersiz senaryo", "Kesin kural ihlal eden seçenek ana öneri olarak gösterilmez; nedeni tabloda ve export içinde görünür."),
                 ("Manuel inceleme", "Geçerli senaryo üretilemezse teklif komitesi incelemesi önerilir."),
             ],
             colors=["blue", "purple", "green", "amber", "cyan", "blue"],
@@ -2249,7 +2249,7 @@ def render_scenario_analysis() -> None:
         contribution = total_offer * float(scenario["computed_margin_pct"]) / 100
         risk_value = max(0.0, 100 - float(scenario["risk_penalty_score"]))
         risk_label = "Düşük" if risk_value >= 75 else "Orta" if risk_value >= 55 else "Yüksek"
-        soft_text = str(scenario.get("soft_penalty_explanations", "")) or "Belirgin soft penalty yok"
+        soft_text = str(scenario.get("soft_penalty_explanations", "")) or "Belirgin risk uyarısı yok"
         scenario_cards_html += premium_card_html(
             title=label,
             value=format_try(scenario["proposed_unit_price"]),
@@ -2268,7 +2268,7 @@ def render_scenario_analysis() -> None:
                 ("Risk seviyesi", risk_label),
                 ("Senaryo skoru", f"{scenario['scenario_score']:.0f}/100"),
                 ("Kural kontrolü", invalid_reason if invalid_reason else "Uygun"),
-                ("Soft penalty", soft_text[:160]),
+                ("Skor düşüş nedeni", soft_text[:160]),
             ],
         )
     if scenario_cards_html:
@@ -2309,7 +2309,7 @@ def render_scenario_analysis() -> None:
         "Senaryo Skoru",
         "Kural Durumu",
         "Geçersiz Senaryo Açıklaması",
-        "Soft Penalty Uyarıları",
+        "Risk Uyarıları / Skor Cezaları",
         "Dengeli Seçenek Havuzunda mı?",
         "Nasıl Yorumlanmalı?",
         "Kural / Risk Notları",
@@ -2351,7 +2351,7 @@ def render_scenario_analysis() -> None:
                 "risk_impact": "Risk etkisi",
                 "confidence": "Güven seviyesi",
                 "evidence_from_similar_tenders": "Benzer ihalelerden kanıt",
-                "hard_constraint_status": "Kural durumu",
+                "hard_constraint_status": "Kesin kural durumu",
                 "caveat": "Not / uyarı",
             }
         )
@@ -2623,7 +2623,7 @@ def render_backtest() -> None:
                 ("Simülasyon yapılır", "Emsal, profil, fiyat koridoru ve senaryolar hesaplanır."),
                 ("Danışman yorumlar", "AI Danışman yalnızca görünür model çıktılarıyla cevap verir."),
                 ("Gerçek sonuç açılır", "Reveal sonrası sistem çıktıları tarihsel sonuçla kıyaslanır."),
-                ("Export alınır", "İhale bazlı çıktı, leakage audit ve expert review dışa aktarılır."),
+                ("Export alınır", "İhale bazlı çıktı, gerçek sonuç sızıntısı kontrolü ve expert review dışa aktarılır."),
             ],
             colors=["blue", "purple", "green", "amber", "cyan", "blue"],
         )
@@ -2740,10 +2740,10 @@ def render_backtest() -> None:
         metric_card("Sert kural ihlal oranı", format_pct(opt["hard_constraint_violation_rate"] * 100), "Kuralı geçemeyen en iyi senaryo oranı", "amber")
     with s4:
         soft_penalty_mean = float(results["soft_penalty_score"].mean()) if "soft_penalty_score" in results else 0.0
-        metric_card("Soft penalty ortalaması", f"{soft_penalty_mean:.1f}/100", "Risk ve soft penalty cezası", "purple")
+        metric_card("Risk uyarısı ortalaması", f"{soft_penalty_mean:.1f}/100", "Risk ve skor cezası", "purple")
     if "soft_penalty_score" in results:
         penalty_distribution = results["soft_penalty_score"].describe().reset_index()
-        penalty_distribution.columns = ["Özet", "Soft penalty skoru"]
+        penalty_distribution.columns = ["Özet", "Risk uyarısı skoru"]
         st.dataframe(penalty_distribution, hide_index=True, width="stretch")
     rank_summary = results[["tender_id", "actual_won_scenario_rank_percentile"]].copy()
     rank_summary["Yorum"] = rank_summary["actual_won_scenario_rank_percentile"].apply(scenario_rank_comment)
@@ -2857,7 +2857,7 @@ def render_backtest() -> None:
     with e2:
         audited_download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "tender_level_sonuclar.csv")
     with e3:
-        audited_download_button("Leakage Audit", dataframe_to_csv_bytes(leakage_report), "leakage_audit.csv")
+        audited_download_button("Gerçek Sonuç Sızıntısı Kontrolü", dataframe_to_csv_bytes(leakage_report), "leakage_audit.csv")
     e4, e5 = st.columns(2, gap="medium")
     with e4:
         audited_download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment_display), "segment_metrikleri.csv")
@@ -3198,7 +3198,7 @@ def render_reports() -> None:
     version_summary.columns = ["Alan", "Değer"] if not version_summary.empty else ["Alan", "Değer"]
     audit_cards = [
         (
-            "Leakage Audit",
+            "Gerçek Sonuç Sızıntısı Kontrolü",
             "Sızıntı kontrolü",
             "Sonuç açılmadan önce gerçek kazanılmış fiyat, final tutar ve gerçek karlılık oranı alanlarının modele girmediğini kontrol eder.",
             "Sızıntı yok" if leakage_ok else "Uyarı",
@@ -3297,7 +3297,7 @@ def render_reports() -> None:
         if isinstance(scenario_result, pd.DataFrame) and not scenario_result.empty:
             audited_download_button("Senaryo Karşılaştırması", dataframe_to_csv_bytes(scenario_result), "senaryo_karsilastirma.csv")
         audited_download_button(
-            "Leakage Audit",
+            "Gerçek Sonuç Sızıntısı Kontrolü",
             dataframe_to_csv_bytes(results[["tender_id", "leakage_audit_status", *[c for c in version_columns if c in results.columns]]]),
             "leakage_audit.csv",
         )

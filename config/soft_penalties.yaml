@@ -1,3 +1,40 @@
+low_similarity:
+  threshold: 0.55
+  penalty_points: 8
+
+wide_band:
+  normalized_band_width_threshold: 0.35
+  penalty_points: 7
+
+model_disagreement:
+  prediction_spread_threshold_pct: 0.20
+  penalty_points: 6
+
+cluster_distance:
+  threshold: 0.75
+  penalty_points: 5
+
+delivery_pressure:
+  warning_days: 30
+  penalty_points: 4
+
+high_competition:
+  competitor_count_threshold: 5
+  penalty_points: 5
+
+missing_optional_data:
+  optional_fields:
+    - competitor_count_estimate
+    - buyer_institution_type
+    - quantity_bucket
+    - delivery_bucket
+  penalty_per_missing_field: 1
+  max_penalty_points: 6
+
+cost_uncertainty:
+  threshold: medium
+  penalty_points: 5
+
 price_outside_band_penalty: 12.0
 low_similarity_penalty: 15.0
 unusual_quantity_penalty: 8.0
