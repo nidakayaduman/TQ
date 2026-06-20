@@ -8,10 +8,11 @@ import pandas as pd
 def segment_level_metrics(results: pd.DataFrame, segment_columns: list[str] | None = None) -> pd.DataFrame:
     columns = segment_columns or [
         "product_group",
-        "region",
         "buyer_institution_type",
+        "region",
+        "procedure_type",
         "quantity_bucket",
-        "cluster_name",
+        "delivery_bucket",
         "year",
         "cluster_id",
     ]

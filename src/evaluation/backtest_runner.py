@@ -80,6 +80,10 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
         scored_df = pd.DataFrame(scored).sort_values("scenario_score", ascending=False).reset_index(drop=True)
         best = scored_df.iloc[0].to_dict()
         retrieval = retrieval_quality(similar, masked, top_k=top_k)
+        similar_summary = "; ".join(
+            f"{row['tender_id']} ({float(row['overall_similarity_score']):.2f})"
+            for _, row in similar.head(5).iterrows()
+        )
         context = {
             **best,
             **profile,
@@ -128,6 +132,8 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
                 "cluster_id": profile["cluster_id"],
                 "cluster_name": profile["cluster_name"],
                 "leakage_audit_status": audit["audit_status"],
+                "leakage_blocked_fields_present": "; ".join(audit["blocked_fields_present"]),
+                "leakage_masked_fields_count": audit["masked_fields_count"],
                 "advisor_validation_status": advisor_validation["advisor_validation_status"],
                 "risk_flags": "; ".join(best["risk_flags"]),
                 "hard_constraints_valid": bool(best["hard_constraints_valid"]),
@@ -135,6 +141,8 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
                 "retrieval_product_group_match_rate": retrieval["product_group_match_rate"],
                 "retrieval_region_match_rate": retrieval["region_match_rate"],
                 "retrieval_quantity_band_match_rate": retrieval["quantity_band_match_rate"],
+                "top_similar_tenders_summary": similar_summary,
+                "reveal_status": "revealed_for_backtest",
                 "soft_penalty_score": best["soft_penalty_score"],
                 **MODEL_VERSION,
             }

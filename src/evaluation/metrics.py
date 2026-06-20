@@ -34,8 +34,10 @@ def price_corridor_metrics(results: pd.DataFrame) -> dict[str, float]:
         "smape": smape(actual, mid) if len(results) else 0.0,
         "wape": wape(actual, mid) if len(results) else 0.0,
         "median_absolute_error": float(errors.median()) if len(errors) else 0.0,
+        "coverage_rate": coverage_rate,
         "band_coverage": coverage_rate,
         "average_band_width": float(band_width.mean()) if len(results) else 0.0,
+        "normalized_band_width_penalty": normalized_band_width_penalty,
         "coverage_adjusted_band_score": float(coverage_rate * (1 - normalized_band_width_penalty)),
     }
 
@@ -55,4 +57,3 @@ def optimizer_metrics(results: pd.DataFrame) -> dict[str, float]:
         "top15_hit_rate": float((percentile >= 85).mean()),
         "hard_constraint_violation_rate": float((~results["hard_constraints_valid"].astype(bool)).mean()),
     }
-

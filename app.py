@@ -30,6 +30,7 @@ from src.evaluation.baseline_models import baseline_predictions, predict_baselin
 from src.evaluation.expert_review import expert_review_template
 from src.evaluation.metrics import optimizer_metrics, price_corridor_metrics
 from src.evaluation.segment_metrics import segment_level_metrics
+from src.evaluation.stress_tests import evaluate_synthetic_outliers
 from src.feature_masking import mask_actual_result_fields
 from src.leakage_audit import audit_pre_reveal_input
 from src.model_card import generate_model_card
@@ -476,6 +477,10 @@ def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
         "isolation_forest_model_version": "isolation-forest-v1",
         "baseline_model_version": "baseline-v1",
         "training_data_range": "2021-2024 train+validation; 2025 pseudo-live test",
+        "leakage_blocked_fields_present": "",
+        "leakage_masked_fields_count": 0,
+        "top_similar_tenders_summary": "",
+        "reveal_status": "revealed_for_backtest",
     }
     for column, default in defaults.items():
         if column not in fixed.columns:
@@ -576,13 +581,13 @@ def scenario_rank_comment(rank_pct: float | int | None) -> str:
     if rank_pct is None or pd.isna(rank_pct):
         return "Senaryo sıralaması hesaplanamadı."
     value = float(rank_pct)
-    if value >= 90:
-        return "Top %10: güçlü uyum."
-    if value >= 80:
-        return "Top %20: kabul edilebilir uyum."
+    if value >= 85:
+        return "Top %15 içinde: güçlü uyum."
+    if value >= 70:
+        return "Top %30 içinde: kabul edilebilir uyum."
     if value >= 50:
-        return "Top %50: orta düzey uyum."
-    return "Alt %50: senaryo skor mantığı bu ihale için zayıf kalmış olabilir."
+        return "Top %50 içinde: orta düzey uyum."
+    return "Alt %50: senaryo skor mantığı gözden geçirilmeli."
 
 
 def render_small_card(title: str, body: str, badge_html: str = "") -> None:
@@ -1828,7 +1833,8 @@ def render_price_corridor_models() -> None:
     for method in [
         "Linear Regression Baseline",
         "Random Forest / Ağaç Tabanlı Baseline",
-        "Median Baseline",
+        "Product Group Median",
+        "Top-K Median",
         "Cost Plus Margin",
     ]:
         item = baseline_map.get(method)
@@ -1880,12 +1886,14 @@ def render_price_corridor_models() -> None:
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header(
         "Fiyat modeli karşılaştırması",
-        "Her yöntem için düşük, orta ve yüksek fiyat gösterilir. Linear Regression Baseline, Random Forest / Ağaç Tabanlı Baseline, Median Baseline ve Cost Plus Margin modelleri tek fiyat üretir; düşük/yüksek aralık bu tahminin etrafında emsal koridor genişliğiyle türetilir.",
+        "Her yöntem için düşük, orta ve yüksek fiyat gösterilir. Product Group Median, Top-K Median, Cost Plus Margin, Linear Regression Baseline ve Random Forest / Ağaç Tabanlı Baseline tek fiyat referansı üretir; düşük/yüksek aralık bu tahminin etrafında emsal koridor genişliğiyle türetilir.",
     )
     model_cards = []
     model_labels = {
         "Benzerlik Tabanlı Fiyat Koridoru": "Benzerlik Tabanlı Koridor",
         "Random Forest / Ağaç Tabanlı Baseline": "Random Forest / Ağaç Tabanlı Baseline",
+        "Product Group Median": "Product Group Median",
+        "Top-K Median": "Top-K Median",
         "Cost Plus Margin": "Cost Plus Margin",
     }
     colors = ["blue", "purple", "mint", "amber", "cyan"]
@@ -2258,6 +2266,18 @@ def render_backtest() -> None:
         "Backtest geriye dönük canlı testtir: test yılındaki her ihalenin gerçek kazanılmış fiyatı ve karlılığı model girdisinden gizlenir, sistem önce emsal/profil/fiyat/senaryo çıktısı üretir, sonra gerçek sonuç açılarak karşılaştırılır. Gerçek Sonuçla Karşılaştır sayfası tek seçili ihaleyi gösterir; Backtest bu kontrolü tüm test yılına yayar. Amaç kazanma/kaybetme tahmini değil, fiyat aralığı ve profil uyumu yaklaşımının geçmiş kazanılmış ihalelerde ne kadar tutarlı çalıştığını ölçmektir.",
         "Backtest neyi anlatır?",
     )
+    with st.expander("Test modu adımları", expanded=False):
+        render_method_grid(
+            [
+                ("Test ihalesi seçilir", "Geçmiş kazanılmış kayıt yeni ihale gibi ele alınır."),
+                ("Gerçek sonuç gizlenir", "Fiyat, marj ve final sonuç alanları modele verilmez."),
+                ("Simülasyon yapılır", "Emsal, profil, fiyat koridoru ve senaryolar hesaplanır."),
+                ("Danışman yorumlar", "AI Danışman yalnızca görünür model çıktılarıyla cevap verir."),
+                ("Gerçek sonuç açılır", "Reveal sonrası sistem çıktıları tarihsel sonuçla kıyaslanır."),
+                ("Export alınır", "İhale bazlı çıktı, leakage audit ve expert review dışa aktarılır."),
+            ],
+            colors=["blue", "purple", "green", "amber", "cyan", "blue"],
+        )
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
     section_header("Emsal ve Profil Metrikleri", "Benzer ihale kalitesi ve profil uyum dağılımı birlikte okunur.", "Emsal / Profil")
@@ -2355,6 +2375,10 @@ def render_backtest() -> None:
         metric_card("WAPE", format_pct(metrics["wape"]), "Ağırlıklı yüzde hata", "cyan")
     with f7:
         metric_card("Ortalama band genişliği", format_try(metrics["average_band_width"]), "Düşük ve yüksek öneri arasındaki ortalama fark", "amber")
+    info_callout(
+        "Fiyat bandı gerçek fiyatı yakalayabilir ama çok genişse karar desteği zayıflar. Bu skor, hem kapsama başarısını hem de bandın gereksiz geniş olup olmadığını birlikte değerlendirir.",
+        "Genişlik cezası uygulanmış fiyat bandı skoru",
+    )
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Senaryo Metrikleri", "Tarihsel gerçek fiyat aday senaryolar içinde ne kadar iyi konumlandı?", "Senaryo")
@@ -2383,13 +2407,13 @@ def render_backtest() -> None:
     with st.expander("Gerçek kazanılmış senaryo sıra detayı", expanded=False):
         info_callout(
             "Gerçek kazanılmış senaryonun, sistemin önerdiği aday senaryolar içinde ne kadar üstte yer aldığını gösterir.",
-            "Percentile yorumu",
+            "Gerçek Kazanılmış Senaryonun Sıralamadaki Yeri",
         )
         st.dataframe(rank_summary, hide_index=True, width="stretch")
     metric_card("Yasak İddia Üretme Oranı", format_pct(forbidden_rate * 100), "AI Danışman güvenlik kontrolü. Hedef sıfırdır.", "red", "🛡️")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Baz Model Karşılaştırması", "Tender IQ fiyat aralığı yaklaşımı; medyan, maliyet üstü fiyat ve regresyon gibi daha basit referanslarla kıyaslanır.", "Kıyas")
+    section_header("Basit Yöntemlerle Karşılaştırma", "Tender IQ fiyat aralığı yaklaşımı; ürün grubu medyanı, Top-K medyanı, maliyet üstü fiyat ve regresyon gibi basit referanslarla kıyaslanır.", "Kıyas")
     baseline = baseline_predictions(pd.concat([split["train"], split["validation"]]), split["test"])
     baseline = baseline.rename(
         columns={
@@ -2398,27 +2422,46 @@ def render_backtest() -> None:
             "MAPE": "Ortalama Yüzde Hata",
             "Coverage": "Aralıkta Kalma Oranı",
             "Avg Band Width": "Ortalama Aralık Genişliği",
+            "Description": "Açıklama",
         }
     )
     current_row = pd.DataFrame(
         [
             {
-                "Yöntem": "Tender IQ mevcut yöntem",
+                "Yöntem": "Benzerlik Tabanlı Fiyat Koridoru",
                 "Ortalama Mutlak Hata": metrics["mae"],
                 "Ortalama Yüzde Hata": metrics["mape"],
                 "Aralıkta Kalma Oranı": metrics["band_coverage"],
                 "Ortalama Aralık Genişliği": metrics["average_band_width"],
+                "Açıklama": "Top-K benzer kazanılmış ihalelerden düşük, orta ve yüksek fiyat koridoru üretir.",
             }
         ]
     )
     st.dataframe(pd.concat([baseline, current_row], ignore_index=True), hide_index=True, width="stretch")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Segment Bazlı Performans", "Ürün, bölge ve profil kırılımlarında hata ve kapsama değerleri.", "Segment")
+    section_header("Kırılım Bazlı Performans", "Genel sonuç iyi görünse bile bazı ürün gruplarında, bölgelerde veya kurum tiplerinde performans daha zayıf olabilir. Segment metrikleri bu farkları görmeyi sağlar.", "Segment")
     segment_display = segment_level_metrics(results)
     if "segment_value" in segment_display.columns:
         segment_display["segment_value"] = segment_display["segment_value"].astype(str)
     st.dataframe(segment_display, hide_index=True, width="stretch")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Sentetik Aykırı Senaryo Testi", "Kaybedilmiş ihale verisi olmadığı için sistemin riskli durumları nasıl yakaladığını görmek amacıyla yapay uç örnekler denenir.", "Stres testi")
+    base_stress_tender = mask_actual_result_fields(split["test"].iloc[0].to_dict())
+    stress_results = evaluate_synthetic_outliers(pd.concat([split["train"], split["validation"]]), base_stress_tender)
+    stress_pass_rate = float((stress_results["Beklenen davranış"] == "Geçti").mean()) if not stress_results.empty else 0.0
+    c_stress_1, c_stress_2 = st.columns(2, gap="medium")
+    with c_stress_1:
+        metric_card("Aykırı test geçme oranı", format_pct(stress_pass_rate * 100), "Riskli yapay örneklerde güven düşüşü, risk bayrağı veya manuel inceleme beklenir.", "purple")
+    with c_stress_2:
+        metric_card("Test edilen uç durum", format_int(len(stress_results)), "Miktar, ürün/kurum uyumsuzluğu, teslim süresi, fiyat ve düşük emsal senaryoları", "amber")
+    with st.expander("Sentetik aykırı senaryo test detayı", expanded=False):
+        info_callout(
+            "Bu test gerçek kayıp tahmini değildir. Amaç, uç örneklerde sistemin daha temkinli davranıp davranmadığını kontrol etmektir.",
+            "Nasıl okunur?",
+        )
+        st.dataframe(stress_results, hide_index=True, width="stretch")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Sızıntı Kontrolü", "Sonuç açılmadan önce gerçek sonuç alanlarının modele girmediği doğrulanır.", "Audit")
@@ -2446,6 +2489,8 @@ def render_backtest() -> None:
             "kmeans_model_version",
             "isolation_forest_model_version",
             "baseline_model_version",
+            "leakage_blocked_fields_present",
+            "leakage_masked_fields_count",
         ]
     ].copy()
     leakage_report["Sızıntı durumu"] = leakage_report["leakage_audit_status"].map(
@@ -2469,6 +2514,7 @@ def render_backtest() -> None:
         st.download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment_display), "segment_metrikleri.csv")
     with e5:
         st.download_button("Expert Review Export", dataframe_to_csv_bytes(expert_review_template(results)), "expert_review_export.csv")
+    st.download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
 
 
 def render_similar_tenders() -> None:
@@ -2705,6 +2751,11 @@ def render_reports() -> None:
     else:
         results = ensure_backtest_columns(results)
         st.session_state.backtest_results = results
+    split = temporal_split(load_active_data())
+    stress_results = evaluate_synthetic_outliers(
+        pd.concat([split["train"], split["validation"]]),
+        mask_actual_result_fields(split["test"].iloc[0].to_dict()),
+    )
     segment = segment_level_metrics(results)
     if "segment_value" in segment.columns:
         segment["segment_value"] = segment["segment_value"].astype(str)
@@ -2794,8 +2845,10 @@ def render_reports() -> None:
     with c3:
         st.download_button("Model Card", model_card, "model_karti.md")
         st.download_button("Expert Review Template", dataframe_to_csv_bytes(expert_review_template(results)), "uzman_inceleme_sablonu.csv")
+        st.download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
     with st.expander("Segment metrikleri ve audit tablo detayı", expanded=False):
         st.dataframe(segment, hide_index=True, width="stretch")
+        st.dataframe(stress_results, hide_index=True, width="stretch")
         st.dataframe(version_summary, hide_index=True, width="stretch")
 
 

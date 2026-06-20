@@ -13,6 +13,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from ..constants import CANONICAL_PRICE_COLUMN
+from ..retrieval import RetrievalEngine
 from ..schema import normalize_schema
 
 FEATURES = ["product_group", "region", "procedure_type", "quantity", "delivery_months", "competitor_count_estimate"]
@@ -66,6 +67,12 @@ def baseline_predictions(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFram
     product_medians = train_data.groupby("product_group")[CANONICAL_PRICE_COLUMN].median()
     global_median = float(train_data[CANONICAL_PRICE_COLUMN].median())
     cost_plus = pd.to_numeric(test_data["estimated_unit_cost"], errors="coerce").fillna(global_median * 0.8) / 0.80
+    retriever = RetrievalEngine.fit(train_data)
+    topk_values = []
+    for _, row in test_data.iterrows():
+        similar = retriever.retrieve(row.to_dict(), top_k=50)
+        topk_values.append(float(similar[CANONICAL_PRICE_COLUMN].median()) if not similar.empty else global_median)
+    topk_median = pd.Series(topk_values, index=test_data.index)
 
     models = {
         "Linear Regression Baseline": _pipeline(LinearRegression()),
@@ -74,23 +81,35 @@ def baseline_predictions(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFram
         ),
     }
     predictions = {
-        "Median Baseline": test_data["product_group"].map(product_medians).fillna(global_median).astype(float),
+        "Product Group Median": test_data["product_group"].map(product_medians).fillna(global_median).astype(float),
+        "Top-K Median": topk_median.astype(float),
         "Cost Plus Margin": cost_plus.astype(float),
     }
     for name, model in models.items():
         model.fit(train_data[FEATURES], train_data[CANONICAL_PRICE_COLUMN].astype(float))
-        predictions[name] = _predict_model_series(model, test_data[FEATURES], predictions["Median Baseline"])
+        predictions[name] = _predict_model_series(model, test_data[FEATURES], predictions["Product Group Median"])
 
     actual = test_data[CANONICAL_PRICE_COLUMN].astype(float)
+    descriptions = {
+        "Product Group Median": "Aynı ürün grubundaki geçmiş kazanılmış fiyatların medyanını baz alır.",
+        "Top-K Median": "Seçili ihaleye en çok benzeyen geçmiş ihalelerin medyan fiyatını kullanır.",
+        "Cost Plus Margin": "Tahmini maliyetin üzerine hedef marj ekleyerek fiyat üretir.",
+        "Linear Regression Baseline": "Sayısal ve kategorik alanlardan doğrusal fiyat tahmini üretir.",
+        "Random Forest / Ağaç Tabanlı Baseline": "Ağaç tabanlı baseline modeldir; doğrusal olmayan örüntüleri yakalamaya çalışır.",
+    }
     for name, predicted in predictions.items():
+        predicted = clean_numeric_outputs(predicted, predictions["Product Group Median"])
         error = (actual - predicted).abs()
+        low = predicted * 0.85
+        high = predicted * 1.15
         rows.append(
             {
                 "Model": name,
                 "MAE": float(error.mean()),
                 "MAPE": safe_mape(actual, predicted),
-                "Coverage": 0.0,
-                "Avg Band Width": 0.0,
+                "Coverage": float(((actual >= low) & (actual <= high)).mean()),
+                "Avg Band Width": float((high - low).mean()),
+                "Description": descriptions[name],
             }
         )
     return pd.DataFrame(rows)
@@ -104,6 +123,8 @@ def predict_baseline_prices(train: pd.DataFrame, tender: dict[str, object]) -> p
     product_group = tender_df["product_group"].iloc[0]
     median_prediction = float(product_medians.get(product_group, global_median))
     estimated_cost = float(pd.to_numeric(tender_df["estimated_unit_cost"], errors="coerce").fillna(global_median * 0.8).iloc[0])
+    similar = RetrievalEngine.fit(train_data).retrieve(tender_df.iloc[0].to_dict(), top_k=50)
+    topk_prediction = float(similar[CANONICAL_PRICE_COLUMN].median()) if not similar.empty else median_prediction
     def usable_prediction(raw_value: float, fallback_value: float) -> tuple[float, bool, str]:
         upper = max(abs(float(fallback_value)) * 8.0, MIN_REASONABLE_PRICE)
         if pd.isna(raw_value) or raw_value <= MIN_REASONABLE_PRICE:
@@ -114,10 +135,16 @@ def predict_baseline_prices(train: pd.DataFrame, tender: dict[str, object]) -> p
 
     predictions: list[dict[str, object]] = [
         {
-            "method": "Median Baseline",
+            "method": "Product Group Median",
             "prediction": median_prediction,
             "description": "Ürün grubu medyanı; yeterli ürün grubu yoksa genel medyan kullanılır.",
             "confidence": "Orta",
+        },
+        {
+            "method": "Top-K Median",
+            "prediction": topk_prediction,
+            "description": "Seçili ihaleye en çok benzeyen geçmiş kazanılmış ihalelerin medyan fiyatı.",
+            "confidence": "Orta" if len(similar) >= 10 else "Düşük",
         },
         {
             "method": "Cost Plus Margin",
