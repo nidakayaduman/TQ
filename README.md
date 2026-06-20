@@ -2,7 +2,7 @@
 
 Streamlit tabanlı production-minded MVP. Uygulama yalnızca tarihsel **kazanılmış** ihale verisiyle çalışır ve yeni bir ihale için **Kazanılmış Profil Uyum Skoru** üretir.
 
-> This score is not a true probability of winning. It indicates similarity to historically won tenders, price-band alignment, margin/risk balance, and model confidence. True win probability requires reliable won/lost tender data.
+> Bu skor gerçek kazanma olasılığı değildir. Geçmişte kazanılmış ihalelere benzerlik, fiyat bandı uyumu, karlılık/risk dengesi ve model güvenini gösterir. Gerçek kazanma olasılığı için güvenilir kazanılmış ve kaybedilmiş ihale verisi gerekir.
 
 ## Ne Yapar?
 
@@ -10,9 +10,9 @@ Streamlit tabanlı production-minded MVP. Uygulama yalnızca tarihsel **kazanıl
 - Pseudo-live temporal split uygular: train, validation, test.
 - Test ihalesinde gerçek sonuç alanlarını reveal öncesi maskeler.
 - Benzer kazanılmış ihaleleri bulur.
-- Fiyat koridoru, profil uyumu, marj, risk ve güven skorlarını hesaplar.
+- Fiyat koridoru, profil uyumu, karlılık oranı, risk ve güven skorlarını hesaplar.
 - Aday senaryolar üretir ve config-driven senaryo skoru verir.
-- Reveal & Compare ekranında seçilen senaryoyu gerçek kazanılmış fiyat/marj ile karşılaştırır.
+- Gerçek Sonuçla Karşılaştır ekranında seçilen senaryoyu gerçek kazanılmış fiyat ve karlılık oranıyla karşılaştırır.
 - Backtest, segment metrikleri, baseline karşılaştırması ve audit/export çıktıları üretir.
 - Deterministic fallback advisor ile güvenli, grounded yorum üretir.
 
@@ -63,4 +63,3 @@ Gerçek API anahtarları repo'ya commit edilmemelidir. Yerel kullanım için `.s
 
 - `.env.example`
 - `.streamlit/secrets.example.toml`
-

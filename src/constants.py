@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 DISCLAIMER = (
-    "This score is not a true probability of winning. It indicates similarity to "
-    "historically won tenders, price-band alignment, margin/risk balance, and model "
-    "confidence. True win probability requires reliable won/lost tender data."
+    "Bu skor gerçek kazanma olasılığı değildir. Geçmişte kazanılmış ihalelere "
+    "benzerlik, fiyat bandı uyumu, karlılık/risk dengesi ve model güvenini "
+    "gösterir. Gerçek kazanma olasılığı için güvenilir kazanılmış ve "
+    "kaybedilmiş ihale verisi gerekir."
 )
 
 BID_TIME_FIELDS = [

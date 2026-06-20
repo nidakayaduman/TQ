@@ -9,6 +9,7 @@ import pandas as pd
 from ..advisor.fallback_advisor import build_fallback_advisor
 from ..advisor.output_validator import validate_advisor_output
 from ..clustering import ProfileFitModel
+from ..config_loader import load_app_config, load_scenario_weights, load_soft_penalties
 from ..confidence import confidence_from_similarity_and_count
 from ..constants import CANONICAL_MARGIN_COLUMN, CANONICAL_PRICE_COLUMN
 from ..feature_masking import mask_actual_result_fields
@@ -30,11 +31,15 @@ def actual_rank_percentile(scored_scenarios: pd.DataFrame) -> float:
     return float(100 * below / max(len(scored_scenarios), 1))
 
 
-def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int = 50) -> pd.DataFrame:
+def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | None = None) -> pd.DataFrame:
+    if top_k is None:
+        top_k = int(load_app_config().get("app", {}).get("default_top_k", 50))
     train = normalize_schema(train_df)
     test = normalize_schema(test_df)
     retriever = RetrievalEngine.fit(train)
     profile_model = ProfileFitModel.fit(train)
+    weights = load_scenario_weights()
+    soft_penalties = load_soft_penalties()
     rows: list[dict[str, Any]] = []
     for _, tender_row in test.iterrows():
         tender = tender_row.to_dict()
@@ -50,6 +55,7 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int = 50)
         actual_margin = float(tender.get(CANONICAL_MARGIN_COLUMN, 0))
         avg_similarity = float(similar["overall_similarity_score"].mean()) if not similar.empty else 0.0
         confidence_score = confidence_from_similarity_and_count(avg_similarity, len(similar))
+        profile = profile_model.score(masked)
         scenarios = generate_candidate_scenarios(
             masked,
             corridor,
@@ -58,11 +64,20 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int = 50)
         scored = []
         for scenario in scenarios:
             validation = validate_scenario(scenario, masked, corridor)
-            profile = profile_model.score(masked, scenario["proposed_unit_price"], validation["computed_margin_pct"])
-            scored.append(score_scenario(scenario, masked, corridor, profile, confidence_score, validation))
+            scored.append(
+                score_scenario(
+                    scenario,
+                    masked,
+                    corridor,
+                    profile,
+                    confidence_score,
+                    validation,
+                    weights=weights,
+                    soft_penalties=soft_penalties,
+                )
+            )
         scored_df = pd.DataFrame(scored).sort_values("scenario_score", ascending=False).reset_index(drop=True)
         best = scored_df.iloc[0].to_dict()
-        profile = profile_model.score(masked, best["proposed_unit_price"], best["computed_margin_pct"])
         retrieval = retrieval_quality(similar, masked, top_k=top_k)
         context = {
             **best,
@@ -117,6 +132,8 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int = 50)
                 "hard_constraints_valid": bool(best["hard_constraints_valid"]),
                 "retrieval_product_group_match_rate": retrieval["product_group_match_rate"],
                 "retrieval_region_match_rate": retrieval["region_match_rate"],
+                "retrieval_quantity_band_match_rate": retrieval["quantity_band_match_rate"],
+                "soft_penalty_score": best["soft_penalty_score"],
             }
         )
     output = pd.DataFrame(rows)

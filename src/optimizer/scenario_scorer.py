@@ -6,16 +6,11 @@ from typing import Any
 
 import numpy as np
 
+from ..config_loader import DEFAULT_APP_CONFIG, DEFAULT_SOFT_PENALTIES, load_scenario_weights, load_soft_penalties
 from ..price_corridor import price_band_fit_score
 from .scenario_validator import margin_pct
 
-DEFAULT_SCORING_WEIGHTS = {
-    "won_profile_fit_score": 0.30,
-    "price_band_fit_score": 0.25,
-    "margin_score": 0.20,
-    "model_confidence_score": 0.15,
-    "risk_penalty_score": -0.10,
-}
+DEFAULT_SCORING_WEIGHTS = DEFAULT_APP_CONFIG["scenario_scoring"]
 
 
 def margin_score_from_pct(value: float, target_margin_pct: float = 20.0) -> float:
@@ -24,11 +19,19 @@ def margin_score_from_pct(value: float, target_margin_pct: float = 20.0) -> floa
     return float(np.clip(value / max(target_margin_pct, 1.0) * 100, 0, 100))
 
 
-def risk_penalty_score(flags: list[str], hard_constraint_valid: bool, low_confidence: bool = False) -> float:
+def risk_penalty_score(
+    flags: list[str],
+    hard_constraint_valid: bool,
+    low_confidence: bool = False,
+    penalties: dict[str, float] | None = None,
+) -> float:
+    cfg = {**DEFAULT_SOFT_PENALTIES, **(penalties or load_soft_penalties())}
     score = 0.0
-    score += 45.0 if not hard_constraint_valid else 0.0
-    score += min(35.0, len(flags) * 10.0)
-    score += 15.0 if low_confidence else 0.0
+    score += float(cfg["low_margin_penalty"]) if not hard_constraint_valid else 0.0
+    score += min(35.0, len(flags) * float(cfg["high_risk_flag_penalty"]))
+    score += float(cfg["insufficient_similar_count_penalty"]) if low_confidence else 0.0
+    if any("fiyat bandının dışında" in flag.casefold() for flag in flags):
+        score += float(cfg["price_outside_band_penalty"])
     return float(np.clip(score, 0, 100))
 
 
@@ -40,8 +43,9 @@ def score_scenario(
     model_confidence_score: float,
     validation: dict[str, Any],
     weights: dict[str, float] | None = None,
+    soft_penalties: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    cfg = {**DEFAULT_SCORING_WEIGHTS, **(weights or {})}
+    cfg = {**load_scenario_weights(), **(weights or {})}
     proposed_price = float(scenario["proposed_unit_price"])
     unit_cost = float(scenario.get("estimated_unit_cost", tender.get("estimated_unit_cost", 0)))
     computed_margin = validation.get("computed_margin_pct", margin_pct(proposed_price, unit_cost))
@@ -54,7 +58,12 @@ def score_scenario(
         "price_band_fit_score": price_band_fit_score(proposed_price, corridor),
         "margin_score": margin_score_from_pct(float(computed_margin)),
         "model_confidence_score": float(np.clip(model_confidence_score, 0, 100)),
-        "risk_penalty_score": risk_penalty_score(risk_flags, bool(validation.get("valid", False)), model_confidence_score < 45),
+        "risk_penalty_score": risk_penalty_score(
+            risk_flags,
+            bool(validation.get("valid", False)),
+            model_confidence_score < 45,
+            soft_penalties,
+        ),
     }
     scenario_score = sum(cfg[key] * components[key] for key in cfg)
     return {
@@ -88,5 +97,6 @@ def score_scenario(
         "scenario_score": float(np.clip(scenario_score, 0, 100)),
         "computed_margin_pct": float(computed_margin),
         "risk_flags": risk_flags,
+        "soft_penalty_score": components["risk_penalty_score"],
         "hard_constraints_valid": bool(validation.get("valid", False)),
     }

@@ -15,16 +15,15 @@ def render_methodology_page() -> None:
         klasik kazan/kaybet sınıflandırması yapılmaz.
 
         Hesaplanan ana gösterge **Kazanılmış Profil Uyum Skoru**dur. Bu skor; geçmiş kazanılmış ihalelere benzerlik,
-        fiyat bandı uyumu, marj/risk dengesi ve model güvenini birlikte yorumlar.
+        fiyat bandı uyumu, karlılık oranı/risk dengesi ve model güvenini birlikte yorumlar.
 
         Ana değerlendirme yöntemi **pseudo-live temporal backtesting** yaklaşımıdır. Test yılındaki her ihale,
         o tarihte yeni gelmiş gibi ele alınır. Gerçek sonuç alanları reveal adımına kadar retrieval, scorer,
         optimizer ve advisor katmanlarından maskelenir.
 
-        Metrikler; fiyat bandı hizası, actual won scenario rank percentile, profil uyumu, retrieval kalitesi,
-        segment kırılımları ve advisor güvenliği üzerinden izlenir.
+        Metrikler; fiyat bandı hizası, gerçek kazanılmış fiyatın senaryo sıralamasındaki yeri, profil uyumu,
+        retrieval kalitesi, segment kırılımları ve advisor güvenliği üzerinden izlenir.
 
         Gerçek supervised kazan/kaybet modellemesi için güvenilir kazanılmış, kaybedilmiş ve no-bid ihale verisi gerekir.
         """
     )
-

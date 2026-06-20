@@ -3,29 +3,37 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
+import warnings
 
 import numpy as np
 import pandas as pd
-import yaml
 from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from .config_loader import load_app_config
 from .constants import CANONICAL_MARGIN_COLUMN, CANONICAL_PRICE_COLUMN
 from .schema import normalize_schema
 
 CATEGORICAL = ["product_group", "region", "procedure_type", "buyer_institution_type"]
 NUMERIC = ["quantity", "delivery_months", "competitor_count_estimate", "estimated_unit_cost"]
+CLUSTER_TRAINING_FEATURES = [*CATEGORICAL, *NUMERIC]
+LIVE_ASSIGNMENT_FEATURES = [*CATEGORICAL, *NUMERIC]
 DEFAULT_CONTAMINATION = 0.05
 
 
-def _configured_contamination() -> float:
-    config_path = Path(__file__).resolve().parents[1] / "config" / "app_config.yaml"
+def _one_hot_encoder() -> OneHotEncoder:
     try:
-        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        return OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    except TypeError:
+        return OneHotEncoder(handle_unknown="ignore", sparse=False)
+
+
+def _configured_contamination() -> float:
+    try:
+        config = load_app_config()
         value = float(config.get("profile_fit", {}).get("isolation_contamination", DEFAULT_CONTAMINATION))
     except Exception:
         value = DEFAULT_CONTAMINATION
@@ -70,7 +78,7 @@ class ProfileFitModel:
         features = _feature_frame(data)
         contamination_value = _configured_contamination() if contamination is None else float(np.clip(contamination, 0.01, 0.20))
         preprocessor = ColumnTransformer(
-            [("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL), ("num", StandardScaler(), NUMERIC)]
+            [("cat", _one_hot_encoder(), CATEGORICAL), ("num", StandardScaler(), NUMERIC)]
         )
         encoded = preprocessor.fit_transform(features)
         isolation_model = IsolationForest(n_estimators=200, contamination=contamination_value, random_state=42)
@@ -84,19 +92,21 @@ class ProfileFitModel:
             for segment, group in data.groupby("product_group")
         }
 
-        cluster_columns = ["product_group", "quantity", CANONICAL_PRICE_COLUMN, CANONICAL_MARGIN_COLUMN]
-        cluster_frame = data[cluster_columns].copy()
+        cluster_frame = features[CLUSTER_TRAINING_FEATURES].copy()
         cluster_preprocessor = ColumnTransformer(
             [
-                ("cat", OneHotEncoder(handle_unknown="ignore"), ["product_group"]),
-                ("num", StandardScaler(), ["quantity", CANONICAL_PRICE_COLUMN, CANONICAL_MARGIN_COLUMN]),
+                ("cat", _one_hot_encoder(), CATEGORICAL),
+                ("num", StandardScaler(), NUMERIC),
             ]
         )
         cluster_encoded = cluster_preprocessor.fit_transform(cluster_frame)
         cluster_count = min(n_clusters, max(1, len(data)))
         cluster_model = KMeans(n_clusters=cluster_count, n_init=10, random_state=42)
-        labels = cluster_model.fit_predict(cluster_encoded)
-        distances = cluster_model.transform(cluster_encoded)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            labels = cluster_model.fit_predict(cluster_encoded)
+            distances = cluster_model.transform(cluster_encoded)
+        distances = np.nan_to_num(distances, nan=np.finfo(float).max, posinf=np.finfo(float).max, neginf=np.finfo(float).max)
         assigned_distances = distances[np.arange(len(labels)), labels]
         profiles: dict[int, dict[str, Any]] = {}
         distance_map: dict[int, np.ndarray] = {}
@@ -140,23 +150,12 @@ class ProfileFitModel:
         percentile = float(np.searchsorted(self.historical_scores, raw_score, side="right") / len(self.historical_scores) * 100)
         inlier = bool(self.isolation_model.predict(encoded)[0] == 1)
 
-        cluster_input = normalize_schema(query_frame)
-        if proposed_price is None:
-            proposed_price = float(cluster_input.get(CANONICAL_PRICE_COLUMN, pd.Series([0])).iloc[0] or 0)
-        if margin_pct is None:
-            margin_pct = float(cluster_input.get(CANONICAL_MARGIN_COLUMN, pd.Series([0])).iloc[0] or 0)
-        cluster_frame = pd.DataFrame(
-            [
-                {
-                    "product_group": cluster_input["product_group"].iloc[0],
-                    "quantity": cluster_input["quantity"].iloc[0],
-                    CANONICAL_PRICE_COLUMN: proposed_price,
-                    CANONICAL_MARGIN_COLUMN: margin_pct,
-                }
-            ]
-        )
+        cluster_frame = features[LIVE_ASSIGNMENT_FEATURES].copy()
         encoded_cluster = self.cluster_preprocessor.transform(cluster_frame)
-        distances = self.cluster_model.transform(encoded_cluster)[0]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            distances = self.cluster_model.transform(encoded_cluster)[0]
+        distances = np.nan_to_num(distances, nan=np.finfo(float).max, posinf=np.finfo(float).max, neginf=np.finfo(float).max)
         cluster_id = int(np.argmin(distances))
         reference = self.cluster_distances.get(cluster_id, np.array([distances[cluster_id]]))
         distance_percentile = float(np.searchsorted(reference, distances[cluster_id], side="right") / max(len(reference), 1))

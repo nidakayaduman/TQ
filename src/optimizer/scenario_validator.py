@@ -4,22 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-
-DEFAULT_HARD_CONSTRAINTS = {
-    "minimum_margin_pct": 8.0,
-    "minimum_delivery_months": 3,
-    "max_deviation_above_historical_p90_pct": 30.0,
-    "required_fields": [
-        "product_name",
-        "product_group",
-        "buyer_institution",
-        "region",
-        "procedure_type",
-        "quantity",
-        "delivery_months",
-        "estimated_unit_cost",
-    ],
-}
+from ..config_loader import DEFAULT_HARD_CONSTRAINTS, load_hard_constraints
 
 
 def margin_pct(unit_price: float, unit_cost: float) -> float:
@@ -32,7 +17,7 @@ def validate_scenario(
     corridor: dict[str, float],
     constraints: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    cfg = {**DEFAULT_HARD_CONSTRAINTS, **(constraints or {})}
+    cfg = {**load_hard_constraints(), **(constraints or {})}
     violations: list[str] = []
     unit_price = float(scenario.get("proposed_unit_price", 0))
     unit_cost = float(scenario.get("estimated_unit_cost", tender.get("estimated_unit_cost", 0)))
@@ -44,7 +29,7 @@ def validate_scenario(
             violations.append(f"Eksik zorunlu alan: {field}")
 
     if computed_margin < float(cfg["minimum_margin_pct"]):
-        violations.append("Önerilen birim fiyat minimum marj eşiğinin altında.")
+        violations.append("Önerilen birim fiyat minimum karlılık oranı eşiğinin altında.")
     if delivery_months < int(cfg["minimum_delivery_months"]):
         violations.append("Teslim süresi operasyonel minimumun altında.")
 
@@ -61,4 +46,3 @@ def validate_scenario(
         "violations": violations,
         "computed_margin_pct": computed_margin,
     }
-

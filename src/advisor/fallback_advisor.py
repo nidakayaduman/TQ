@@ -41,7 +41,7 @@ def build_fallback_advisor(context: dict[str, Any]) -> dict[str, Any]:
             else "Dengeli fiyat seviyesini ana referans alıp teklif senaryolarını karlılık hedefiyle karşılaştırın."
         ),
         "pwin_interpretation": (
-            f"pwin burada olasılık değil, geçmiş kazanılmış profile uyum göstergesidir. Skoru profil yakınlığı, "
+            f"Bu skor gerçek olasılık değil, geçmiş kazanılmış profile uyum göstergesidir. Skoru profil yakınlığı, "
             f"fiyat bandı uyumu, karlılık, risk ve model güveni sürüklüyor."
         ),
         "pricing_interpretation": (

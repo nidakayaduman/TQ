@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .config_loader import load_app_config
 from .schema import normalize_schema
 
 
 def temporal_split(
     df: pd.DataFrame,
-    train_end_year: int = 2023,
-    validation_year: int = 2024,
-    test_year: int = 2025,
+    train_end_year: int | None = None,
+    validation_year: int | None = None,
+    test_year: int | None = None,
 ) -> dict[str, pd.DataFrame]:
+    config = load_app_config().get("backtest", {})
+    train_end_year = int(train_end_year if train_end_year is not None else config.get("train_end_year", 2023))
+    validation_year = int(validation_year if validation_year is not None else config.get("validation_year", 2024))
+    test_year = int(test_year if test_year is not None else config.get("test_year", 2025))
     data = normalize_schema(df).sort_values("tender_date")
     train = data[data["year"] <= train_end_year].copy()
     validation = data[data["year"] == validation_year].copy()
@@ -43,4 +48,3 @@ def rolling_backtest_splits(df: pd.DataFrame, min_train_year: int | None = None)
                 }
             )
     return splits
-

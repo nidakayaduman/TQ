@@ -4,7 +4,6 @@ requests
 beautifulsoup4
 pandas
 scikit-learn
-xgboost
 lxml
 python-dateutil
 cryptography

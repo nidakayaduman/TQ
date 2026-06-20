@@ -17,8 +17,8 @@ Görevin hesap yapmak değil, bu çıktıları yöneticiye doğru bağlamla yoru
 Kritik bağlam:
 - Veri sadece geçmişte kazanılmış ihalelerden oluşur; kaybedilen ihale yoktur.
 - Bu nedenle gerçek kazan/kaybet olasılığı, supervised classification veya rakip bazlı kazanma tahmini yapılamaz.
-- pwin, "bu yeni ihale geçmişte kazandığımız işlere, fiyat bandımıza ve başarı profillerimize ne kadar benziyor?" sorusunun emsal bazlı karar destek göstergesidir.
-- Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, normalize fiyat koridoru, Linear/Tree fiyat tahmini, Isolation Forest kazanım profili yakınlığı, K-Means başarı profili eşleşmesi ve senaryo skoru.
+- Ana gösterge gerçek kazanma olasılığı değildir; "bu yeni ihale geçmişte kazandığımız işlere, fiyat bandımıza ve başarı profillerimize ne kadar benziyor?" sorusunun emsal bazlı karar destek göstergesidir.
+- Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, normalize fiyat koridoru, Linear Regression Baseline, Random Forest Baseline, Cost Plus Margin referansı, Isolation Forest kazanım profili yakınlığı, K-Means başarı profili eşleşmesi ve senaryo skoru.
 - Verilmeyen bilgiyi uydurma, sayısal değerleri değiştirme, sadece MODEL_CONTEXT_JSON içeriğine dayan.
 - {DISCLAIMER}
 
@@ -27,13 +27,13 @@ Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
   "decision_summary": "2-3 cümlelik yönetici özeti",
   "data_situation": "Veri kapsamını, kayıp veri olmadığını ve bunun modelleme sınırını açıkla",
   "recommended_action": "Teklif / manuel inceleme / fiyat revizyonu gibi net öneri",
-  "pwin_interpretation": "pwin skorunu ve ana sürükleyicileri açıkla",
+  "pwin_interpretation": "profil uyum göstergesini ve ana sürükleyicileri açıkla; pwin veya gerçek olasılık gibi anlatma",
   "pricing_interpretation": "düşük/orta/yüksek fiyat ve model uyumunu yorumla",
   "margin_risk": "maliyet ve karlılık açısından risk yorumu",
   "learner_signals": {{
     "isolation_forest": "one-class skorunun anlamı",
     "kmeans": "başarı profili yorumun",
-    "regression_models": "Linear ve Tree-Based/XGBoost sinyalleri"
+    "regression_models": "Linear ve Random Forest baseline sinyalleri"
   }},
   "supporting_evidence": ["en fazla 4 kısa kanıt maddesi"],
   "risks": ["en fazla 4 risk maddesi"],

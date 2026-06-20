@@ -35,7 +35,7 @@ def validate_data_quality(df: pd.DataFrame) -> dict[str, object]:
     if CANONICAL_MARGIN_COLUMN in data.columns:
         margins = pd.to_numeric(data[CANONICAL_MARGIN_COLUMN], errors="coerce")
         if ((margins < -100) | (margins > 100)).any():
-            issues.append("Marj yüzdesi beklenen aralığın dışında.")
+            issues.append("Karlılık oranı beklenen aralığın dışında.")
 
     return {
         "passed": not issues,
@@ -43,4 +43,3 @@ def validate_data_quality(df: pd.DataFrame) -> dict[str, object]:
         "row_count": int(len(data)),
         "column_count": int(len(data.columns)),
     }
-
