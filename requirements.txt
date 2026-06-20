@@ -8,3 +8,5 @@ xgboost
 lxml
 python-dateutil
 cryptography
+pytest
+pyyaml

@@ -9,3 +9,5 @@ data/ekap_company_ranking.json
 data/ekap_normalized_records.json
 data/ekap_poc_records.json
 data/ekap_scrape_results.json
+audit_logs/
+outputs/

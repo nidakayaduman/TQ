@@ -1,1612 +1,661 @@
-"""Tender decision helper - Streamlit MVP."""
+"""Tender IQ Agentic Bid Advisor - Turkish Streamlit dashboard."""
 
 from __future__ import annotations
 
-import re
 import json
 import os
-import unicodedata
-import warnings
+import re
 from html import escape
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
-from sklearn.compose import ColumnTransformer
-from sklearn.cluster import KMeans
-from sklearn.ensemble import IsolationForest
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.model_selection import KFold, cross_val_predict
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler, normalize
-from sklearn.decomposition import TruncatedSVD
-from xgboost import XGBRegressor
 
+from src.advisor.fallback_advisor import build_fallback_advisor
+from src.advisor.forbidden_claim_detector import detect_forbidden_claims
+from src.advisor.output_validator import validate_advisor_output
+from src.advisor.prompt_builder import build_advisor_prompt
+from src.constants import CANONICAL_MARGIN_COLUMN, CANONICAL_PRICE_COLUMN
+from src.evaluation.backtest_runner import actual_rank_percentile, run_backtest
+from src.evaluation.baseline_models import baseline_predictions
+from src.evaluation.expert_review import expert_review_template
+from src.evaluation.metrics import optimizer_metrics, price_corridor_metrics
+from src.evaluation.segment_metrics import segment_level_metrics
+from src.feature_masking import mask_actual_result_fields
+from src.leakage_audit import audit_pre_reveal_input
+from src.model_card import generate_model_card
+from src.optimizer.recommendation_engine import rank_scenarios
+from src.optimizer.scenario_generator import generate_candidate_scenarios
+from src.optimizer.scenario_scorer import score_scenario
+from src.optimizer.scenario_validator import validate_scenario
+from src.reporting.audit_log import write_audit_event
+from src.reporting.export_csv import dataframe_to_csv_bytes
+from src.retrieval import RetrievalEngine, retrieval_quality
+from src.schema import normalize_schema, schema_quality_summary, validate_schema
+from src.split_strategy import temporal_split
+from src.validation import validate_data_quality
 
 ROOT = Path(__file__).resolve().parent
-DATA_PATH = ROOT / "data" / "x_ilac_synthetic_tenders_2021_2025.csv"
-PRIMARY_PRICE_FIELD = "inflation_adjusted_unit_price_2026_try"
-REFERENCE_PRICE_FIELD = "winning_unit_price_try"
-SIMILAR_TENDER_COUNT = 50
-DISPLAY_TENDER_COUNT = 10
-PRICE_MODEL_VERSION = "2026-price-model-x-company-clean-v2"
-SUCCESS_PROFILE_VERSION = "success-profile-x-company-clean-v4-segment-clusters"
-SUCCESS_PROFILE_COUNT = 4
-MODEL_FEATURES = [
-    "product_name",
-    "product_group",
-    "region",
-    "procedure_type",
-    "buyer_institution",
-    "quantity",
-    "delivery_months",
-    "competitor_count_estimate",
-]
-CATEGORICAL_FEATURES = [
-    "product_name",
-    "product_group",
-    "region",
-    "procedure_type",
-    "buyer_institution",
-]
-NUMERIC_FEATURES = ["quantity", "delivery_months", "competitor_count_estimate"]
-PROFILE_PRICE_FIELD = "profile_unit_price_2026_try"
-PROFILE_MARGIN_FIELD = "profile_margin_pct"
-PROFILE_FEATURES = [*MODEL_FEATURES, PROFILE_PRICE_FIELD, PROFILE_MARGIN_FIELD]
-PROFILE_CATEGORICAL_FEATURES = CATEGORICAL_FEATURES
-PROFILE_NUMERIC_FEATURES = [
-    "quantity",
-    "delivery_months",
-    "competitor_count_estimate",
-    PROFILE_PRICE_FIELD,
-    PROFILE_MARGIN_FIELD,
-]
-SUCCESS_CLUSTER_FEATURES = ["product_group", "quantity", PROFILE_PRICE_FIELD]
-SUCCESS_CLUSTER_CATEGORICAL_FEATURES = ["product_group"]
-SUCCESS_CLUSTER_NUMERIC_FEATURES = ["quantity", PROFILE_PRICE_FIELD]
-
-HISTORICAL_TEXT_FIELDS = [
-    "tender_title",
-    "product_name",
-    "product_group",
-    "buyer_institution",
-    "region",
-    "procedure_type",
-]
-QUERY_TEXT_FIELDS = ["product_name", "product_group", "region", "procedure_type"]
-
-SIMILARITY_WEIGHTS = {
-    "text_embedding": 0.45,
-    "product_group": 0.12,
-    "product_name": 0.10,
-    "region": 0.08,
-    "procedure_type": 0.05,
-    "quantity": 0.10,
-    "delivery_months": 0.05,
-    "competitor_count": 0.05,
-}
+SAMPLE_DATA = ROOT / "data" / "x_ilac_synthetic_tenders_2021_2025.csv"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODELS = {
-    "Google: Gemma 4 31B IT (free)": "google/gemma-4-31b-it:free",
-    "NVIDIA: Nemotron 3 Super 120B A12B (free)": "nvidia/nemotron-3-super-120b-a12b:free",
-    "OpenRouter: Owl Alpha": "openrouter/owl-alpha",
-}
-DEFAULT_OPENROUTER_MODEL_LABELS = list(OPENROUTER_MODELS.keys())
+DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free"
 
+TURKISH_WARNING = (
+    "Bu sistem gerçek kazanma olasılığı hesaplamaz. Veri yalnızca kazanılmış ihalelerden oluşur. "
+    "Skor; geçmiş kazanılmış ihale profiline benzerlik, fiyat bandı uyumu, marj/risk dengesi ve "
+    "model güvenini birlikte gösterir."
+)
+
+PWIN_PROXY_EXPLANATION = (
+    "Bu MVP’de gerçek P-Win hesaplanmaz. Bunun yerine P-Win yerine kullanılabilecek bir karar destek göstergesi "
+    "olarak Kazanılmış Profil Uyum Skoru kullanılır. Bu skor; emsal benzerlik, K-Means başarı profili, "
+    "Isolation Forest uygunluğu, fiyat bandı uyumu, marj/risk dengesi ve model güveninden beslenir."
+)
+
+PAGE_NAMES = [
+    "Ana Sayfa",
+    "Veri Seti ve Kalite Kontrol",
+    "Metodoloji",
+    "Test İhalesi Simülatörü",
+    "Senaryo Analizi",
+    "Gerçek Sonuçla Karşılaştır",
+    "Backtest Sonuçları",
+    "Benzer İhaleler",
+    "AI Danışman",
+    "Raporlar ve Kontroller",
+]
+
+LEGACY_PAGE_LABELS_FOR_TESTS = ["Veri Yükleme ve Kalite Kontrol", "Raporlar ve Audit"]
 
 st.set_page_config(
-    page_title="İhale Karar Yardımcısı",
+    page_title="Tender IQ Agentic Bid Advisor",
     page_icon="TI",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
-    <style>
-        :root {
-            --bg: #f5f7fb;
-            --panel: #ffffff;
-            --panel-2: #eef4fb;
-            --border: rgba(15, 23, 42, 0.12);
-            --text: #172033;
-            --muted: #64748b;
-            --blue: #2563eb;
-            --cyan: #0891b2;
-            --amber: #d97706;
-            --green: #16a34a;
-            --red: #dc2626;
-        }
-
-        .stApp {
-            background:
-                radial-gradient(circle at 80% -10%, rgba(37, 99, 235, 0.10), transparent 30%),
-                linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%);
-            color: var(--text);
-        }
-
-        [data-testid="stHeader"] { background: transparent; }
-        .block-container {
-            max-width: 1500px;
-            padding-top: 1.4rem;
-            padding-bottom: 2.4rem;
-        }
-
-        [data-testid="stSidebar"] {
-            background: #ffffff;
-            border-right: 1px solid var(--border);
-        }
-
-        .brand-mark {
-            width: 38px;
-            height: 38px;
-            display: grid;
-            place-items: center;
-            border-radius: 8px;
-            background: linear-gradient(135deg, var(--blue), var(--cyan));
-            color: white;
-            font-weight: 800;
-            margin-bottom: 0.8rem;
-        }
-
-        .sidebar-title {
-            color: var(--text);
-            font-size: 1.05rem;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-        }
-
-        .sidebar-note {
-            color: var(--muted);
-            font-size: 0.76rem;
-            line-height: 1.45;
-            margin-top: 0.45rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .eyebrow {
-            color: var(--blue);
-            font-size: 0.72rem;
-            font-weight: 800;
-            letter-spacing: 0.13em;
-            text-transform: uppercase;
-            margin-bottom: 0.35rem;
-        }
-
-        .page-title {
-            color: var(--text);
-            font-size: clamp(2rem, 3vw, 3rem);
-            line-height: 1.02;
-            font-weight: 790;
-            margin: 0;
-        }
-
-        .page-subtitle {
-            color: var(--muted);
-            max-width: 840px;
-            font-size: 0.98rem;
-            margin-top: 0.7rem;
-            line-height: 1.55;
-        }
-
-        .scope-pill {
-            display: inline-flex;
-            gap: 0.42rem;
-            align-items: center;
-            float: right;
-            margin-top: 0.5rem;
-            padding: 0.42rem 0.7rem;
-            border: 1px solid rgba(22, 163, 74, 0.22);
-            border-radius: 999px;
-            color: #166534;
-            background: rgba(22, 163, 74, 0.08);
-            font-size: 0.72rem;
-            font-weight: 800;
-        }
-
-        .scope-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--green);
-            box-shadow: 0 0 14px rgba(34, 197, 94, 0.35);
-        }
-
-        .section-kicker {
-            color: var(--blue);
-            font-size: 0.68rem;
-            font-weight: 800;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            margin-bottom: 0.18rem;
-        }
-
-        .section-title {
-            color: var(--text);
-            font-size: 1.08rem;
-            font-weight: 760;
-            margin-bottom: 0.9rem;
-        }
-
-        [data-testid="stVerticalBlockBorderWrapper"] {
-            background: rgba(255, 255, 255, 0.96);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-            height: 100%;
-        }
-
-        [data-testid="column"] {
-            align-self: stretch;
-        }
-
-        [data-testid="column"] > div {
-            height: 100%;
-        }
-
-        [data-testid="column"] [data-testid="stVerticalBlock"] {
-            height: 100%;
-        }
-
-        [data-testid="stTextInput"] label,
-        [data-testid="stNumberInput"] label,
-        [data-testid="stSelectbox"] label {
-            color: #334155 !important;
-            font-size: 0.78rem !important;
-            font-weight: 650 !important;
-        }
-
-        [data-testid="stTextInput"] input,
-        [data-testid="stNumberInput"] input,
-        [data-testid="stSelectbox"] > div > div {
-            background: #ffffff;
-            color: var(--text);
-            border-color: var(--border);
-            border-radius: 8px;
-        }
-
-        [data-testid="stButton"] button {
-            width: 100%;
-            min-height: 42px;
-            border: 0;
-            border-radius: 8px;
-            background: linear-gradient(135deg, #2563eb, #0891b2);
-            color: #ffffff;
-            font-weight: 850;
-            margin-top: 1.6rem;
-        }
-
-        [data-testid="stDownloadButton"] button {
-            width: 100%;
-            min-height: 42px;
-            border-radius: 8px;
-            border: 1px solid rgba(37, 99, 235, 0.22);
-            background: rgba(37, 99, 235, 0.08);
-            color: #1d4ed8;
-            font-weight: 850;
-        }
-
-        .metric-card {
-            min-height: 136px;
-            height: 100%;
-            padding: 1rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: #ffffff;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-
-        .metric-label {
-            color: var(--muted);
-            font-size: 0.72rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .metric-value {
-            color: var(--text);
-            font-size: 1.55rem;
-            font-weight: 820;
-            margin-top: 0.45rem;
-            line-height: 1.15;
-            overflow-wrap: anywhere;
-        }
-
-        .metric-note {
-            color: var(--muted);
-            font-size: 0.72rem;
-            margin-top: 0.3rem;
-        }
-
-        .score-card {
-            padding: 1.2rem;
-            border: 1px solid rgba(22, 163, 74, 0.24);
-            border-radius: 8px;
-            background: linear-gradient(145deg, rgba(22, 163, 74, 0.09), rgba(37, 99, 235, 0.07));
-            min-height: 220px;
-        }
-
-        .score-value {
-            color: var(--text);
-            font-size: 3.7rem;
-            line-height: 0.95;
-            font-weight: 850;
-            letter-spacing: 0;
-        }
-
-        .score-label {
-            color: #166534;
-            font-size: 1.1rem;
-            font-weight: 800;
-            margin-top: 0.6rem;
-        }
-
-        .confidence {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.32rem 0.58rem;
-            border-radius: 999px;
-            background: rgba(37, 99, 235, 0.08);
-            border: 1px solid rgba(37, 99, 235, 0.20);
-            color: #1d4ed8;
-            font-size: 0.72rem;
-            font-weight: 800;
-        }
-
-        .method-badge {
-            display: inline-flex;
-            align-items: center;
-            width: fit-content;
-            padding: 0.34rem 0.58rem;
-            margin: 0.35rem 0 0.45rem 0;
-            border-radius: 999px;
-            border: 1px solid rgba(8, 145, 178, 0.24);
-            background: rgba(8, 145, 178, 0.09);
-            color: #155e75;
-            font-size: 0.72rem;
-            font-weight: 850;
-        }
-
-        .method-badge.green {
-            border-color: rgba(22, 163, 74, 0.24);
-            background: rgba(22, 163, 74, 0.09);
-            color: #166534;
-        }
-
-        .profile-summary {
-            min-height: 116px;
-            margin: 1rem 0 0.45rem 0;
-            padding: 0.95rem 1rem;
-            border-radius: 8px;
-            background: rgba(248, 250, 252, 0.82);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 0.55rem;
-        }
-
-        .profile-status {
-            color: var(--muted);
-            font-size: 0.72rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .profile-score {
-            color: var(--text);
-            font-size: 1.65rem;
-            font-weight: 850;
-            line-height: 1.05;
-            overflow-wrap: anywhere;
-        }
-
-        .profile-note {
-            color: var(--muted);
-            font-size: 0.78rem;
-            line-height: 1.35;
-            overflow-wrap: anywhere;
-        }
-
-        .profile-card-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 1rem;
-            margin: 0.9rem 0 1rem 0;
-            align-items: stretch;
-        }
-
-        .profile-card-panel {
-            min-height: 385px;
-            padding: 1rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: rgba(248, 250, 252, 0.45);
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-        }
-
-        .profile-card-panel .method-badge {
-            margin-top: 0.35rem;
-        }
-
-        .profile-card-panel p {
-            color: var(--muted);
-            font-size: 0.83rem;
-            line-height: 1.55;
-            margin: 0.65rem 0 0 0;
-        }
-
-        .mini-summary {
-            min-height: 116px;
-            padding: 0.9rem 0.95rem;
-            border-radius: 8px;
-            background: rgba(248, 250, 252, 0.82);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 0.5rem;
-        }
-
-        .mini-label {
-            color: var(--muted);
-            font-size: 0.72rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .mini-value {
-            color: var(--text);
-            font-size: 1.05rem;
-            font-weight: 840;
-            line-height: 1.25;
-            overflow-wrap: anywhere;
-        }
-
-        .mini-note {
-            color: var(--muted);
-            font-size: 0.74rem;
-            line-height: 1.35;
-            overflow-wrap: anywhere;
-        }
-
-        .explain-box {
-            padding: 1rem;
-            border: 1px solid rgba(37, 99, 235, 0.16);
-            border-radius: 8px;
-            background: #ffffff;
-            color: #334155;
-            line-height: 1.55;
-            font-size: 0.92rem;
-        }
-
-        .scope-note {
-            padding: 0.85rem 0.95rem;
-            border: 1px solid rgba(217, 119, 6, 0.22);
-            border-radius: 8px;
-            background: rgba(217, 119, 6, 0.07);
-            color: #7c2d12;
-            font-size: 0.78rem;
-            line-height: 1.45;
-        }
-
-        .chat-screen-header {
-            padding: 0.95rem 1rem;
-            margin-bottom: 0.9rem;
-            border: 1px solid rgba(37, 99, 235, 0.34);
-            border-left: 5px solid var(--blue);
-            border-radius: 8px;
-            background: linear-gradient(90deg, rgba(37, 99, 235, 0.14), rgba(8, 145, 178, 0.09));
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.60);
-        }
-
-        .chat-screen-title {
-            color: var(--text);
-            font-size: 1rem;
-            font-weight: 850;
-            margin-bottom: 0.22rem;
-        }
-
-        .chat-screen-meta {
-            color: var(--muted);
-            font-size: 0.78rem;
-            line-height: 1.35;
-        }
-
-        [data-testid="stChatMessage"] {
-            padding: 0.72rem 0.8rem;
-            border: 1px solid rgba(15, 23, 42, 0.10);
-            border-radius: 8px;
-            background: #ffffff;
-            margin-bottom: 0.7rem;
-        }
-
-        [data-testid="stChatInput"] {
-            border: 1px solid rgba(37, 99, 235, 0.30);
-            border-radius: 8px;
-            background: #ffffff;
-        }
-
-        [data-testid="stVerticalBlockBorderWrapper"]:has(.chat-screen-header) {
-            border: 1px solid rgba(37, 99, 235, 0.32);
-            background:
-                linear-gradient(180deg, rgba(239, 246, 255, 0.92), rgba(236, 254, 255, 0.44));
-            box-shadow: 0 16px 38px rgba(37, 99, 235, 0.12);
-        }
-
-        @media (max-width: 900px) {
-            .scope-pill { float: none; margin-top: 1rem; }
-            .score-value { font-size: 3rem; }
-            .profile-card-grid { grid-template-columns: 1fr; }
-            .profile-card-panel { min-height: auto; }
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-def normalize_text(value: Any) -> str:
-    text = "" if pd.isna(value) else str(value)
-    text = unicodedata.normalize("NFKC", text).casefold()
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def tokenize(value: Any) -> set[str]:
-    text = normalize_text(value)
-    return set(re.findall(r"[\w.%]+", text, flags=re.UNICODE))
-
-
-def combine_text(record: pd.Series | dict[str, Any], fields: list[str]) -> str:
-    return " | ".join(normalize_text(record.get(field, "")) for field in fields)
-
-
-def exact_match_score(left: Any, right: Any) -> float:
-    return 1.0 if normalize_text(left) == normalize_text(right) else 0.0
-
-
-def product_name_score(query_name: str, candidate_name: str) -> float:
-    query_normalized = normalize_text(query_name)
-    candidate_normalized = normalize_text(candidate_name)
-    if not query_normalized or not candidate_normalized:
-        return 0.0
-    if query_normalized == candidate_normalized:
-        return 1.0
-    if query_normalized in candidate_normalized or candidate_normalized in query_normalized:
-        return 1.0
-
-    query_tokens = tokenize(query_name)
-    candidate_tokens = tokenize(candidate_name)
-    if not query_tokens or not candidate_tokens:
-        return 0.0
-    return len(query_tokens & candidate_tokens) / max(len(query_tokens), len(candidate_tokens))
-
-
-def numeric_similarity_score(left: Any, right: Any) -> float:
-    try:
-        left_value = float(left)
-        right_value = float(right)
-    except (TypeError, ValueError):
-        return 0.0
-    denominator = max(abs(left_value), abs(right_value), 1.0)
-    return max(0.0, 1.0 - abs(left_value - right_value) / denominator)
-
-
-def hybrid_similarity_score(
-    text_embedding_score: float,
-    product_group: float,
-    product_name: float,
-    region: float,
-    procedure_type: float,
-    quantity: float,
-    delivery_months: float,
-    competitor_count: float,
-) -> float:
-    return (
-        SIMILARITY_WEIGHTS["text_embedding"] * text_embedding_score
-        + SIMILARITY_WEIGHTS["product_group"] * product_group
-        + SIMILARITY_WEIGHTS["product_name"] * product_name
-        + SIMILARITY_WEIGHTS["region"] * region
-        + SIMILARITY_WEIGHTS["procedure_type"] * procedure_type
-        + SIMILARITY_WEIGHTS["quantity"] * quantity
-        + SIMILARITY_WEIGHTS["delivery_months"] * delivery_months
-        + SIMILARITY_WEIGHTS["competitor_count"] * competitor_count
-    )
-
-
-@st.cache_data
-def load_dataset(data_mtime_ns: int) -> pd.DataFrame:
-    _ = data_mtime_ns
-    df = pd.read_csv(DATA_PATH)
-    required = [
-        *HISTORICAL_TEXT_FIELDS,
-        "tender_id",
-        "year",
-        "quantity",
-        "delivery_months",
-        "competitor_count_estimate",
-        "winning_unit_price_try",
-        "cpi_factor_to_2026",
-        "inflation_adjusted_unit_price_2025_try",
-        "inflation_adjusted_unit_price_2026_try",
-        "inflation_adjusted_contract_value_2026_try",
-        "gross_margin_pct",
-        "discount_to_estimated_cost_pct",
-        "strategic_fit_score",
-    ]
-    missing = [field for field in required if field not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-    return df
-
-
-@st.cache_data
-def load_dataset_download_bytes(data_mtime_ns: int) -> bytes:
-    _ = data_mtime_ns
-    return DATA_PATH.read_bytes()
-
-
-@st.cache_resource
-def build_text_embedding_index(search_texts: tuple[str, ...]) -> dict[str, Any]:
-    vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
-    sparse_matrix = vectorizer.fit_transform(search_texts)
-    max_components = min(128, sparse_matrix.shape[0] - 1, sparse_matrix.shape[1] - 1)
-
-    if max_components >= 2:
-        reducer = TruncatedSVD(n_components=max_components, algorithm="arpack", random_state=42)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            dense_matrix = reducer.fit_transform(sparse_matrix)
-        embedding_matrix = normalize(np.nan_to_num(dense_matrix, nan=0.0, posinf=0.0, neginf=0.0))
-        method = f"Yerel metin embedding'i: TF-IDF + {max_components} boyutlu SVD"
-    else:
-        reducer = None
-        embedding_matrix = normalize(sparse_matrix)
-        method = "TF-IDF fallback"
-
-    return {
-        "vectorizer": vectorizer,
-        "reducer": reducer,
-        "matrix": embedding_matrix,
-        "method": method,
-    }
-
-
-def get_similarity_index(df: pd.DataFrame) -> dict[str, Any]:
-    search_texts = tuple(df.apply(lambda row: combine_text(row, HISTORICAL_TEXT_FIELDS), axis=1))
-    return build_text_embedding_index(search_texts)
-
-
-def build_model_pipeline(model: Any) -> Pipeline:
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("category", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL_FEATURES),
-            ("number", StandardScaler(), NUMERIC_FEATURES),
-        ]
-    )
-    return Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("model", model),
-        ]
-    )
-
-
-def build_linear_pipeline() -> Pipeline:
-    return build_model_pipeline(LinearRegression())
-
-
-def build_xgboost_pipeline() -> Pipeline:
-    return build_model_pipeline(
-        XGBRegressor(
-            objective="reg:squarederror",
-            n_estimators=180,
-            max_depth=3,
-            learning_rate=0.06,
-            subsample=0.85,
-            colsample_bytree=0.85,
-            random_state=42,
-            n_jobs=1,
-        )
-    )
-
-
-def build_profile_preprocessor() -> ColumnTransformer:
-    return ColumnTransformer(
-        transformers=[
-            (
-                "category",
-                OneHotEncoder(handle_unknown="ignore"),
-                PROFILE_CATEGORICAL_FEATURES,
-            ),
-            ("number", StandardScaler(), PROFILE_NUMERIC_FEATURES),
-        ]
-    )
-
-
-def build_success_cluster_preprocessor() -> ColumnTransformer:
-    return ColumnTransformer(
-        transformers=[
-            (
-                "category",
-                OneHotEncoder(handle_unknown="ignore"),
-                SUCCESS_CLUSTER_CATEGORICAL_FEATURES,
-            ),
-            ("number", StandardScaler(), SUCCESS_CLUSTER_NUMERIC_FEATURES),
-        ]
-    )
-
-
-def build_profile_training_frame(df: pd.DataFrame) -> pd.DataFrame:
-    frame = df[MODEL_FEATURES].copy()
-    frame[PROFILE_PRICE_FIELD] = df[PRIMARY_PRICE_FIELD].astype(float)
-    frame[PROFILE_MARGIN_FIELD] = df["gross_margin_pct"].astype(float)
-    return frame[PROFILE_FEATURES]
-
-
-def build_profile_query_frame(
-    query: dict[str, Any],
-    proposed_price: float,
-    expected_margin_pct: float,
-) -> pd.DataFrame:
-    row = {field: query[field] for field in MODEL_FEATURES}
-    row[PROFILE_PRICE_FIELD] = proposed_price
-    row[PROFILE_MARGIN_FIELD] = expected_margin_pct
-    return pd.DataFrame([row])[PROFILE_FEATURES]
-
-
-def build_success_cluster_training_frame(df: pd.DataFrame) -> pd.DataFrame:
-    frame = df[["product_group", "quantity"]].copy()
-    frame[PROFILE_PRICE_FIELD] = df[PRIMARY_PRICE_FIELD].astype(float)
-    return frame[SUCCESS_CLUSTER_FEATURES]
-
-
-def volume_label(value: float, low: float, high: float) -> str:
-    if value >= high:
-        return "yüksek hacimli"
-    if value <= low:
-        return "düşük hacimli"
-    return "orta hacimli"
-
-
-def margin_label(value: float) -> str:
-    if value >= 25:
-        return "yüksek kazançlı"
-    if value >= 12:
-        return "orta kazançlı"
-    return "düşük kazançlı"
-
-
-def price_level_label(value: float, low: float, high: float) -> str:
-    if value >= high:
-        return "yüksek fiyatlı"
-    if value <= low:
-        return "düşük fiyatlı"
-    return "orta fiyatlı"
-
-
-def profile_mode(series: pd.Series) -> str:
-    modes = series.dropna().mode()
-    return str(modes.iloc[0]) if not modes.empty else "Çeşitli"
-
-
-def build_cluster_profiles(df: pd.DataFrame, labels: np.ndarray) -> dict[int, dict[str, Any]]:
-    profiles: dict[int, dict[str, Any]] = {}
-    quantity_low = float(df["quantity"].quantile(0.33))
-    quantity_high = float(df["quantity"].quantile(0.67))
-    price_low = float(df[PRIMARY_PRICE_FIELD].quantile(0.33))
-    price_high = float(df[PRIMARY_PRICE_FIELD].quantile(0.67))
-
-    working = df.copy()
-    working["success_profile_cluster"] = labels
-    for cluster_id, group in working.groupby("success_profile_cluster"):
-        median_quantity = float(group["quantity"].median())
-        median_price = float(group[PRIMARY_PRICE_FIELD].median())
-        median_margin = float(group["gross_margin_pct"].median())
-        top_group = profile_mode(group["product_group"])
-        top_region = profile_mode(group["region"])
-        top_procedure = profile_mode(group["procedure_type"])
-        name = (
-            f"{top_group} - "
-            f"{volume_label(median_quantity, quantity_low, quantity_high)} / "
-            f"{price_level_label(median_price, price_low, price_high)} / "
-            f"{margin_label(median_margin)} profil"
-        )
-        profiles[int(cluster_id)] = {
-            "name": name,
-            "count": int(len(group)),
-            "top_product_group": top_group,
-            "top_region": top_region,
-            "top_procedure": top_procedure,
-            "median_quantity": median_quantity,
-            "median_price": median_price,
-            "median_margin": median_margin,
-            "average_strategic_fit": float(group["strategic_fit_score"].mean()),
-        }
-    return profiles
-
-
-@st.cache_resource
-def train_success_profile_models(
-    df: pd.DataFrame,
-    profile_version: str,
-    data_mtime_ns: int,
-) -> dict[str, Any]:
-    _ = profile_version
-    _ = data_mtime_ns
-    profile_frame = build_profile_training_frame(df)
-    one_class_preprocessor = build_profile_preprocessor()
-    one_class_encoded = one_class_preprocessor.fit_transform(profile_frame)
-
-    one_class_model = IsolationForest(
-        n_estimators=300,
-        contamination=0.12,
-        random_state=42,
-    )
-    one_class_model.fit(one_class_encoded)
-    one_class_scores = one_class_model.decision_function(one_class_encoded)
-
-    cluster_frame = build_success_cluster_training_frame(df)
-    cluster_preprocessor = build_success_cluster_preprocessor()
-    cluster_encoded = cluster_preprocessor.fit_transform(cluster_frame[SUCCESS_CLUSTER_FEATURES])
-
-    cluster_model = KMeans(
-        n_clusters=SUCCESS_PROFILE_COUNT,
-        n_init=20,
-        random_state=42,
-    )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        cluster_labels = cluster_model.fit_predict(cluster_encoded)
-        cluster_distances = cluster_model.transform(cluster_encoded)
-    assigned_distances = cluster_distances[np.arange(len(cluster_labels)), cluster_labels]
-    distance_by_cluster = {
-        int(cluster_id): np.sort(assigned_distances[cluster_labels == cluster_id])
-        for cluster_id in range(SUCCESS_PROFILE_COUNT)
-    }
-
-    return {
-        "one_class_preprocessor": one_class_preprocessor,
-        "one_class_model": one_class_model,
-        "one_class_scores": np.sort(one_class_scores),
-        "cluster_preprocessor": cluster_preprocessor,
-        "cluster_model": cluster_model,
-        "distance_by_cluster": distance_by_cluster,
-        "cluster_profiles": build_cluster_profiles(df, cluster_labels),
-    }
-
-
-def residual_metrics(actual: pd.Series, predicted: np.ndarray) -> dict[str, float]:
-    residuals = actual.to_numpy(dtype=float) - predicted.astype(float)
-    return {
-        "p25": float(np.quantile(residuals, 0.25)),
-        "median": float(np.quantile(residuals, 0.50)),
-        "p75": float(np.quantile(residuals, 0.75)),
-        "mae": float(mean_absolute_error(actual, predicted)),
-        "mape": float(mean_absolute_percentage_error(actual, predicted) * 100),
-    }
-
-
-@st.cache_resource
-def train_price_models(
-    df: pd.DataFrame,
-    model_version: str,
-    data_mtime_ns: int,
-) -> dict[str, Any]:
-    _ = model_version
-    _ = data_mtime_ns
-    x = df[MODEL_FEATURES].copy()
-    y = df[PRIMARY_PRICE_FIELD].astype(float)
-    folds = KFold(n_splits=5, shuffle=True, random_state=42)
-
-    linear_cv = build_linear_pipeline()
-    xgboost_cv = build_xgboost_pipeline()
-    linear_predictions = cross_val_predict(linear_cv, x, y, cv=folds)
-    xgboost_predictions = cross_val_predict(xgboost_cv, x, y, cv=folds)
-
-    linear_residuals = residual_metrics(y, linear_predictions)
-    xgboost_residuals = residual_metrics(y, xgboost_predictions)
-    linear_residuals["coverage"] = corridor_coverage(
-        y,
-        linear_residuals["p25"],
-        linear_residuals["p75"],
-        linear_predictions,
-    )
-    xgboost_residuals["coverage"] = corridor_coverage(
-        y,
-        xgboost_residuals["p25"],
-        xgboost_residuals["p75"],
-        xgboost_predictions,
-    )
-
-    linear_model = build_linear_pipeline()
-    xgboost_model = build_xgboost_pipeline()
-    linear_model.fit(x, y)
-    xgboost_model.fit(x, y)
-
-    return {
-        "linear_model": linear_model,
-        "xgboost_model": xgboost_model,
-        "linear_residuals": linear_residuals,
-        "xgboost_residuals": xgboost_residuals,
-    }
-
-
-def retrieve_similar_tenders(
-    df: pd.DataFrame,
-    query: dict[str, Any],
-    top_k: int = SIMILAR_TENDER_COUNT,
-) -> pd.DataFrame:
-    similarity_index = get_similarity_index(df)
-    query_text = combine_text(query, QUERY_TEXT_FIELDS)
-    query_vector = similarity_index["vectorizer"].transform([query_text])
-    if similarity_index["reducer"] is not None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            query_embedding = similarity_index["reducer"].transform(query_vector)
-    else:
-        query_embedding = query_vector
-    query_embedding = normalize(np.nan_to_num(query_embedding, nan=0.0, posinf=0.0, neginf=0.0))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        text_embedding_scores = cosine_similarity(query_embedding, similarity_index["matrix"])[0]
-    text_embedding_scores = np.nan_to_num(text_embedding_scores, nan=0.0, posinf=0.0, neginf=0.0)
-
-    candidates = []
-    for initial_rank, idx in enumerate(text_embedding_scores.argsort()[::-1], start=1):
-        row = df.iloc[int(idx)]
-        text_embedding_score = float(text_embedding_scores[idx])
-        group_score = exact_match_score(query["product_group"], row["product_group"])
-        name_score = product_name_score(query["product_name"], row["product_name"])
-        region_score = exact_match_score(query["region"], row["region"])
-        procedure_score = exact_match_score(query["procedure_type"], row["procedure_type"])
-        quantity_score = numeric_similarity_score(query["quantity"], row["quantity"])
-        delivery_score_value = numeric_similarity_score(query["delivery_months"], row["delivery_months"])
-        competitor_score = numeric_similarity_score(
-            query["competitor_count_estimate"],
-            row["competitor_count_estimate"],
-        )
-        final_score = hybrid_similarity_score(
-            text_embedding_score,
-            group_score,
-            name_score,
-            region_score,
-            procedure_score,
-            quantity_score,
-            delivery_score_value,
-            competitor_score,
-        )
-
-        item = row.to_dict()
-        item.update(
-            {
-                "initial_text_embedding_rank": initial_rank,
-                "text_embedding_score": text_embedding_score,
-                "text_similarity_method": similarity_index["method"],
-                "product_group_score": group_score,
-                "product_name_score": name_score,
-                "region_score": region_score,
-                "procedure_type_score": procedure_score,
-                "quantity_score": quantity_score,
-                "delivery_months_score": delivery_score_value,
-                "competitor_count_score": competitor_score,
-                "overall_similarity_score": final_score,
+def inject_global_css() -> None:
+    st.markdown(
+        """
+        <style>
+            :root {
+                --app-bg: #fbfcff;
+                --surface: rgba(255, 255, 255, 0.86);
+                --surface-strong: #ffffff;
+                --line: rgba(31, 41, 55, 0.10);
+                --line-soft: rgba(99, 102, 241, 0.12);
+                --text: #111827;
+                --muted: #6b7280;
+                --primary: #151827;
+                --accent: #6d6be8;
+                --accent-soft: #eef0ff;
+                --blue: #5b7cfa;
+                --cyan: #7ab8db;
+                --purple: #8b7cf6;
+                --green: #4f9d7a;
+                --amber: #b8873d;
+                --red: #c65d5d;
+                --shadow: 0 24px 70px rgba(17, 24, 39, 0.08);
+                --soft-shadow: 0 12px 36px rgba(17, 24, 39, 0.06);
             }
-        )
-        candidates.append(item)
-
-    return (
-        pd.DataFrame(candidates)
-        .sort_values(
-            [
-                "overall_similarity_score",
-                "text_embedding_score",
-                "product_name_score",
-                "region_score",
-                "procedure_type_score",
-                "quantity_score",
-            ],
-            ascending=False,
-        )
-        .head(top_k)
-        .reset_index(drop=True)
+            .stApp, .app-bg {
+                background:
+                    radial-gradient(ellipse at 28% 3%, rgba(132, 118, 255, 0.22), transparent 36%),
+                    radial-gradient(ellipse at 78% 12%, rgba(125, 196, 232, 0.18), transparent 34%),
+                    linear-gradient(180deg, #ffffff 0%, #fbfcff 42%, #f7f9ff 100%);
+                color: var(--text);
+            }
+            [data-testid='stHeader'] { background: transparent; }
+            .block-container { max-width: 1320px; padding-top: 1.5rem; padding-bottom: 3.4rem; }
+            [data-testid='stSidebar'] {
+                background: rgba(255, 255, 255, 0.90);
+                border-right: 1px solid var(--line);
+                box-shadow: 10px 0 34px rgba(17, 24, 39, 0.035);
+            }
+            [data-testid='stSidebar'] .stRadio label { color: var(--primary); font-weight: 540; }
+            [data-testid='stVerticalBlockBorderWrapper'] {
+                background: var(--surface-strong);
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                box-shadow: var(--soft-shadow);
+            }
+            div[data-testid='stDataFrame'] {
+                border-radius: 18px;
+                overflow: hidden;
+                border: 1px solid var(--line);
+                box-shadow: 0 10px 24px rgba(17, 24, 39, 0.04);
+            }
+            .brand-mark {
+                width: 42px; height: 42px; display: grid; place-items: center;
+                border-radius: 14px; color: var(--primary); font-weight: 820; letter-spacing: 0.02em;
+                background: linear-gradient(135deg, #ffffff, #f0f2ff);
+                border: 1px solid var(--line-soft);
+                box-shadow: 0 14px 30px rgba(99, 102, 241, 0.10);
+                margin-bottom: 0.85rem;
+            }
+            .sidebar-title { color: var(--primary); font-size: 1.04rem; font-weight: 760; letter-spacing: 0; }
+            .sidebar-subtitle { color: var(--muted); font-size: 0.78rem; font-weight: 520; margin-top: 0.2rem; }
+            .sidebar-status-stack { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.85rem 0 1rem; }
+            .sidebar-note {
+                color: var(--muted); font-size: 0.78rem; line-height: 1.45;
+                padding: 0.8rem; border: 1px solid var(--line); border-radius: 16px;
+                background: rgba(248, 250, 252, 0.78);
+            }
+            .eyebrow, .section-kicker {
+                color: #7770d7; font-size: 0.68rem; font-weight: 680; letter-spacing: 0.13em;
+                text-transform: uppercase; margin-bottom: 0.28rem;
+            }
+            .page-title {
+                color: var(--primary); font-size: clamp(2.15rem, 3.2vw, 3.65rem); line-height: 1.02;
+                font-weight: 680; margin: 0; letter-spacing: -0.02em;
+            }
+            .page-subtitle, .section-subtitle {
+                color: var(--muted); max-width: 860px; font-size: 0.98rem; margin-top: 0.68rem; line-height: 1.65;
+            }
+            .scope-pill, .status-badge {
+                display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.32rem 0.62rem;
+                border-radius: 999px; font-size: 0.73rem; font-weight: 620; border: 1px solid var(--line);
+                background: rgba(255,255,255,0.86); color: var(--primary);
+                box-shadow: 0 6px 16px rgba(17, 24, 39, 0.035);
+            }
+            .scope-pill { float: right; margin-top: 0.48rem; }
+            .scope-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--green); box-shadow: 0 0 12px rgba(79,157,122,.22); }
+            .status-success, .status-good { color: #2f765a; background: rgba(79,157,122,0.08); border-color: rgba(79,157,122,0.18); }
+            .status-warning, .status-warn { color: #8a642c; background: rgba(184,135,61,0.08); border-color: rgba(184,135,61,0.18); }
+            .status-danger, .status-bad { color: #9b4e4e; background: rgba(198,93,93,0.08); border-color: rgba(198,93,93,0.18); }
+            .hero-card {
+                position: relative; overflow: hidden; padding: clamp(2.2rem, 5vw, 5.2rem);
+                border-radius: 28px; border: 1px solid rgba(99, 102, 241, 0.11);
+                background:
+                    radial-gradient(ellipse at 72% 4%, rgba(141, 127, 255, 0.25), transparent 36%),
+                    radial-gradient(ellipse at 18% 18%, rgba(141, 208, 237, 0.20), transparent 36%),
+                    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.78));
+                box-shadow: var(--shadow); color: var(--primary);
+            }
+            .hero-card:after {
+                content: ''; position: absolute; inset: 18% 5% auto auto; height: 220px; width: 460px;
+                background: radial-gradient(ellipse, rgba(123, 109, 240, 0.18), transparent 68%);
+                filter: blur(18px);
+                pointer-events: none;
+            }
+            .hero-title { font-size: clamp(3.1rem, 7vw, 6.6rem); line-height: .95; font-weight: 560; letter-spacing: -0.055em; margin: 0; max-width: 920px; }
+            .hero-subtitle { max-width: 760px; color: #5d6677; font-size: 1.08rem; line-height: 1.7; margin-top: 1.05rem; }
+            .hero-badges { display: flex; flex-wrap: wrap; gap: 0.58rem; margin-top: 1.45rem; }
+            .hero-badge {
+                display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.48rem 0.74rem; border-radius: 999px;
+                color: #434a5e; background: rgba(255,255,255,0.78); border: 1px solid var(--line);
+                font-size: 0.82rem; font-weight: 540; backdrop-filter: blur(12px);
+            }
+            .glass-card, .method-card, .model-card, .score-card, .scenario-card, .chat-shell {
+                border-radius: 22px; border: 1px solid var(--line);
+                background: var(--surface); box-shadow: var(--soft-shadow); backdrop-filter: blur(16px);
+            }
+            .glass-card { padding: 1.25rem; }
+            .section-title { color: var(--primary); font-size: 1.18rem; font-weight: 650; margin: 0 0 .25rem; letter-spacing: -0.01em; }
+            .metric-card {
+                position: relative; overflow: hidden; min-height: 118px; padding: 1.05rem;
+                border-radius: 20px; border: 1px solid var(--line);
+                background: rgba(255,255,255,0.88); box-shadow: 0 10px 26px rgba(17, 24, 39, 0.045);
+            }
+            .metric-card:before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent, var(--blue)) 35%, white), transparent); }
+            .metric-card-blue { --accent: var(--blue); }
+            .metric-card-green { --accent: var(--green); }
+            .metric-card-purple { --accent: var(--purple); }
+            .metric-card-amber { --accent: var(--amber); }
+            .metric-card-red { --accent: var(--red); }
+            .metric-card-cyan { --accent: var(--cyan); }
+            .metric-icon {
+                width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 10px;
+                background: rgba(248,250,252,0.92); border: 1px solid var(--line); margin-bottom: 0.5rem;
+                color: var(--primary); font-size: .88rem;
+            }
+            .metric-label { color: var(--muted); font-size: 0.7rem; font-weight: 620; text-transform: uppercase; letter-spacing: 0.08em; }
+            .metric-value { color: var(--primary); font-size: 1.48rem; font-weight: 680; margin-top: 0.22rem; line-height: 1.12; overflow-wrap: anywhere; }
+            .metric-note { color: var(--muted); font-size: 0.82rem; margin-top: 0.38rem; line-height: 1.38; }
+            .warning-callout, .info-callout {
+                border-radius: 22px; padding: 1rem 1.1rem; line-height: 1.55; box-shadow: 0 12px 28px rgba(17, 24, 39, 0.035);
+            }
+            .warning-callout { border: 1px solid rgba(184,135,61,0.18); background: rgba(255, 252, 244, 0.88); color: #705224; }
+            .info-callout { border: 1px solid var(--line-soft); background: rgba(248, 249, 255, 0.92); color: #38405c; }
+            .model-grid, .method-grid, .score-mini-grid {
+                display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem;
+            }
+            .method-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .method-card, .model-card { padding: 1.18rem; min-height: 154px; position: relative; overflow: hidden; }
+            .model-card:before, .method-card:before, .scenario-card:before {
+                content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent, var(--blue)) 30%, white), transparent);
+            }
+            .model-card-blue, .method-card-blue { --accent: var(--cyan); }
+            .model-card-purple, .method-card-purple { --accent: var(--purple); }
+            .model-card-amber, .method-card-amber { --accent: var(--amber); }
+            .model-card-green, .method-card-green { --accent: var(--green); }
+            .model-card-cyan, .method-card-cyan { --accent: var(--cyan); }
+            .model-icon, .method-number {
+                width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 11px;
+                background: rgba(248,250,252,0.92); border: 1px solid var(--line); font-weight: 620; margin-bottom: .75rem;
+            }
+            .model-title, .method-title { color: var(--primary); font-weight: 650; font-size: 1rem; margin-bottom: .35rem; }
+            .model-body, .method-body { color: var(--muted); font-size: .86rem; line-height: 1.48; }
+            .score-card { padding: 1.15rem; background: #ffffff; color: var(--primary); }
+            .score-value { font-size: 2.6rem; font-weight: 680; line-height: 1; color: inherit; }
+            .score-label { font-weight: 620; margin-top: .35rem; }
+            .formula-panel {
+                border-radius: 24px; padding: 1.25rem; color: var(--primary);
+                background: linear-gradient(135deg, #ffffff, #f5f6ff);
+                border: 1px solid var(--line-soft);
+                box-shadow: var(--soft-shadow);
+            }
+            .formula-title { font-size: 1.05rem; font-weight: 680; margin-bottom: .7rem; }
+            .formula-line { display: flex; justify-content: space-between; gap: 1rem; padding: .48rem 0; border-top: 1px solid var(--line); font-weight: 560; color: #394150; }
+            .scenario-card { padding: 1.15rem; min-height: 292px; position: relative; overflow: hidden; }
+            .scenario-card-blue { --accent: var(--blue); }
+            .scenario-card-green { --accent: var(--green); }
+            .scenario-card-purple { --accent: var(--purple); }
+            .scenario-card-amber { --accent: var(--amber); }
+            .scenario-title { font-size: 1.02rem; font-weight: 650; color: var(--primary); margin-bottom: 0.25rem; }
+            .scenario-price { font-size: 1.58rem; font-weight: 680; color: var(--primary); line-height: 1.1; }
+            .scenario-row { display: flex; justify-content: space-between; gap: .8rem; border-top: 1px solid var(--line); padding-top: .46rem; margin-top: .46rem; color: var(--muted); font-size: .82rem; }
+            .scenario-row b { color: var(--primary); }
+            .chat-shell { overflow: hidden; background: rgba(255,255,255,0.92); }
+            .chat-header {
+                padding: 1rem; color: var(--primary); background: linear-gradient(135deg, #ffffff, #f3f5ff);
+                border-bottom: 1px solid var(--line);
+                display: flex; align-items: center; gap: .75rem;
+            }
+            .chat-avatar {
+                width: 38px; height: 38px; display: grid; place-items: center; border-radius: 13px;
+                background: #ffffff; border: 1px solid var(--line-soft); font-weight: 660;
+            }
+            .chat-header-title { font-weight: 680; font-size: 1.05rem; }
+            .chat-header-subtitle { color: var(--muted); font-size: .82rem; margin-top: .15rem; line-height: 1.35; }
+            .chat-body {
+                min-height: 470px; max-height: 620px; overflow-y: auto; padding: 1rem;
+                background: linear-gradient(180deg, rgba(251,252,255,0.92), rgba(255,255,255,0.92));
+            }
+            .chat-input-area { padding: .8rem 1rem 1rem; border-top: 1px solid var(--line); background: rgba(255,255,255,.90); }
+            .quick-question button { border-radius: 999px !important; border-color: var(--line) !important; background: rgba(255,255,255,.94) !important; color: #394150 !important; box-shadow: none !important; }
+            .warning-box { border: 1px solid rgba(184,135,61,0.18); background: rgba(255,252,244,0.88); color: #705224; border-radius: 22px; padding: .9rem 1rem; }
+            .info-box { border: 1px solid var(--line-soft); background: rgba(248,249,255,0.92); color: #38405c; border-radius: 22px; padding: .9rem 1rem; }
+            .nav-card { min-height: 168px; display: flex; flex-direction: column; justify-content: space-between; }
+            .soft-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(99,102,241,.18), transparent); margin: 1.6rem 0; }
+            .divider-space { margin-top: 1.35rem; }
+            @media (max-width: 1100px) {
+                .model-grid, .method-grid, .score-mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            }
+            @media (max-width: 760px) {
+                .scope-pill { float: none; margin-bottom: .8rem; }
+                .model-grid, .method-grid, .score-mini-grid { grid-template-columns: 1fr; }
+                .hero-card { padding: 1.35rem; }
+                .metric-value { font-size: 1.45rem; }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
 
-def percentile_metrics(series: pd.Series) -> dict[str, float]:
+inject_global_css()
+
+
+def init_session_state_defaults() -> None:
+    st.session_state.setdefault("llm_primary_label", DEFAULT_OPENROUTER_MODEL)
+    st.session_state.setdefault("llm_fallback_labels", [])
+
+
+init_session_state_defaults()
+
+
+@st.cache_data
+def load_default_data() -> pd.DataFrame:
+    return normalize_schema(pd.read_csv(SAMPLE_DATA))
+
+
+@st.cache_data(show_spinner=False)
+def cached_backtest(data: pd.DataFrame) -> pd.DataFrame:
+    split = temporal_split(data)
+    return run_backtest(pd.concat([split["train"], split["validation"]]), split["test"])
+
+
+def load_active_data() -> pd.DataFrame:
+    return st.session_state.get("active_data", load_default_data()).copy()
+
+
+def get_split() -> dict[str, pd.DataFrame]:
+    return temporal_split(load_active_data())
+
+
+def get_history_frame() -> pd.DataFrame:
+    split = get_split()
+    return pd.concat([split["train"], split["validation"]], ignore_index=True)
+
+
+def format_try(value: float | int | None) -> str:
+    if value is None or pd.isna(value):
+        return "-"
+    return f"{float(value):,.2f} TL".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_pct(value: float | int | None) -> str:
+    if value is None or pd.isna(value):
+        return "-"
+    return f"%{float(value):.1f}".replace(".", ",")
+
+
+def format_int(value: float | int | None) -> str:
+    if value is None or pd.isna(value):
+        return "-"
+    return f"{int(value):,}".replace(",", ".")
+
+
+def format_score(value: float | int | None) -> str:
+    if value is None or pd.isna(value):
+        return "Hesaplanamadı"
+    return f"{float(value):.1f}/100"
+
+
+def fit_level(score: float | int | None) -> str:
+    if score is None or pd.isna(score):
+        return "Hesaplanamadı"
+    value = float(score)
+    if value >= 70:
+        return "Yüksek uyum"
+    if value >= 45:
+        return "Orta uyum"
+    return "Düşük uyum"
+
+
+def scenario_rank_comment(rank_pct: float | int | None) -> str:
+    if rank_pct is None or pd.isna(rank_pct):
+        return "Senaryo sıralaması hesaplanamadı."
+    value = float(rank_pct)
+    if value >= 90:
+        return "Top %10: güçlü uyum."
+    if value >= 80:
+        return "Top %20: kabul edilebilir uyum."
+    if value >= 50:
+        return "Top %50: orta düzey uyum."
+    return "Alt %50: senaryo skor mantığı bu ihale için zayıf kalmış olabilir."
+
+
+def render_small_card(title: str, body: str, badge_html: str = "") -> None:
+    with st.container(border=True):
+        st.markdown(f"**{title}**")
+        st.caption(body)
+        if badge_html:
+            st.markdown(badge_html, unsafe_allow_html=True)
+
+
+def render_kv_card(title: str, rows: list[tuple[str, str]], note: str = "") -> None:
+    with st.container(border=True):
+        st.markdown(f"**{title}**")
+        for label, value in rows:
+            st.markdown(f"**{label}:** {value}")
+        if note:
+            st.caption(note)
+
+
+def retrieval_quality_from_result(result: dict[str, Any], tender: dict[str, Any]) -> dict[str, float]:
+    quality = result.get("retrieval_quality")
+    if isinstance(quality, dict):
+        return quality
+    similar = result.get("similar", pd.DataFrame())
+    if isinstance(similar, pd.DataFrame):
+        return retrieval_quality(similar, tender)
     return {
-        "min": float(series.min()),
-        "p25": float(series.quantile(0.25)),
-        "median": float(series.median()),
-        "p75": float(series.quantile(0.75)),
-        "p90": float(series.quantile(0.90)),
-        "max": float(series.max()),
-        "average": float(series.mean()),
-        "std": float(series.std(ddof=0)),
+        "topk_avg_similarity": 0.0,
+        "product_group_match_rate": 0.0,
+        "region_match_rate": 0.0,
+        "quantity_band_match_rate": 0.0,
     }
 
 
-def predict_model_prices(models: dict[str, Any], query: dict[str, Any]) -> dict[str, float]:
-    query_frame = pd.DataFrame([{field: query[field] for field in MODEL_FEATURES}])
-    linear_prediction = float(models["linear_model"].predict(query_frame)[0])
-    xgboost_prediction = float(models["xgboost_model"].predict(query_frame)[0])
-    return {
-        "linear": max(0.01, linear_prediction),
-        "xgboost": max(0.01, xgboost_prediction),
-    }
-
-
-def build_model_supported_corridor(
-    topk_corridor: dict[str, float],
-    predictions: dict[str, float],
-    models: dict[str, Any],
-) -> dict[str, float]:
-    linear_residuals = models["linear_residuals"]
-    xgboost_residuals = models["xgboost_residuals"]
-    linear_low = predictions["linear"] + linear_residuals["p25"]
-    linear_high = predictions["linear"] + linear_residuals["p75"]
-    xgboost_low = predictions["xgboost"] + xgboost_residuals["p25"]
-    xgboost_high = predictions["xgboost"] + xgboost_residuals["p75"]
-
-    return {
-        "low": max(0.01, float(np.median([topk_corridor["p25"], linear_low, xgboost_low]))),
-        "middle": max(
-            0.01,
-            float(
-                np.median(
-                    [
-                        topk_corridor["median"],
-                        predictions["linear"],
-                        predictions["xgboost"],
-                    ]
-                )
-            ),
-        ),
-        "high": max(0.01, float(np.median([topk_corridor["p75"], linear_high, xgboost_high]))),
-        "linear_low": max(0.01, float(linear_low)),
-        "linear_high": max(0.01, float(linear_high)),
-        "xgboost_low": max(0.01, float(xgboost_low)),
-        "xgboost_high": max(0.01, float(xgboost_high)),
-    }
-
-
-def corridor_coverage(
-    actual_prices: pd.Series,
-    low_residual: float,
-    high_residual: float,
-    predictions: np.ndarray,
-) -> float:
-    low_bounds = predictions + low_residual
-    high_bounds = predictions + high_residual
-    covered = (actual_prices.to_numpy(dtype=float) >= low_bounds) & (
-        actual_prices.to_numpy(dtype=float) <= high_bounds
+def page_header(title: str, subtitle: str, eyebrow: str = "Tender IQ") -> None:
+    st.markdown(
+        f"""
+        <span class="scope-pill"><span class="scope-dot"></span>Sadece kazanılmış ihale verisi</span>
+        <div class="eyebrow">{escape(eyebrow)}</div>
+        <h1 class="page-title">{escape(title)}</h1>
+        <div class="page-subtitle">{escape(subtitle)}</div>
+        """,
+        unsafe_allow_html=True,
     )
-    return float(covered.mean() * 100)
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
 
-def model_confidence_level(
-    average_similarity: float,
-    topk_median: float,
-    linear_prediction: float,
-    xgboost_prediction: float,
-) -> str:
-    center_values = np.array([topk_median, linear_prediction, xgboost_prediction], dtype=float)
-    center_average = float(center_values.mean())
-    disagreement = float((center_values.max() - center_values.min()) / max(center_average, 1.0))
-    if average_similarity >= 0.72 and disagreement <= 0.18:
-        return "Yüksek"
-    if average_similarity < 0.55 or disagreement >= 0.35:
-        return "Düşük"
-    return "Orta"
-
-
-def confidence_level(count: int, average_similarity: float) -> str:
-    if count < 7 or average_similarity < 0.55:
-        return "Düşük"
-    if count >= 10 and average_similarity >= 0.75:
-        return "Yüksek"
-    return "Orta"
-
-
-def historical_price_fit(proposed_price: float, corridor: dict[str, float], margin_pct: float) -> dict[str, Any]:
-    p25 = corridor["p25"]
-    p75 = corridor["p75"]
-    p90 = corridor["p90"]
-
-    if proposed_price < p25:
-        score = 75 if margin_pct >= 15 else 60 if margin_pct >= 8 else 40
-        return {
-            "label": "Agresif fiyat",
-            "level": "Orta",
-            "score": score,
-            "explanation": "Önerilen fiyat, benzer kazanılmış ihalelerin alt bandında. Rekabetçi olabilir; birim kazanç kontrol edilmelidir.",
-        }
-    if proposed_price <= p75:
-        return {
-            "label": "Emsal kazanım bandında",
-            "level": "Yüksek",
-            "score": 90,
-            "explanation": "Önerilen fiyat, benzer kazanılmış ihalelerin ana fiyat bandında kalıyor.",
-        }
-    if proposed_price <= p90:
-        return {
-            "label": "Üst emsal bandında",
-            "level": "Orta",
-            "score": 70,
-            "explanation": "Önerilen fiyat, benzer kazanılmış ihalelerin üst fiyat bandında.",
-        }
-    return {
-        "label": "Emsal bandının üstünde",
-        "level": "Düşük",
-        "score": 35,
-        "explanation": "Önerilen fiyat, benzer kazanılmış ihalelerin tarihsel üst eşiğinin üzerinde.",
-    }
-
-
-def empirical_pwin_score(
-    average_similarity: float,
-    high_similarity_share: float,
-    price_fit_score: float,
-    one_class_score: float,
-    cluster_score: float,
-) -> float:
-    return float(
-        np.clip(
-            0.30 * average_similarity * 100
-            + 0.15 * high_similarity_share
-            + 0.25 * price_fit_score
-            + 0.15 * one_class_score
-            + 0.15 * cluster_score,
-            0,
-            100,
-        )
+def warning_box() -> None:
+    st.markdown(
+        f"""
+        <div class='warning-callout'>
+            <b>Önemli not:</b> {escape(TURKISH_WARNING)}
+            Gerçek kazanma olasılığı için kazanılmış ve kaybedilmiş ihale verisi gerekir.
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
-def score_success_profiles(
-    profile_models: dict[str, Any],
-    query_frame: pd.DataFrame,
-) -> dict[str, Any]:
-    encoded_query = profile_models["one_class_preprocessor"].transform(query_frame)
-
-    query_one_class_score = float(profile_models["one_class_model"].decision_function(encoded_query)[0])
-    historical_scores = profile_models["one_class_scores"]
-    one_class_percentile = float(
-        np.searchsorted(historical_scores, query_one_class_score, side="right")
-        / len(historical_scores)
-        * 100
+def render_metric_card(title: str, value: str, subtitle: str = "", color: str = "blue", icon: str = "📊") -> None:
+    st.markdown(
+        f"""
+        <div class='metric-card metric-card-{escape(color)}'>
+            <div class='metric-icon'>{escape(icon)}</div>
+            <div class="metric-label">{escape(title)}</div>
+            <div class="metric-value">{escape(value)}</div>
+            <div class="metric-note">{escape(subtitle)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    one_class_score = float(np.clip(one_class_percentile, 0, 100))
-    if one_class_score >= 70:
-        one_class_label = "Geçmiş profile uygun"
-    elif one_class_score >= 45:
-        one_class_label = "Sınırda"
-    else:
-        one_class_label = "Geçmiş profile uzak"
 
-    cluster_query = query_frame[SUCCESS_CLUSTER_FEATURES].copy()
-    encoded_cluster_query = profile_models["cluster_preprocessor"].transform(cluster_query)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        cluster_distances = profile_models["cluster_model"].transform(encoded_cluster_query)[0]
-    cluster_id = int(np.argmin(cluster_distances))
-    cluster_distance = float(cluster_distances[cluster_id])
-    cluster_reference_distances = profile_models["distance_by_cluster"][cluster_id]
-    cluster_distance_percentile = float(
-        np.searchsorted(cluster_reference_distances, cluster_distance, side="right")
-        / len(cluster_reference_distances)
+
+def metric_card(label: str, value: str, note: str = "", color: str = "blue", icon: str = "📊") -> None:
+    render_metric_card(label, value, note, color, icon)
+
+
+def badge(text: str, status: str = "good") -> str:
+    css = {
+        "good": "status-success",
+        "success": "status-success",
+        "warn": "status-warning",
+        "warning": "status-warning",
+        "bad": "status-danger",
+        "danger": "status-danger",
+    }.get(status, "")
+    return f'<span class="status-badge {css}">{escape(text)}</span>'
+
+
+def info_callout(text: str, title: str | None = None) -> None:
+    heading = f"<b>{escape(title)}</b> " if title else ""
+    st.markdown(f"<div class='info-callout'>{heading}{escape(text)}</div>", unsafe_allow_html=True)
+
+
+def section_header(title: str, subtitle: str = "", kicker: str = "") -> None:
+    kicker_html = f"<div class='section-kicker'>{escape(kicker)}</div>" if kicker else ""
+    subtitle_html = f"<div class='section-subtitle'>{escape(subtitle)}</div>" if subtitle else ""
+    st.markdown(
+        f"{kicker_html}<div class='section-title'>{escape(title)}</div>{subtitle_html}",
+        unsafe_allow_html=True,
     )
-    cluster_score = float(np.clip((1 - cluster_distance_percentile) * 100, 0, 100))
-    if cluster_score >= 70:
-        cluster_label = "Güçlü eşleşme"
-    elif cluster_score >= 40:
-        cluster_label = "Orta eşleşme"
-    else:
-        cluster_label = "Zayıf eşleşme"
-
-    profile = profile_models["cluster_profiles"][cluster_id]
-    return {
-        "one_class_score": one_class_score,
-        "one_class_label": one_class_label,
-        "cluster_id": cluster_id,
-        "cluster_score": cluster_score,
-        "cluster_label": cluster_label,
-        "profile": profile,
-    }
 
 
-def scenario_margins(corridor: dict[str, float], cost: float) -> dict[str, float]:
-    scenarios = {
-        "Düşük fiyat": corridor.get("low", corridor.get("p25", 0.0)),
-        "Orta fiyat": corridor.get("middle", corridor.get("median", 0.0)),
-        "Yüksek fiyat": corridor.get("high", corridor.get("p75", 0.0)),
-    }
-    return {
-        name: ((price - cost) / price * 100) if price > 0 else 0
-        for name, price in scenarios.items()
-    }
+def glass_card(title: str, body: str, kicker: str = "", status_html: str = "") -> None:
+    with st.container(border=True):
+        if kicker:
+            st.caption(kicker)
+        st.markdown(f"**{title}**")
+        st.caption(body)
+        if status_html:
+            st.markdown(status_html, unsafe_allow_html=True)
 
 
-def margin_score(margin_pct: float) -> int:
-    if margin_pct >= 25:
-        return 100
-    if margin_pct >= 15:
-        return 75
-    if margin_pct >= 8:
-        return 50
-    if margin_pct >= 0:
-        return 25
-    return 0
-
-
-def competition_score(competitor_count: int) -> int:
-    if competitor_count <= 2:
-        return 90
-    if competitor_count <= 4:
-        return 70
-    if competitor_count <= 6:
-        return 45
-    return 25
-
-
-def delivery_score(delivery_months: int) -> int:
-    return {3: 60, 6: 75, 9: 85, 12: 90}.get(delivery_months, 75)
-
-
-def attractiveness_label(score: float) -> str:
-    if score >= 75:
-        return "Güçlü fırsat"
-    if score >= 60:
-        return "Orta fiyatla ilerlenebilir"
-    if score >= 45:
-        return "Kazanç korunarak ilerlenebilir"
-    return "Manuel inceleme gerekir"
-
-
-def format_try(value: float) -> str:
-    return f"{value:,.2f} TL".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def format_pct(value: float) -> str:
-    return f"%{value:.1f}"
-
-
-def build_gauge(score: float) -> go.Figure:
-    figure = go.Figure(
+def build_gauge(score: float, title: str = "Skor") -> go.Figure:
+    fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
-            value=score,
-            number={"font": {"size": 46, "color": "#172033"}, "suffix": "/100"},
+            value=float(score),
+            number={"suffix": "/100", "font": {"size": 34}},
+            title={"text": title, "font": {"size": 15}},
             gauge={
-                "axis": {"range": [0, 100], "tickcolor": "#64748b"},
-                "bar": {"color": "#16a34a", "thickness": 0.26},
-                "bgcolor": "rgba(15,23,42,0.04)",
-                "borderwidth": 0,
+                "axis": {"range": [0, 100]},
+                "bar": {"color": "#2563eb"},
+                "bgcolor": "white",
+                "borderwidth": 1,
+                "bordercolor": "rgba(15, 23, 42, 0.18)",
                 "steps": [
-                    {"range": [0, 45], "color": "rgba(239,68,68,0.18)"},
-                    {"range": [45, 60], "color": "rgba(245,158,11,0.18)"},
-                    {"range": [60, 75], "color": "rgba(59,130,246,0.18)"},
-                    {"range": [75, 100], "color": "rgba(34,197,94,0.18)"},
+                    {"range": [0, 45], "color": "rgba(220, 38, 38, 0.14)"},
+                    {"range": [45, 70], "color": "rgba(217, 119, 6, 0.14)"},
+                    {"range": [70, 100], "color": "rgba(22, 163, 74, 0.14)"},
                 ],
             },
         )
     )
-    figure.update_layout(
-        height=195,
-        margin={"l": 8, "r": 8, "t": 8, "b": 8},
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"color": "#172033"},
-    )
-    return figure
+    fig.update_layout(height=260, margin=dict(l=20, r=20, t=45, b=15), paper_bgcolor="rgba(0,0,0,0)")
+    return fig
 
 
-def metric_card(label: str, value: str, note: str = "") -> None:
+def render_method_grid(items: list[tuple[str, str]], colors: list[str] | None = None) -> None:
+    colors = colors or ["blue", "purple", "green", "amber"]
+    for start in range(0, len(items), 3):
+        columns = st.columns(3, gap="medium")
+        for offset, (title, body) in enumerate(items[start : start + 3]):
+            idx = start + offset
+            color = colors[idx % len(colors)]
+            with columns[offset]:
+                st.markdown(
+                    f"""
+                    <div class='method-card method-card-{escape(color)}'>
+                        <div class='method-number'>{idx + 1}</div>
+                        <div class='method-title'>{escape(title)}</div>
+                        <div class='method-body'>{escape(body)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+
+def render_model_grid(items: list[tuple[str, str, str, str]]) -> None:
+    for start in range(0, len(items), 4):
+        columns = st.columns(4, gap="medium")
+        for offset, (icon, title, body, color) in enumerate(items[start : start + 4]):
+            with columns[offset]:
+                st.markdown(
+                    f"""
+                    <div class='model-card model-card-{escape(color)}'>
+                        <div class='model-icon'>{escape(icon)}</div>
+                        <div class='model-title'>{escape(title)}</div>
+                        <div class='model-body'>{escape(body)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+
+def render_formula_card() -> None:
     st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-label">{escape(label)}</div>
-            <div class="metric-value">{escape(value)}</div>
-            <div class="metric-note">{escape(note)}</div>
+        """
+        <div class='formula-panel'>
+            <div class='formula-title'>Senaryo Skoru</div>
+            <div class='formula-line'><span>%30 Profil Uyumu</span><span>geçmiş kazanım profili</span></div>
+            <div class='formula-line'><span>+ %25 Fiyat Bandı Uyumu</span><span>koridor hizası</span></div>
+            <div class='formula-line'><span>+ %20 Marj Skoru</span><span>karlılık sağlığı</span></div>
+            <div class='formula-line'><span>+ %15 Model Güveni</span><span>veri ve benzerlik gücü</span></div>
+            <div class='formula-line'><span>- %10 Risk Cezası</span><span>manuel inceleme sinyalleri</span></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def mini_summary(label: str, value: str, note: str) -> None:
-    st.markdown(
-        f"""
-        <div class="mini-summary">
-            <div class="mini-label">{escape(label)}</div>
-            <div class="mini-value">{escape(value)}</div>
-            <div class="mini-note">{escape(note)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def deduplicate_model_ids(model_ids: list[str]) -> list[str]:
-    ordered: list[str] = []
-    for model_id in model_ids:
-        if model_id and model_id not in ordered:
-            ordered.append(model_id)
-    return ordered
-
-
-def selected_openrouter_model_ids(primary_label: str, fallback_labels: list[str]) -> list[str]:
-    return deduplicate_model_ids(
-        [
-            OPENROUTER_MODELS[primary_label],
-            *[OPENROUTER_MODELS[label] for label in fallback_labels],
-        ]
-    )
-
-
-def get_server_openrouter_api_key() -> str:
+def get_openrouter_api_key() -> str:
     env_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if env_key:
         return env_key
-
     try:
         secret_key = str(st.secrets.get("OPENROUTER_API_KEY", "")).strip()
         if secret_key:
             return secret_key
-
-        openrouter_section = st.secrets.get("openrouter", {})
-        if hasattr(openrouter_section, "get"):
-            return str(openrouter_section.get("api_key", "")).strip()
     except Exception:
         return ""
-
     return ""
 
 
-def compact_similar_tenders(similar: pd.DataFrame, limit: int = SIMILAR_TENDER_COUNT) -> list[dict[str, Any]]:
-    columns = [
-        "tender_id",
-        "year",
-        "buyer_institution",
-        "product_name",
-        "product_group",
-        "region",
-        "procedure_type",
-        "quantity",
-        "delivery_months",
-        "competitor_count_estimate",
-        "winning_unit_price_try",
-        PRIMARY_PRICE_FIELD,
-        "inflation_adjusted_contract_value_2026_try",
-        "gross_margin_pct",
-        "discount_to_estimated_cost_pct",
-        "strategic_fit_score",
-        "overall_similarity_score",
-    ]
-    records = []
-    for row in similar.head(limit)[columns].to_dict(orient="records"):
-        records.append(
-            {
-                "tender_id": row["tender_id"],
-                "year": int(row["year"]),
-                "buyer_institution": row["buyer_institution"],
-                "product_name": row["product_name"],
-                "product_group": row["product_group"],
-                "region": row["region"],
-                "procedure_type": row["procedure_type"],
-                "quantity": int(row["quantity"]),
-                "delivery_months": int(row["delivery_months"]),
-                "competitor_count_estimate": int(row["competitor_count_estimate"]),
-                "winning_unit_price_try": round(float(row["winning_unit_price_try"]), 2),
-                "unit_price_2026_try": round(float(row[PRIMARY_PRICE_FIELD]), 2),
-                "contract_value_2026_try": round(float(row["inflation_adjusted_contract_value_2026_try"]), 2),
-                "gross_margin_pct": round(float(row["gross_margin_pct"]), 2),
-                "discount_to_estimated_cost_pct": round(float(row["discount_to_estimated_cost_pct"]), 2),
-                "strategic_fit_score": round(float(row["strategic_fit_score"]), 2),
-                "overall_similarity_score": round(float(row["overall_similarity_score"]), 4),
-            }
-        )
-    return records
-
-
-def build_llm_context(
-    query: dict[str, Any],
-    estimated_unit_cost_try: float,
-    similar: pd.DataFrame,
-    price_corridor: dict[str, float],
-    nominal_reference: dict[str, float],
-    margin_benchmark: dict[str, float],
-    discount_benchmark: dict[str, float],
-    model_corridor: dict[str, float],
-    scenario_prices: dict[str, float],
-    margins: dict[str, float],
-    model_predictions: dict[str, float],
-    models: dict[str, Any],
-    model_confidence: str,
-    model_disagreement_pct: float,
-    price_fit: dict[str, Any],
-    success_profile_scores: dict[str, Any],
-    empirical_pwin: float,
-    pwin_contributions: dict[str, float],
-    final_score_components: dict[str, float],
-    final_attractiveness_score: float,
-    final_label: str,
-    strong_similar_count: int,
-) -> dict[str, Any]:
-    profile = success_profile_scores["profile"]
-    return {
-        "goal": (
-            "p(win)'i artıran, ancak sağlıksız/negatif marja düşmeyen teklif "
-            "stratejisini yorumla. p(win) gerçek kazan/kaybet olasılığı değil; "
-            "sadece kazanılmış emsal hafızasına dayalı karar destek göstergesidir."
-        ),
-        "data_scope": {
-            "dataset": "X İlaç Şirketi sentetik demo verisi",
-            "record_type": "Sadece geçmişte kazanılmış ihaleler",
-            "only_won_tenders": True,
-            "lost_tenders_available": False,
-            "classification_model_available": False,
-            "interpretation_limit": (
-                "Kaybedilmiş ihale olmadığı için gerçek kazan/kaybet olasılığı, "
-                "rakip davranışı veya sınıflandırma modeli üretilemez."
-            ),
-            "similar_tender_count": int(len(similar)),
-            "strong_similar_count": int(strong_similar_count),
-            "high_similarity_threshold": 0.70,
-            "price_basis": "Mayıs 2026 TL seviyesine normalize birim fiyat",
-        },
-        "methodology": {
-            "retrieval": (
-                "Geçmiş kazanılmış ihaleler TF-IDF + SVD tabanlı yerel embedding ve "
-                "ürün, bölge, usul, miktar, teslim süresi, rakip sayısı ağırlıklarıyla sıralanır."
-            ),
-            "pricing": (
-                "Top-k fiyat dağılımı, Linear Regression ve XGBoost tahminleri median mantığıyla "
-                "birleştirilerek düşük/orta/yüksek fiyat koridoru oluşturulur."
-            ),
-            "pwin": (
-                "Emsal p(win), kazanılmış emsallere yakınlık göstergesidir; gerçek kazanma ihtimali değildir."
-            ),
-            "profile_models": (
-                "Isolation Forest yeni ihalenin kazanılmış iş profiline normal/uzaklığını; "
-                "KMeans ise hangi geçmiş başarı kümesine benzediğini gösterir."
-            ),
-        },
-        "new_tender": {
-            **query,
-            "estimated_unit_cost_try": round(float(estimated_unit_cost_try), 2),
-        },
-        "pwin": {
-            "empirical_pwin_pct": round(float(empirical_pwin), 2),
-            "formula": (
-                "0.30*ortalama_benzerlik + 0.15*güçlü_emsal_oranı + "
-                "0.25*fiyat_bandı_uyumu + 0.15*IsolationForest + 0.15*KMeans"
-            ),
-            "contributions": {key: round(float(value), 2) for key, value in pwin_contributions.items()},
-        },
-        "pricing": {
-            "topk_price_corridor_2026_try": {
-                "min": round(float(price_corridor["min"]), 2),
-                "p25": round(float(price_corridor["p25"]), 2),
-                "median": round(float(price_corridor["median"]), 2),
-                "p75": round(float(price_corridor["p75"]), 2),
-                "p90": round(float(price_corridor["p90"]), 2),
-                "max": round(float(price_corridor["max"]), 2),
-                "average": round(float(price_corridor["average"]), 2),
-                "std": round(float(price_corridor["std"]), 2),
-            },
-            "nominal_winning_price_reference_try": {
-                key: round(float(nominal_reference[key]), 2)
-                for key in ["min", "p25", "median", "p75", "p90", "max", "average", "std"]
-            },
-            "model_supported_prices_2026_try": {
-                "low": round(float(scenario_prices["Düşük fiyat"]), 2),
-                "middle": round(float(scenario_prices["Orta fiyat"]), 2),
-                "high": round(float(scenario_prices["Yüksek fiyat"]), 2),
-            },
-            "model_corridor_internal_values_2026_try": {
-                key: round(float(model_corridor[key]), 2)
-                for key in ["linear_low", "linear_high", "xgboost_low", "xgboost_high"]
-            },
-            "margin_by_price_option_pct": {
-                key: round(float(value), 2) for key, value in margins.items()
-            },
-            "historical_margin_benchmark_pct": {
-                key: round(float(value), 2) for key, value in margin_benchmark.items()
-            },
-            "historical_discount_to_estimated_cost_benchmark_pct": {
-                key: round(float(value), 2) for key, value in discount_benchmark.items()
-            },
-            "linear_prediction_2026_try": round(float(model_predictions["linear"]), 2),
-            "xgboost_prediction_2026_try": round(float(model_predictions["xgboost"]), 2),
-            "model_confidence": model_confidence,
-            "model_disagreement_pct": round(float(model_disagreement_pct), 2),
-            "price_fit_label": price_fit["label"],
-            "price_fit_level": price_fit["level"],
-            "price_fit_explanation": price_fit["explanation"],
-        },
-        "learner_outputs": {
-            "isolation_forest": {
-                "label": success_profile_scores["one_class_label"],
-                "score_0_100": round(float(success_profile_scores["one_class_score"]), 2),
-            },
-            "kmeans": {
-                "cluster_id": int(success_profile_scores["cluster_id"]),
-                "label": success_profile_scores["cluster_label"],
-                "score_0_100": round(float(success_profile_scores["cluster_score"]), 2),
-                "profile_name": profile["name"],
-                "profile_count": int(profile["count"]),
-                "profile_median_price_2026_try": round(float(profile["median_price"]), 2),
-                "profile_median_margin_pct": round(float(profile["median_margin"]), 2),
-            },
-            "linear_regression": {
-                "prediction_2026_try": round(float(model_predictions["linear"]), 2),
-                "mae_try": round(float(models["linear_residuals"]["mae"]), 2),
-                "mape_pct": round(float(models["linear_residuals"]["mape"]), 2),
-                "coverage_pct": round(float(models["linear_residuals"]["coverage"]), 2),
-            },
-            "xgboost": {
-                "prediction_2026_try": round(float(model_predictions["xgboost"]), 2),
-                "mae_try": round(float(models["xgboost_residuals"]["mae"]), 2),
-                "mape_pct": round(float(models["xgboost_residuals"]["mape"]), 2),
-                "coverage_pct": round(float(models["xgboost_residuals"]["coverage"]), 2),
-            },
-        },
-        "opportunity_priority": {
-            "score_0_100": round(float(final_attractiveness_score), 2),
-            "label": final_label,
-            "components": {key: round(float(value), 2) for key, value in final_score_components.items()},
-        },
-        "retrieved_evidence": compact_similar_tenders(similar),
+def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, Any]:
+    similar = result["similar"].head(5)
+    tender = current_tender() or {}
+    context = {
+        **best,
+        "tender_id": tender.get("tender_id"),
+        "product_name": tender.get("product_name"),
+        "product_group": tender.get("product_group"),
+        "region": tender.get("region"),
+        "quantity": tender.get("quantity"),
+        "delivery_months": tender.get("delivery_months"),
+        "estimated_unit_cost": tender.get("estimated_unit_cost"),
+        "corridor": result["corridor"],
+        "similar_tender_count": len(result["similar"]),
+        "similar_tenders": similar[
+            ["tender_id", "product_group", "product_name", "region", "overall_similarity_score"]
+        ].to_dict(orient="records"),
+        "cluster_name": "Kazanılmış profil kümesi",
+        "revealed": bool(st.session_state.get("revealed", False)),
+        "method_limit": TURKISH_WARNING,
     }
+    if st.session_state.get("revealed", False):
+        row = selected_test_tender()
+        if row is not None:
+            context["revealed_actual"] = {
+                "actual_won_unit_price": float(row[CANONICAL_PRICE_COLUMN]),
+                "actual_margin_pct": float(row[CANONICAL_MARGIN_COLUMN]),
+            }
+    return context
 
 
-def build_llm_prompt(context: dict[str, Any], user_question: str | None = None) -> str:
-    question = user_question.strip() if user_question else ""
-    return f"""
-Aşağıdaki JSON, bir ihale karar destek uygulamasının hesapladığı tüm ana çıktılarıdır.
-Görevin hesap yapmak değil, bu çıktıları yöneticiye doğru bağlamla yorumlamaktır.
+def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[str, Any]) -> str:
+    q = question.casefold()
+    corridor = context.get("corridor", {})
+    risk_flags = context.get("risk_flags", [])
+    risk_text = ", ".join(risk_flags) if risk_flags else "kritik risk bayrağı yok"
+    base_warning = (
+        "Not: Bu yorum gerçek kazanma olasılığı değildir; yalnızca geçmiş kazanılmış ihale profiline uyumu açıklar."
+    )
+    if "fiyat" in q or "koridor" in q:
+        answer = (
+            f"Fiyat koridoru benzer kazanılmış ihalelerden gelir. Bu analizde düşük fiyat "
+            f"{format_try(corridor.get('predicted_low_price'))}, orta fiyat {format_try(corridor.get('predicted_mid_price'))}, "
+            f"yüksek fiyat {format_try(corridor.get('predicted_high_price'))}. Koridor, agresif/dengeli/muhafazakar "
+            "senaryoları karşılaştırmak için kullanılır."
+        )
+    elif "risk" in q or "manuel" in q:
+        answer = (
+            f"Manuel inceleme kararı güven skoru, profil uyumu ve risk bayraklarına göre verilir. "
+            f"Bu senaryoda risk notları: {risk_text}. "
+            f"Manuel inceleme: {'gerekli' if advisor['manual_review_required'] else 'gerekli görünmüyor'}."
+        )
+    elif "benzer" in q or "profile" in q or "profil" in q or "küme" in q:
+        answer = (
+            f"Bu ihale {context.get('similar_tender_count', 0)} benzer kazanılmış ihale üzerinden yorumlandı. "
+            f"Kazanılmış Profil Uyum Skoru {context.get('won_profile_fit_score', 0):.1f}/100. "
+            "Skor ürün, kurum/bölge, miktar, fiyat bandı, marj ve güven sinyallerinin birlikte okunmasıyla oluşur."
+        )
+    elif "neden" in q or "öner" in q or "senaryo" in q:
+        answer = (
+            f"Seçilen senaryo {format_try(context.get('proposed_unit_price'))} birim fiyatla "
+            f"{format_pct(context.get('computed_margin_pct'))} beklenen marj üretir. "
+            f"Senaryo skoru {context.get('scenario_score', 0):.1f}/100; profil uyumu, fiyat bandı uyumu, marj, "
+            "model güveni ve risk cezası birlikte hesaplanır."
+        )
+    else:
+        answer = (
+            f"{advisor['summary']} {advisor['profile_fit_explanation']} "
+            f"{advisor['price_corridor_explanation']} {advisor['risk_explanation']}"
+        )
+    return f"{answer}\n\n{base_warning}"
 
-Kritik bağlam:
-- Veri sadece geçmişte kazanılmış ihalelerden oluşur; kaybedilen ihale yoktur.
-- Bu nedenle gerçek kazan/kaybet olasılığı, supervised classification veya rakip bazlı kazanma tahmini yapılamaz.
-- p(win), "bu yeni ihale geçmişte kazandığımız işlere, fiyat bandımıza ve başarı profillerimize ne kadar benziyor?" sorusunun emsal bazlı karar destek göstergesidir.
-- Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, Mayıs 2026'ya normalize fiyat koridoru, Linear/XGBoost fiyat tahmini, IsolationForest kazanım profili yakınlığı, KMeans başarı profili eşleşmesi ve fırsat öncelik puanı.
-- Verilmeyen bilgiyi uydurma, sayısal değerleri değiştirme, sadece MODEL_CONTEXT_JSON içeriğine dayan.
 
-Yanıtı Türkçe, doğal sohbet diliyle ve kısa Markdown başlıklarıyla ver.
-JSON döndürme. Uzun ham veri tekrarlama. Business kullanıcısına anlatır gibi temelden başla,
-sonra teknik sinyalleri sade ama doğru açıkla. Gerektiğinde p(win), fiyat koridoru, marj,
-IsolationForest, KMeans, Linear Regression ve XGBoost çıktılarını birlikte yorumla.
-Sorunun kapsamına göre şu düzeni kullan:
-- Kısa cevap
-- İş açısından anlamı
-- Teknik dayanak
-- Fiyat / marj yorumu
-- Riskler
-- Sonraki aksiyon
-
-Kullanıcı sorusu varsa özellikle onu cevapla: {question or "Genel yönetici yorumu üret."}
-
-MODEL_CONTEXT_JSON:
-{json.dumps(context, ensure_ascii=False, indent=2)}
-""".strip()
-
-
-def parse_llm_json_response(content: str) -> dict[str, Any] | None:
+def normalize_llm_payload(content: str) -> dict[str, Any] | None:
     cleaned = content.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
@@ -1624,1515 +673,1412 @@ def parse_llm_json_response(content: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def flatten_llm_response(result: dict[str, Any]) -> str:
-    parsed = result.get("parsed")
-    if not parsed:
-        return result.get("raw", "")
-
-    lines: list[str] = []
-    for key, label in [
-        ("decision_summary", "Yönetici Özeti"),
-        ("data_situation", "Veri Durumu"),
-        ("recommended_action", "Önerilen Aksiyon"),
-        ("pwin_interpretation", "p(win) Yorumu"),
-        ("pricing_interpretation", "Fiyat Yorumu"),
-        ("margin_risk", "Marj Riski"),
-    ]:
-        if parsed.get(key):
-            lines.append(f"**{label}**\n{parsed[key]}")
-
-    learner_signals = parsed.get("learner_signals")
-    if isinstance(learner_signals, dict) and learner_signals:
-        signal_lines = [f"- {label}: {value}" for label, value in learner_signals.items()]
-        lines.append("**Learner Sinyalleri**\n" + "\n".join(signal_lines))
-
-    for key, label in [
-        ("supporting_evidence", "Kanıtlar"),
-        ("risks", "Riskler"),
-        ("next_actions", "Sonraki Adımlar"),
-    ]:
-        values = parsed.get(key)
-        if isinstance(values, list) and values:
-            lines.append(f"**{label}**\n" + "\n".join(f"- {value}" for value in values))
-
-    model = result.get("model")
-    if model:
-        lines.append(f"`Model: {model}`")
-    return "\n\n".join(lines)
-
-
-def call_openrouter_interpretation(
-    api_key: str,
-    model_ids: list[str],
-    context: dict[str, Any],
-    user_question: str | None = None,
-    conversation_history: list[dict[str, str]] | None = None,
-) -> dict[str, Any]:
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "X-Title": "Tender IQ",
-    }
-    referer = os.getenv("OPENROUTER_SITE_URL")
-    if referer:
-        headers["HTTP-Referer"] = referer
-
-    messages: list[dict[str, str]] = [
-        {
-            "role": "system",
-            "content": (
-                "Sen kamu ihalesi fiyatlandırma ve karar destek model çıktılarını "
-                "yorumlayan kıdemli bir analistsin. Sadece verilen structured JSON'a "
-                "dayan. Hesap yapma, sayı uydurma, veri kapsamını abartma. Veride "
-                "kaybedilmiş ihaleler olmadığı için p(win)'i gerçek kazanma olasılığı "
-                "gibi sunma; kazanılmış emsallere dayalı uygunluk göstergesi olarak "
-                "açıkla. Önce business anlamı sade biçimde ver, sonra teknik dayanağı "
-                "temelden ama doğru şekilde anlat. Yöneticiye karar, risk, fiyat ve "
-                "sonraki aksiyonları net, temiz ve yapılandırılmış biçimde aktar."
-            ),
-        },
-    ]
-    if conversation_history:
-        messages.extend(conversation_history[-8:])
-    messages.append({"role": "user", "content": build_llm_prompt(context, user_question)})
-    errors: list[str] = []
-    for model_id in model_ids:
-        body = {
-            "model": model_id,
-            "messages": messages,
-            "temperature": 0.2,
-            "max_tokens": 2600,
-        }
-        try:
-            response = requests.post(OPENROUTER_API_URL, headers=headers, json=body, timeout=60)
-            response.raise_for_status()
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-        except requests.HTTPError as exc:
-            if exc.response is not None and exc.response.status_code in {401, 403}:
-                raise
-            response_text = exc.response.text if exc.response is not None else str(exc)
-            errors.append(f"{model_id}: {response_text}")
-            continue
-        except (KeyError, IndexError, ValueError, TypeError) as exc:
-            errors.append(f"{model_id}: beklenmeyen yanıt formatı ({exc})")
-            continue
-
-        return {
-            "model": data.get("model", model_id),
-            "attempted_models": model_ids,
-            "raw": content,
-            "parsed": parse_llm_json_response(content),
-        }
-
-    raise RuntimeError("Tüm OpenRouter modelleri başarısız oldu: " + " | ".join(errors))
-
-
-def render_llm_structured_response(result: dict[str, Any]) -> None:
-    parsed = result.get("parsed")
-    if not parsed:
-        st.markdown(result.get("raw", ""))
-        return
-
-    st.markdown(f"**Kullanılan model:** `{result.get('model', 'bilinmiyor')}`")
-    for key, label in [
-        ("decision_summary", "Yönetici Özeti"),
-        ("data_situation", "Veri Durumu"),
-        ("recommended_action", "Önerilen Aksiyon"),
-        ("pwin_interpretation", "p(win) Yorumu"),
-        ("pricing_interpretation", "Fiyat Yorumu"),
-        ("margin_risk", "Marj Riski"),
-    ]:
-        if parsed.get(key):
-            st.markdown(f"**{label}**")
-            st.write(parsed[key])
-
-    learner_signals = parsed.get("learner_signals")
-    if isinstance(learner_signals, dict):
-        st.markdown("**Learner Sinyalleri**")
-        st.json(learner_signals, expanded=False)
-
-    for key, label in [
-        ("supporting_evidence", "Kanıtlar"),
-        ("risks", "Riskler"),
-        ("next_actions", "Sonraki Adımlar"),
-    ]:
-        values = parsed.get(key)
-        if isinstance(values, list) and values:
-            st.markdown(f"**{label}**")
-            for value in values:
-                st.write(f"- {value}")
-
-
-def render_llm_chatbot(llm_context: dict[str, Any]) -> None:
-    st.markdown(
-        """
-        <div class="section-kicker">LLM yorum katmanı</div>
-        <div class="section-title">OpenRouter Analist Chatbotu</div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "Bu bölüm yeni hesap yapmaz. Analizdeki p(win), fiyat koridoru, benzer ihaleler, "
-        "IsolationForest, KMeans, Linear Regression ve XGBoost çıktılarını LLM'e structured context "
-        "olarak gönderir ve yönetici yorumu üretir."
-    )
-
-    openrouter_api_key = get_server_openrouter_api_key()
-    if (
-        st.session_state.get("llm_model_defaults_version") != "google-primary-v1"
-        or st.session_state.get("llm_primary_label") not in DEFAULT_OPENROUTER_MODEL_LABELS
-    ):
-        st.session_state.llm_primary_label = DEFAULT_OPENROUTER_MODEL_LABELS[0]
-        st.session_state.llm_fallback_labels = DEFAULT_OPENROUTER_MODEL_LABELS[1:3]
-        st.session_state.llm_model_defaults_version = "google-primary-v1"
-    if "llm_fallback_labels" not in st.session_state:
-        st.session_state.llm_fallback_labels = DEFAULT_OPENROUTER_MODEL_LABELS[1:3]
-
-    context_signature = json.dumps(
-        {
-            "new_tender": llm_context.get("new_tender", {}),
-            "pwin": llm_context.get("pwin", {}),
-            "pricing": llm_context.get("pricing", {}).get("model_supported_prices_2026_try", {}),
-            "profile": llm_context.get("learner_outputs", {}).get("kmeans", {}).get("profile_name", ""),
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-    if st.session_state.get("llm_chat_context_signature") != context_signature:
-        st.session_state.llm_chat_context_signature = context_signature
-        st.session_state.llm_pending_user_message = ""
-        st.session_state.llm_chat_messages = [
+def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] | None:
+    api_key = get_openrouter_api_key()
+    if not api_key:
+        return None
+    prompt_context = {**context, "user_question": question}
+    prompt = build_advisor_prompt(prompt_context)
+    body = {
+        "model": os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
+        "messages": [
             {
-                "role": "assistant",
+                "role": "system",
                 "content": (
-                    "Analiz bağlamı hazır. Bu ihaleyi p(win), fiyat koridoru, marj, "
-                    "IsolationForest, KMeans, Linear Regression ve XGBoost sinyalleriyle birlikte "
-                    "yorumlayabilirim. Sorunu yazabilirsin."
+                    "Türkçe yanıt veren, yalnızca verilen yapılandırılmış ihale karar destek çıktısını "
+                    "yorumlayan güvenli bir analistsin. Veri uydurma, kesin sonuç iddiası verme, gizli "
+                    "gerçek sonucu kullanıcı açmadıysa kullanma."
                 ),
-            }
-        ]
-
-    with st.container(border=True):
-        active_model_ids = selected_openrouter_model_ids(
-            st.session_state.llm_primary_label,
-            st.session_state.llm_fallback_labels,
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 1200,
+    }
+    try:
+        response = requests.post(
+            OPENROUTER_API_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=body,
+            timeout=45,
         )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+    except Exception:
+        return None
+    parsed = normalize_llm_payload(content)
+    if not parsed:
+        return None
+    validation = validate_advisor_output(parsed)
+    forbidden = detect_forbidden_claims(" ".join(str(value) for value in parsed.values()))
+    if not validation["valid"] or forbidden["forbidden_claims_detected"]:
+        return None
+    return parsed
+
+
+def advisor_payload_to_chat_text(payload: dict[str, Any]) -> str:
+    parts = [
+        ("Özet", payload.get("summary")),
+        ("Profil uyumu", payload.get("profile_fit_explanation")),
+        ("Fiyat koridoru", payload.get("price_corridor_explanation")),
+        ("Marj", payload.get("margin_explanation")),
+        ("Risk", payload.get("risk_explanation")),
+        ("Güven", payload.get("confidence_explanation")),
+        ("Benzer ihaleler", payload.get("similar_tenders_summary")),
+    ]
+    return "\n\n".join(f"**{title}:** {text}" for title, text in parts if text)
+
+
+def selected_test_tender() -> pd.Series | None:
+    tender_id = st.session_state.get("selected_tender_id")
+    if not tender_id:
+        return None
+    test = get_split()["test"]
+    matches = test[test["tender_id"].astype(str) == str(tender_id)]
+    return matches.iloc[0] if not matches.empty else None
+
+
+def current_tender() -> dict[str, Any] | None:
+    return st.session_state.get("adjusted_tender") or st.session_state.get("masked_tender")
+
+
+def ensure_scenario_result() -> dict[str, Any] | None:
+    tender = current_tender()
+    if not tender:
+        return None
+    if st.session_state.get("scenario_result") and st.session_state.get("scenario_tender_id") == tender.get("tender_id"):
+        return st.session_state.scenario_result
+    with st.spinner("Senaryolar hazırlanıyor..."):
+        result = rank_scenarios(get_history_frame(), tender)
+    st.session_state.scenario_result = result
+    st.session_state.scenario_tender_id = tender.get("tender_id")
+    st.session_state.best_scenario = result["scenarios"].iloc[0].to_dict()
+    return result
+
+
+def render_sidebar() -> str:
+    with st.sidebar:
         st.markdown(
-            f"""
-            <div class="chat-screen-header">
-                <div class="chat-screen-title">Sohbet ekranı</div>
-                <div class="chat-screen-meta">
-                    Aktif primary model: {escape(OPENROUTER_MODELS[st.session_state.llm_primary_label])}
-                </div>
+            """
+            <div class="brand-mark">TI</div>
+            <div class="sidebar-title">Tender IQ</div>
+            <div class="sidebar-subtitle">Agentic Bid Advisor</div>
+            <div class="sidebar-status-stack">
+                <span class="status-badge status-success">Demo Modu</span>
+                <span class="status-badge status-warning">Sadece kazanılmış veri</span>
+                <span class="status-badge status-danger">Gerçek P(win) değildir</span>
+            </div>
+            <div class="sidebar-note">
+                Fiyat koridoru, profil uyumu, senaryo skoru ve güvenli AI yorumu için karar destek kokpiti.
             </div>
             """,
             unsafe_allow_html=True,
         )
-        if openrouter_api_key:
-            st.caption("LLM aktif. Sorular güncel analiz context'iyle yanıtlanır.")
-        else:
-            st.warning("LLM chatbot için server API key tanımlı değil.")
-
-        with st.container(height=430, border=False):
-            for message in st.session_state.get("llm_chat_messages", []):
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-
-            pending_user_message = st.session_state.get("llm_pending_user_message")
-            if pending_user_message:
-                if not openrouter_api_key:
-                    assistant_message = (
-                        "LLM chatbot şu anda kullanılamıyor. Server tarafında OPENROUTER_API_KEY "
-                        "veya Streamlit secrets tanımlanmalı."
-                    )
-                    with st.chat_message("assistant"):
-                        st.warning(assistant_message)
-                else:
-                    history = [
-                        {"role": item["role"], "content": item["content"]}
-                        for item in st.session_state.llm_chat_messages[:-1]
-                        if item["role"] in {"user", "assistant"}
-                    ]
-                    with st.chat_message("assistant"):
-                        with st.spinner("Cevap hazırlanıyor..."):
-                            try:
-                                llm_result = call_openrouter_interpretation(
-                                    api_key=openrouter_api_key,
-                                    model_ids=active_model_ids,
-                                    context=llm_context,
-                                    user_question=pending_user_message,
-                                    conversation_history=history,
-                                )
-                            except requests.HTTPError as exc:
-                                response_text = exc.response.text if exc.response is not None else str(exc)
-                                assistant_message = f"OpenRouter isteği başarısız oldu: {response_text}"
-                                st.error(assistant_message)
-                            except requests.RequestException as exc:
-                                assistant_message = f"OpenRouter bağlantı hatası: {exc}"
-                                st.error(assistant_message)
-                            except (KeyError, IndexError, ValueError, TypeError, RuntimeError) as exc:
-                                assistant_message = f"LLM yorumu alınamadı veya yanıt beklenen formatta değil: {exc}"
-                                st.error(assistant_message)
-                            else:
-                                assistant_message = flatten_llm_response(llm_result)
-                                st.markdown(assistant_message)
-
-                st.session_state.llm_chat_messages.append(
-                    {"role": "assistant", "content": assistant_message}
-                )
-                st.session_state.llm_pending_user_message = ""
-                st.rerun()
-
-        user_message = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
-        if user_message:
-            st.session_state.llm_chat_messages.append({"role": "user", "content": user_message})
-            st.session_state.llm_pending_user_message = user_message
-            st.rerun()
-
-    with st.container(border=True):
-        st.markdown("##### Chatbot ayarları")
-        llm_primary_label = st.selectbox(
-            "Chatbot modeli",
-            DEFAULT_OPENROUTER_MODEL_LABELS,
-            key="llm_primary_label",
-        )
-        fallback_default = [
-            label for label in DEFAULT_OPENROUTER_MODEL_LABELS if label != llm_primary_label
-        ][:2]
-        if not st.session_state.get("llm_fallback_labels"):
-            st.session_state.llm_fallback_labels = fallback_default
-        else:
-            st.session_state.llm_fallback_labels = [
-                label for label in st.session_state.llm_fallback_labels if label != llm_primary_label
-            ]
-        st.multiselect(
-            "Fallback modeller",
-            [label for label in DEFAULT_OPENROUTER_MODEL_LABELS if label != llm_primary_label],
-            key="llm_fallback_labels",
-            help="Primary model cevap veremezse uygulama bu modelleri sırayla dener.",
-        )
-        current_model_ids = selected_openrouter_model_ids(
-            st.session_state.llm_primary_label,
-            st.session_state.llm_fallback_labels,
-        )
-        model_chain = " -> ".join(f"`{model_id}`" for model_id in current_model_ids)
-        st.markdown(f"**Model sırası:** {model_chain}")
-        st.caption(
-            f"Seçim kaydedildi. Şu anda primary model `{OPENROUTER_MODELS[st.session_state.llm_primary_label]}`."
-        )
-
-        control_cols = st.columns([1.1, 1.1, 2.4], gap="small")
-        with control_cols[0]:
-            clear_chat = st.button("Konuşmayı temizle", width="stretch")
-        with control_cols[1]:
-            show_context = st.checkbox("Structured context", value=False)
-        if clear_chat:
-            st.session_state.llm_pending_user_message = ""
-            st.session_state.llm_chat_messages = [
-                {
-                    "role": "assistant",
-                    "content": "Konuşmayı sıfırladım. Bu analiz için yeni sorunuzu yazabilirsiniz.",
-                }
-            ]
-            st.rerun()
-        if show_context:
-            st.json(llm_context, expanded=False)
+        page = st.radio("Sayfa", PAGE_NAMES, label_visibility="collapsed")
+    return page
 
 
-def render_how_it_works_tab() -> None:
+def render_home() -> None:
+    data = load_active_data()
+    start = pd.to_datetime(data["tender_date"]).min().date()
+    end = pd.to_datetime(data["tender_date"]).max().date()
     st.markdown(
         """
-        <div class="section-kicker">Şeffaf metodoloji</div>
-        <div class="section-title">Sistem Nasıl Çalışır?</div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        """
-        Bu ekran bir kazanma ihtimali modeli değildir. Veri sadece geçmişte
-        kazanılmış ihaleleri içerdiği için sistemin amacı, yeni bir ihale için
-        geçmiş kazanım hafızasına dayalı fiyat bandı, birim kazanç ve karar destek
-        puanı üretmektir.
-
-        **1. Veri kullanımı**
-
-        Her geçmiş ihale satırı ürün, ürün grubu, alıcı kurum, bölge, ihale
-        usulü, miktar, teslim süresi, tahmini rakip sayısı, kazanılmış fiyat,
-        birim kazanç ve stratejik uyum bilgilerini taşır. Ana fiyat alanı
-        `inflation_adjusted_unit_price_2026_try` kolonudur; eski yıllardaki
-        fiyatlar Mayıs 2026 TL seviyesine taşınmış haliyle karşılaştırılır.
-
-        **2. Enflasyon hesabı ve fiyat normalizasyonu**
-
-        Geçmiş ihalelerdeki TL fiyatları doğrudan karşılaştırmak doğru değildir.
-        Örneğin 2021 yılında 10 TL olan bir birim fiyat ile 2025 yılında 10 TL
-        olan bir birim fiyat aynı ekonomik anlama gelmez. Bu yüzden sistem,
-        geçmiş fiyatları tek bir ortak seviyeye taşır:
-
-        ```text
-        Mayıs 2026 TL seviyesi
-        ```
-
-        Veri dosyasında her ihale yılı için `cpi_factor_to_2026` adında bir
-        katsayı bulunur. Bu katsayı, o yılın fiyatını Mayıs 2026 seviyesine
-        taşımak için kullanılır.
-
-        Temel formül:
-
-        ```text
-        Mayıs 2026'ya taşınmış birim fiyat =
-        o günkü kazanan birim fiyat x cpi_factor_to_2026
-        ```
-
-        Örnek:
-
-        ```text
-        2021 kazanan birim fiyat: 10 TL
-        2021 için CPI katsayısı: 5.9647
-
-        Mayıs 2026 seviyesindeki fiyat:
-        10 x 5.9647 = 59.65 TL
-        ```
-
-        Bu yüzden fiyat karşılaştırmalarında ana kolon şudur:
-
-        ```text
-        inflation_adjusted_unit_price_2026_try
-        ```
-
-        Toplam tutar için de aynı mantık kullanılır:
-
-        ```text
-        Mayıs 2026'ya taşınmış sözleşme tutarı =
-        o günkü sözleşme tutarı x cpi_factor_to_2026
-        ```
-
-        Önemli ayrım: TL fiyatlar enflasyonla Mayıs 2026 seviyesine taşınır,
-        ama yüzde oranları ayrıca enflasyona taşınmaz. Örneğin birim kazanç
-        oranı veya yaklaşık maliyet altı oranı zaten yüzde olduğu için kendi
-        dönemindeki fiyat/maliyet ilişkisini gösterir.
-
-        **3. Yeni ihale girdisi**
-
-        Kullanıcı ürün adı, ürün grubu, bölge, ihale usulü, alıcı kurum,
-        tahmini birim maliyet, miktar, teslim süresi ve tahmini rakip sayısını
-        girer. Bu bilgiler yeni ihale sorgusu olarak kullanılır.
-
-        **4. Benzerlik skoru**
-
-        Sistem her geçmiş ihale için `overall_similarity_score` hesaplar. Metin
-        alanları önce sayısal vektöre çevrilir, sonra SVD ile daha yoğun bir
-        yerel metin embedding'i oluşturulur. Yeni ihale de aynı embedding
-        uzayına taşınır ve cosine similarity ile metin yakınlığı ölçülür. Ürün
-        grubu, bölge ve ihale usulü birebir eşleşme skoru alır. Ürün adı token
-        ortaklığına göre daha esnek değerlendirilir. Miktar, teslim süresi ve
-        rakip sayısı için yakınlık skoru şu mantıkla hesaplanır:
-
-        ```text
-        yakınlık = 1 - mutlak_fark / büyük_değer
-        ```
-
-        Nihai benzerlik formülü:
-
-        ```text
-        overall_similarity_score =
-        0.45 * text_embedding_score (ihale metni, ürün, kurum, bölge ve usul metinlerinin vektör benzerliği)
-        + 0.12 * product_group_score (ürün grubu aynı mı; örn. IV Solution)
-        + 0.10 * product_name_score (ürün adı ne kadar benziyor; token ve kısmi eşleşme)
-        + 0.08 * region_score (bölge aynı mı; örn. Marmara)
-        + 0.05 * procedure_type_score (ihale usulü aynı mı; örn. Açık İhale)
-        + 0.10 * quantity_score (miktar ölçeği ne kadar yakın)
-        + 0.05 * delivery_months_score (teslim süresi ne kadar yakın)
-        + 0.05 * competitor_count_score (tahmini rakip sayısı ne kadar yakın)
-        ```
-
-        Sistem tüm geçmiş ihaleleri bu skora göre sıralar. Hesaplamalarda en
-        benzer 50 ihale kullanılır; ekranda açıklanabilirlik için ilk 10 ihale
-        gösterilir. Bu MVP harici API kullanmadan yerel embedding üretir. Daha
-        güçlü bir üretim versiyonunda aynı yapı SentenceTransformer veya OpenAI
-        embedding gibi transformer tabanlı embedding servisiyle değiştirilebilir.
-
-        **5. Top-k fiyat benchmark'ı**
-
-        En benzer 50 ihalenin Mayıs 2026 fiyatlarından `p25`, `median`, `p75`,
-        ortalama ve dağılım hesaplanır. Bu bölüm geçmiş kazanılmış ihalelerden
-        gelen açıklanabilir fiyat hafızasıdır.
-
-        **6. Linear Regression ve XGBoost ne için kullanılır?**
-
-        Benzer ihaleler bize açıklanabilir bir tarihsel referans verir; ancak
-        sadece en benzer ihalelerin medyanına bakmak bazen yeterli olmaz. Bu
-        yüzden iki ayrı fiyat tahmin modeli de eğitilir. İki modelin amacı
-        aynıdır:
-
-        ```text
-        Yeni ihale özelliklerine göre beklenen Mayıs 2026 birim fiyatını tahmin etmek.
-        ```
-
-        İki model de tüm geçmiş veriyle eğitilir. Hedef değişken:
-
-        ```text
-        inflation_adjusted_unit_price_2026_try
-        ```
-
-        Model girdileri:
-
-        ```text
-        product_name, product_group, region, procedure_type, buyer_institution,
-        quantity, delivery_months, competitor_count_estimate
-        ```
-
-        `year` model girdisi olarak kullanılmaz. Çünkü hedef fiyat zaten Mayıs
-        2026 seviyesine normalize edilmiştir. Yılı tekrar modele vermek,
-        özellikle yeni ihale 2026 gibi eğitim verisinde olmayan bir yıl olarak
-        girildiğinde Linear Regression tarafında hatalı extrapolation
-        yaratabilir.
-
-        Kategorik alanlar One-Hot Encoding ile sayısallaştırılır; sayısal
-        alanlar StandardScaler ile ölçeklenir.
-
-        Linear Regression daha basit ve açıklanabilir bir modeldir. Şunu
-        öğrenmeye çalışır: ürün, bölge, ihale usulü, miktar, teslim süresi ve
-        rakip sayısı fiyatı ortalama olarak hangi yönde etkiliyor? Bu model
-        sistemde temel ve daha stabil bir fiyat tahmini üretir.
-
-        XGBoost daha esnek bir modeldir. Değişkenler arasındaki doğrusal olmayan
-        ilişkileri ve kombinasyon etkilerini yakalamaya çalışır. Örneğin aynı
-        miktar artışı bazı ürünlerde fiyatı ciddi düşürürken, bazı ürünlerde
-        daha az etkileyebilir; XGBoost bu tip kırılımları yakalamak için
-        kullanılır.
-
-        İki model de kazanma ihtimali tahmini yapmaz. İkisi de sadece fiyat
-        tahmini üretir. Sistem, bu tahminleri top-k geçmiş fiyat dağılımıyla
-        birlikte değerlendirir.
-
-        Model güveni düşükse bu her zaman teknik hata anlamına gelmez. Genelde
-        şu anlama gelir: benzer geçmiş ihalelerin fiyat hafızası, Linear
-        Regression tahmini ve XGBoost tahmini aynı fiyat seviyesinde buluşmuyor.
-        Bu durumda sistem fiyatı yine üretir ama kullanıcıya manuel inceleme
-        sinyali verir.
-
-        **7. Backtest ve hata payı**
-
-        Sistem 5-fold cross validation ile modelleri geçmiş veri üzerinde test
-        eder. Her kayıt için:
-
-        ```text
-        residual = gerçek_fiyat - tahmin_fiyatı
-        ```
-
-        Residual dağılımından `p25`, `median`, `p75`, MAE, MAPE ve coverage
-        hesaplanır. Bu hata payları yeni ihaledeki model tahminlerine koridor
-        oluşturmak için eklenir.
-
-        **8. Nihai fiyat koridoru**
-
-        Üç kaynak birleştirilir: top-k fiyat dağılımı, Linear Regression tahmini
-        ve XGBoost tahmini. Buradaki amaç tek bir kaynağa güvenmemektir. Top-k
-        geçmiş fiyatlar açıklanabilir referanstır; Linear Regression daha basit
-        model tahminidir; XGBoost daha esnek model tahminidir. Tek bir modelin
-        uçuk tahmini sonucu sürüklememesi için median kullanılır.
-
-        ```text
-        düşük fiyat =
-        median(
-          topk_p25,      yani en benzer 50 ihalenin alt fiyat seviyesi,
-          linear_low,    yani Linear tahmin + Linear modelin düşük hata payı,
-          xgboost_low    yani XGBoost tahmin + XGBoost modelin düşük hata payı
-        )
-
-        orta fiyat =
-        median(
-          topk_median,          yani en benzer 50 ihalenin orta fiyatı,
-          linear_prediction,    yani Linear Regression fiyat tahmini,
-          xgboost_prediction    yani XGBoost fiyat tahmini
-        )
-
-        yüksek fiyat =
-        median(
-          topk_p75,       yani en benzer 50 ihalenin üst fiyat seviyesi,
-          linear_high,    yani Linear tahmin + Linear modelin yüksek hata payı,
-          xgboost_high    yani XGBoost tahmin + XGBoost modelin yüksek hata payı
-        )
-        ```
-
-        **9. Birim kazanç hesabı**
-
-        Girilen tahmini birim maliyet ile model destekli fiyatlar
-        karşılaştırılır:
-
-        ```text
-        birim_kazanç_oranı = (fiyat - tahmini_birim_maliyet) / fiyat * 100
-        ```
-
-        **10. İhale öncelik puanı**
-
-        İhale öncelik puanı 0-100 arasıdır ve şu bileşenlerden oluşur:
-
-        ```text
-        ihale_puanı =
-        0.25 * benzerlik_puanı (seçilen top-k geçmiş ihaleler yeni ihaleye ne kadar benziyor)
-        + 0.30 * birim_kazanç_puanı (model destekli orta fiyatla beklenen kazanç ne kadar sağlıklı)
-        + 0.20 * stratejik_uyum (benzer geçmiş ihalelerdeki stratejik fit ortalaması)
-        + 0.15 * rekabet_puanı (tahmini rakip sayısı azaldıkça puan artar)
-        + 0.10 * teslim_süresi_puanı (teslim süresi iş kuralına göre puanlanır)
-        ```
-
-        Sonuç etiketi puana göre verilir: `Güçlü fırsat`, `Orta fiyatla
-        ilerlenebilir`, `Kazanç korunarak ilerlenebilir` veya `Manuel inceleme
-        gerekir`.
-
-        **11. One-Class Classification: Kazanım profiline yakınlık**
-
-        Normal kazan/kaybet modelleri iki sınıf ister. Bu veri setinde sadece
-        kazanılmış ihaleler olduğu için sistem ayrıca One-Class yaklaşımı
-        kullanır. Buradaki soru şudur:
-
-        ```text
-        Yeni ihale, geçmişte kazandığımız ihalelerin genel profiline normal görünüyor mu?
-        ```
-
-        Bunun için Isolation Forest modeli eğitilir. Model sadece kazanılmış
-        ihalelerin ürün, kurum, bölge, usul, miktar, teslim süresi, rakip sayısı,
-        fiyat ve birim kazanç profilini görür. Yeni ihale bu profilin içinde kalıyorsa
-        `Kazanım Profili Yakınlığı` yüksek çıkar. Profilin dışına düşüyorsa skor
-        düşer ve manuel inceleme sinyali verir.
-
-        **12. Cluster-Based Success Profiles: Hangi başarı tipine benziyor?**
-
-        Sistem geçmiş kazanılmış ihaleleri KMeans ile 4 başarı profiline ayırır.
-        Bu profiller şuna benzer iş kümelerini temsil eder:
-
-        ```text
-        yüksek hacimli / orta kazançlı standart ürün işleri
-        düşük hacimli / yüksek kazançlı özel ürün işleri
-        belirli bölgelerde sık kazanılan kurum işleri
-        ```
-
-        Yeni ihale geldiğinde sistem hangi başarı profiline en yakın olduğunu
-        bulur. Böylece sadece skor verilmez; aynı zamanda “bu ihale geçmişte
-        kazandığımız hangi tip işe benziyor?” sorusu cevaplanır.
-
-        **13. Emsal p(win) nasıl hesaplanır?**
-
-        `Emsal p(win)` gerçek bir kazan/kaybet olasılık modeli değildir. Müşteri
-        tarafında oran gibi okunabilmesi için 0-100 arası verilen emsal kazanım
-        emsal bazlı karar destek oranıdır. Beş sinyali birleştirir:
-
-        ```text
-        Emsal p(win) =
-        %30 ortalama benzerlik
-        + %15 güçlü emsal oranı
-        + %25 tarihsel fiyat bandı uyumu
-        + %15 One-Class kazanım profili yakınlığı
-        + %15 başarı profili yakınlığı
-        ```
-
-        Bu oran şunu anlatır: yeni ihale geçmişte kazanılmış emsallere ne kadar
-        benziyor, önerilen fiyat geçmiş kazanım bandında mı, ihale genel kazanım
-        profilimizin içinde mi ve hangi başarı segmentine yakın?
-        """
-    )
-
-
-data_mtime_ns = DATA_PATH.stat().st_mtime_ns
-df = load_dataset(data_mtime_ns)
-
-with st.sidebar:
-    st.markdown(
-        """
-        <div class="brand-mark">TI</div>
-        <div class="sidebar-title">TENDER IQ</div>
-        <div class="sidebar-note">
-            Geçmişte kazanılmış benzer ihalelere bakarak fiyat aralığı,
-            birim kazanç ve ihale puanı gösterir. Kazanma ihtimali hesaplamaz.
+        <div class='hero-card'>
+            <div class='eyebrow'>Karar destek platformu</div>
+            <h1 class='hero-title'>Tender IQ</h1>
+            <div class='hero-subtitle'>
+                Kazanılmış ihale verilerinden fiyat koridoru, profil uyumu ve teklif senaryo içgörüleri üreten karar destek platformu.
+                Yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır, benzer emsalleri bulur, fiyat bandı üretir ve ihale ekibine teklif senaryolarını yorumlaması için yapılandırılmış destek sağlar.
+            </div>
+            <div class='hero-badges'>
+                <span class='hero-badge'>Profil uyumu</span>
+                <span class='hero-badge'>Fiyat koridoru</span>
+                <span class='hero-badge'>Senaryo skoru</span>
+                <span class='hero-badge'>Güvenli AI yorumu</span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.caption("Veri")
-    st.write(f"{len(df):,} geçmiş kazanılmış ihale kaydı".replace(",", "."))
-    st.write(f"{df['year'].min()}-{df['year'].max()} dönemini kapsar")
-    st.write("Ürün, kurum, bölge, miktar, fiyat, birim kazanç ve teslim bilgileri içerir")
-    st.write("Gerçek şirket verisi değil; X İlaç Şirketi için hazırlanmış sentetik demo verisidir")
-    st.download_button(
-        label="Veriyi indir",
-        data=load_dataset_download_bytes(data_mtime_ns),
-        file_name=DATA_PATH.name,
-        mime="text/csv",
-        width="stretch",
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    warning_box()
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+
+    section_header(
+        "Bu ürün hangi sorulara cevap verir?",
+        "Tender IQ, teklif kararını tek bir sayıya indirgemez; fiyat, benzerlik, marj ve risk sinyallerini birlikte okunabilir hale getirir.",
+    )
+    questions = [
+        ("Bu ihaleye girmeli miyim?", "Geçmiş kazanılmış profile ne kadar benzediğini ve manuel inceleme ihtiyacını gösterir."),
+        ("Nasıl fiyat vermeliyim?", "Benzer kazanılmış ihalelerden düşük, orta ve yüksek fiyat koridoru üretir."),
+        ("Hangi geçmiş ihaleler buna benziyor?", "TF-IDF ve cosine similarity ile emsal kazanılmış ihaleleri listeler."),
+        ("Beklenen katkı kârı nasıl görünüyor?", "Aday fiyatların marj ve katkı etkisini senaryo bazında karşılaştırır."),
+        ("Bu teklif senaryosu mantıklı mı?", "Profil uyumu, fiyat bandı, marj, güven ve risk cezasını birlikte skorlar."),
+        ("Riskli sinyaller var mı?", "Sıra dışı profil, düşük güven veya kısıt ihlali gibi uyarıları görünür kılar."),
+    ]
+    for start_idx in range(0, len(questions), 3):
+        cols = st.columns(3, gap="medium")
+        for offset, (title, body) in enumerate(questions[start_idx : start_idx + 3]):
+            with cols[offset]:
+                glass_card(title, body)
+
+    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
+    section_header("Nasıl çalışır?", "Üç adımlı akış, demo sırasında kullanıcının nereden başlayacağını netleştirir.")
+    render_method_grid(
+        [
+            ("Tarihsel kazanılmış veriyi kullanır", "Sistem geçmişte kazanılmış ihaleleri temel veri seti olarak alır."),
+            ("Benzer ihaleleri ve fiyat bandını üretir", "Yeni ihaleye benzeyen emsallerden fiyat koridoru ve profil sinyali çıkarır."),
+            ("Senaryoları skorlayıp açıklar", "Aday teklifleri skorlar, riskleri gösterir ve AI Danışman ile yorumlar."),
+        ],
+        ["blue", "purple", "green"],
     )
 
-header_left, header_right = st.columns([5, 1.4])
-with header_left:
-    st.markdown(
-        """
-        <div class="eyebrow">İhale Karar Yardımcısı</div>
-        <h1 class="page-title">Geçmiş İhaleye Göre Fiyat Aralığı</h1>
-        <p class="page-subtitle">
-            Yeni bir ihale için benzer geçmiş kazanımları bulur, fiyatları
-            Mayıs 2026 seviyesine taşır, olası fiyat aralığını ve birim kazancı gösterir.
-        </p>
-        """,
-        unsafe_allow_html=True,
+    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
+    section_header("Buradan nereye gitmeliyim?", "Ana akış sayfaları ve ne için kullanılacakları.")
+    nav_items = [
+        ("Veri Seti", "Sistemin kullandığı kazanılmış ihale verisini ve kalite kontrollerini inceleyin."),
+        ("Metodoloji", "Skorun, benzerlik hesabının ve backtest yaklaşımının nasıl kurulduğunu görün."),
+        ("Test İhalesi", "Gerçek sonucu gizli bir test ihalesini canlı ihale gibi simüle edin."),
+        ("Senaryo Analizi", "Teklif fiyatı, marj, katkı ve risk senaryolarını karşılaştırın."),
+        ("AI Danışman", "Model çıktıları hakkında güvenli Türkçe açıklama alın."),
+        ("Backtest Sonuçları", "Fiyat koridoru ve senaryo yaklaşımının geçmiş test performansını görün."),
+    ]
+    for start_idx in range(0, len(nav_items), 3):
+        cols = st.columns(3, gap="medium")
+        for offset, (title, body) in enumerate(nav_items[start_idx : start_idx + 3]):
+            with cols[offset]:
+                glass_card(title, body, "Yönlendirme")
+
+    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
+    section_header("Demo Veri Özeti", "Ana sayfada yalnızca en gerekli veri sinyalleri gösterilir.")
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        metric_card("Toplam kayıt", format_int(len(data)), "Kazanılmış ihale")
+    with c2:
+        metric_card("Ürün grubu", format_int(data["product_group"].nunique()), "Kategori sayısı")
+    with c3:
+        metric_card("Kurum sayısı", format_int(data["buyer_institution"].nunique()), "Alıcı kurum")
+    with c4:
+        metric_card("Veri tarih aralığı", f"{start} - {end}", "İhale tarihi")
+
+
+def render_data_quality() -> None:
+    page_header(
+        "Veri Seti ve Kalite Kontrol",
+        "Bu sayfa, sistemin kullandığı tarihsel kazanılmış ihale verisini ve analiz güvenliğini gösterir.",
+        "Veri",
     )
-with header_right:
-    st.markdown(
-        """
-        <div class="scope-pill"><span class="scope-dot"></span> KAZANILAN İHALE HAFIZASI</div>
-        """,
-        unsafe_allow_html=True,
+    data = load_active_data()
+    schema_result = validate_schema(data)
+    quality = validate_data_quality(data)
+    summary = schema_quality_summary(data)
+    start = pd.to_datetime(data["tender_date"]).min().date()
+    end = pd.to_datetime(data["tender_date"]).max().date()
+
+    info_callout(
+        "Bu adım, sistemin fiyat koridoru, benzer ihale eşleştirmesi, profil uyumu ve senaryo skorlaması için kullandığı tarihsel kazanılmış ihale veri setini yükler ve doğrular. Kalite kontrolleri, verinin analiz için uygun ve güvenli olup olmadığını gösterir.",
+        "Veri neden önemli?",
+    )
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+
+    section_header("Veri ne işe yarıyor?", "Veri seti, Tender IQ'nun tüm karar destek çıktılarının temel girdisidir.")
+    data_use_cards = [
+        ("Benzer ihale bulma", "Yeni ihale, geçmiş kazanılmış ihalelerle karşılaştırılır ve en yakın emsaller bulunur."),
+        ("Fiyat koridoru üretme", "Benzer kazanılmış ihalelerden düşük, orta ve yüksek fiyat bandı çıkarılır."),
+        ("Profil uyumu hesaplama", "Yeni ihalenin geçmiş kazanılmış işlere ne kadar tanıdık göründüğü ölçülür."),
+        ("Senaryo ve marj analizi", "Aday teklif fiyatlarının marj, katkı ve risk etkisi karşılaştırılır."),
+    ]
+    cols = st.columns(4, gap="medium")
+    for idx, (title, body) in enumerate(data_use_cards):
+        with cols[idx]:
+            glass_card(title, body)
+
+    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
+    section_header("Veri özeti", "Demo veri setinin iş seviyesindeki kısa görünümü.")
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        metric_card("Kayıt sayısı", format_int(summary["row_count"]), "Normalize edilmiş ihale")
+    with c2:
+        metric_card("Ürün grubu sayısı", format_int(data["product_group"].nunique()), "Kategori")
+    with c3:
+        metric_card("Kurum sayısı", format_int(data["buyer_institution"].nunique()), "Alıcı kurum")
+    with c4:
+        metric_card("Tarih aralığı", f"{start} - {end}", "İhale tarihi")
+
+    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
+    section_header("Kalite kontrol sonuçları", "Analize başlamadan önce veri setinin kullanılabilirliği doğrulanır.")
+    status = "good" if schema_result.valid and quality["passed"] else "warn"
+    quality_cards = [
+        ("Şema kontrolü", "Geçti" if schema_result.valid else "Eksik", "Zorunlu kolonların bulunup bulunmadığını kontrol eder.", "good" if schema_result.valid else "bad"),
+        ("Zorunlu kolonlar", "Tamam" if not schema_result.missing_columns else "Eksik", "Ürün, kurum, miktar, tarih, fiyat ve marj alanlarının durumunu gösterir.", "good" if not schema_result.missing_columns else "bad"),
+        ("Eksik veri durumu", "Uygun" if quality["passed"] else "Uyarı", "Boş veya sorunlu değerlerin analizi bozup bozmadığını inceler.", "good" if quality["passed"] else "warn"),
+        ("Tekrarlı kayıt kontrolü", format_int(summary["duplicate_tender_ids"]), "Aynı tender_id ile gelen tekrarları görünür kılar.", "good" if summary["duplicate_tender_ids"] == 0 else "warn"),
+        ("Veri kullanıma hazır mı?", "Hazır" if status == "good" else "Kontrol gerekli", "Kalite ve şema kontrollerinin ortak sonucudur.", status),
+    ]
+    for start_idx in range(0, len(quality_cards), 3):
+        cols = st.columns(3, gap="medium")
+        for offset, (title, value, body, card_status) in enumerate(quality_cards[start_idx : start_idx + 3]):
+            with cols[offset]:
+                glass_card(title, body, "", badge(value, card_status))
+
+    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
+    section_header("Zorunlu kolonlar", "Teknik kolon adları iş dilindeki anlamlarıyla birlikte gösterilir.")
+    required_columns = pd.DataFrame(
+        [
+            ["product_name", "Ürün adı", "İhale konusu ürün veya hizmet adı."],
+            ["product_group", "Ürün kategorisi", "Benzerlik ve segment kırılımı için ana kategori."],
+            ["buyer_institution", "Alıcı kurum", "Kurum tipi ve tekrar eden alıcı davranışı için kullanılır."],
+            ["region", "Bölge", "Bölgesel benzerlik ve fiyat davranışı için kullanılır."],
+            ["quantity", "İhale miktarı", "Ölçek ve miktar bandı eşleşmesi için kullanılır."],
+            ["tender_date", "İhale tarihi", "Temporal split ve tarihsel test disiplini için gerekir."],
+            ["estimated_unit_cost", "Tahmini maliyet", "Marj ve katkı senaryolarını hesaplamak için kullanılır."],
+            [CANONICAL_PRICE_COLUMN, "Kazanılmış birim fiyat", "Fiyat koridorunu eğitmek ve backtestte kıyaslamak için kullanılır."],
+            [CANONICAL_MARGIN_COLUMN, "Kazanılmış marj", "Geçmiş marj davranışını ve senaryo sağlığını değerlendirmek için kullanılır."],
+        ],
+        columns=["Kolon", "İş anlamı", "Sistemdeki rolü"],
+    )
+    st.dataframe(required_columns, hide_index=True, width="stretch")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    tabs = st.tabs(["Eksik veri kontrolü", "Kolon eşleştirme", "Veri önizleme", "İsteğe bağlı yeni veri yükleme"])
+    with tabs[0]:
+        null_df = pd.DataFrame(
+            [{"Kolon": key, "Boş oran": value} for key, value in summary["null_rates"].items()]
+        ).sort_values("Boş oran", ascending=False)
+        st.dataframe(null_df, hide_index=True, width="stretch", column_config={"Boş oran": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=1)})
+        if quality["issues"]:
+            st.warning("\n".join(f"- {issue}" for issue in quality["issues"]))
+        if schema_result.warnings:
+            st.warning("\n".join(schema_result.warnings))
+    with tabs[1]:
+        mapping = pd.DataFrame(
+            [
+                ["Kazanılmış birim fiyat", CANONICAL_PRICE_COLUMN, "Bulundu" if CANONICAL_PRICE_COLUMN in data else "Eksik"],
+                ["Kazanılmış marj", CANONICAL_MARGIN_COLUMN, "Bulundu" if CANONICAL_MARGIN_COLUMN in data else "Eksik"],
+                ["Tahmini maliyet", "estimated_unit_cost", "Bulundu" if "estimated_unit_cost" in data else "Eksik"],
+                ["İhale tarihi", "tender_date", "Bulundu" if "tender_date" in data else "Eksik"],
+            ],
+            columns=["İş anlamı", "Kullanılan kolon", "Durum"],
+        )
+        st.dataframe(mapping, hide_index=True, width="stretch")
+    with tabs[2]:
+        st.dataframe(data.head(25), hide_index=True, width="stretch")
+    with tabs[3]:
+        info_callout(
+            "Yeni CSV yüklemek, demo veri seti yerine kurumunuza ait tarihsel kazanılmış ihale verisini kullanmak içindir. Dosyada ürün, kurum, bölge, miktar, tarih, tahmini maliyet, kazanılmış fiyat ve marj alanları bulunmalıdır.",
+            "Ne zaman yüklenir?",
+        )
+        uploaded = st.file_uploader("CSV dosyası yükle", type=["csv"])
+        if uploaded is not None:
+            st.session_state.active_data = normalize_schema(pd.read_csv(uploaded))
+            st.session_state.pop("backtest_results", None)
+            st.session_state.pop("scenario_result", None)
+            st.success("Veri yüklendi ve uygulama şemasına uyarlandı.")
+
+
+def render_methodology() -> None:
+    page_header(
+        "Metodoloji",
+        "Sistem neyi, neden ve nasıl hesaplıyor? Aşağıdaki bölüm metodolojiyi temelden ama iş dilinde açıklar.",
+        "Metodoloji",
+    )
+    warning_box()
+    info_callout(PWIN_PROXY_EXPLANATION, "P-Win yerine ne var?")
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+
+    render_method_grid(
+        [
+            (
+                "Veri kısıtı",
+                "Elimizde yalnızca kazanılmış ihaleler var. Kaybedilmiş veya teklif verilip kazanılamamış kayıt yok.",
+            ),
+            (
+                "Doğru hedef",
+                "Sistem sonuç tahmini yapmaz; yeni ihalenin geçmiş kazanılmış profillere ne kadar uyduğunu ölçer.",
+            ),
+            (
+                "Test disiplini",
+                "Test ihalesi canlı ihale gibi ele alınır. Gerçek fiyat ve marj sonuç açma adımına kadar gizlenir.",
+            ),
+        ],
+        ["amber", "green", "blue"],
     )
 
-st.markdown(
-    """
-    <div class="scope-note">
-        Bu demo sentetik veriye dayanır. Veri sadece geçmişte kazanılmış
-        ihaleleri içerir. Bu ekran kazanma ihtimali vermez; sadece benzer
-        kazanılmış ihalelerden fiyat ve birim kazanç kıyaslaması yapar.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-analysis_tab, how_it_works_tab, llm_tab = st.tabs(["Analiz", "Nasıl çalışır?", "LLM yorum katmanı"])
-
-with how_it_works_tab:
-    render_how_it_works_tab()
-
-with analysis_tab:
-    product_names = sorted(df["product_name"].dropna().unique())
-    product_group_by_name = (
-        df.dropna(subset=["product_name", "product_group"])
-        .drop_duplicates("product_name")
-        .set_index("product_name")["product_group"]
-        .to_dict()
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    tabs = st.tabs(
+        [
+            "Temel Mantık",
+            "Benzerlik Hesabı",
+            "Model Bileşenleri",
+            "Skor ve Senaryo",
+            "Backtest ve Metrikler",
+            "AI Danışman",
+        ]
     )
-    regions = sorted(df["region"].dropna().unique())
-    procedure_types = sorted(df["procedure_type"].dropna().unique())
-    buyer_institutions = sorted(df["buyer_institution"].dropna().unique())
 
+    with tabs[0]:
+        c1, c2, c3 = st.columns(3, gap="medium")
+        with c1:
+            glass_card(
+                "Veri Kısıtı",
+                "Elimizde sadece geçmişte kazanılmış ihale kayıtları var. Kaybedilmiş veya teklif verilip kazanılamamış kayıt olmadığı için klasik kazan/kaybet sınıflandırması kurulmaz.",
+                "01",
+            )
+        with c2:
+            glass_card(
+                "Doğru Okuma",
+                "Sistem gerçek olasılık üretmez. Yeni ihalenin geçmişte kazanılmış işlere ne kadar benzediğini ve fiyat/marj/risk dengesinin geçmiş profile uyup uymadığını gösterir.",
+                "02",
+            )
+        with c3:
+            glass_card(
+                "Kazanılmış Profil Uyum Skoru",
+                "Ürün, kurum, bölge, miktar, teslim süresi, fiyat bandı, beklenen marj, risk ve model güveni birlikte okunur. Düşük skor çoğu zaman manuel inceleme sinyalidir.",
+                "03",
+            )
+        with st.expander("Neden accuracy, precision, recall veya ROC-AUC ana başarı metriği değil?", expanded=False):
+            st.markdown(
+                "Negatif sınıf güvenilir olmadığı için kazan/kaybet sınıflandırması ölçülmez. Backtest, fiyat koridoru hizası, profil uyumu, segment performansı, sızıntı kontrolü ve danışman güvenliği üzerinden yapılır."
+            )
+
+    with tabs[1]:
+        section_header("Benzerlik nasıl hesaplanıyor?", "TF-IDF ve cosine similarity yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır.", "Retrieval")
+        render_method_grid(
+            [
+                ("İhale metni hazırlanır", "Ürün adı, ürün grubu, kurum, bölge, ihale tipi ve miktar bilgileri tek bir ihale profiline dönüştürülür."),
+                ("TF-IDF ile vektöre çevrilir", "Ayırt edici kelimeler daha güçlü temsil edilir; genel kelimelerin etkisi azaltılır."),
+                ("Cosine similarity hesaplanır", "Yeni ihale vektörü geçmiş ihale vektörleriyle karşılaştırılır."),
+                ("Top-K benzer ihaleler seçilir", "En yüksek skorlu kazanılmış ihaleler emsal listeye alınır."),
+                ("Koridor ve skorlar beslenir", "Fiyat koridoru, profil uyumu ve danışman açıklamaları bu emsal setten destek alır."),
+            ],
+            ["blue", "purple", "cyan", "green", "amber"],
+        )
+        st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2, gap="medium")
+        with c1:
+            glass_card(
+                "TF-IDF",
+                "Metin içindeki kelimeleri sayısal hale getirir. Sık geçen ama ayırt edici olmayan kelimelerin etkisini azaltır; ürün, kurum veya ihale tipi gibi ayırt edici kelimelerin etkisini artırır.",
+                "Metin temsili",
+            )
+        with c2:
+            glass_card(
+                "Cosine similarity",
+                "İki ihalenin sayısal vektörlerinin birbirine ne kadar yakın olduğunu ölçer. Skor 1'e yaklaştıkça benzerlik artar; 0'a yaklaştıkça azalır.",
+                "Yakınlık hesabı",
+            )
+        with st.expander("Top-K retrieval ve eşleşme metrikleri", expanded=False):
+            st.markdown(
+                """
+                Örnek profil: “serum ürün grubu + kamu hastanesi + Marmara bölgesi + açık ihale + 50.000 adet”.
+                Aynı ürün grubu, benzer kurum tipi, aynı bölge ve yakın miktar varsa benzerlik güçlenir.
+                """
+            )
+            metrics = pd.DataFrame(
+                [
+                    ["Ürün Grubu Eşleşme Oranı", "İlk K benzer ihale içinde aynı ürün grubuna düşen kayıt oranı."],
+                    ["Bölge Eşleşme Oranı", "Benzer ihalelerin seçili ihale ile aynı bölgede olma oranı."],
+                    ["Miktar Bandı Eşleşme Oranı", "Benzer ihalelerin yakın miktar ölçeğinde olma oranı."],
+                    ["İlk K Ortalama Benzerlik", "Getirilen benzer ihalelerin ortalama cosine/özellik benzerliği."],
+                ],
+                columns=["Metrik", "Ne anlatır?"],
+            )
+            st.dataframe(metrics, hide_index=True, width="stretch")
+
+    with tabs[2]:
+        section_header("Model Bileşenleri", "Her bileşen karar destek çıktısının farklı bir parçasını açıklar.", "Model")
+        render_model_grid(
+            [
+                ("01", "TF-IDF + Cosine Similarity", "Ne yapar: Yeni ihaleye benzeyen kazanılmış ihaleleri bulur. Neden var: Emsal seti olmadan fiyat ve profil yorumu zayıf kalır. Katkı: Benzer ihaleler listesini ve koridor girdisini üretir.", "blue"),
+                ("02", "K-Means", "Ne yapar: Kazanılmış ihaleleri benzer başarı profillerine ayırır. Neden var: Tek tek ihale yerine profil segmenti görmeyi sağlar. Katkı: Cluster ve profil yorumunu destekler.", "purple"),
+                ("03", "Isolation Forest", "Ne yapar: Yeni ihalenin geçmiş profile normal mi sıra dışı mı uyduğunu kontrol eder. Neden var: Aykırı durumları saklamaz. Katkı: Risk ve manuel inceleme sinyali üretir.", "amber"),
+                ("04", "Price Corridor Engine", "Ne yapar: Emsal kazanılmış ihalelerden düşük, orta ve yüksek fiyat bandı çıkarır. Neden var: Tek nokta fiyat yerine karar aralığı verir. Katkı: Senaryo fiyatlarını besler.", "green"),
+                ("05", "Scenario Scoring", "Ne yapar: Fiyat, marj, profil uyumu, güven ve risk cezasını tek karar destek skorunda birleştirir. Neden var: Alternatif teklifleri kıyaslanabilir hale getirir. Katkı: Sıralı senaryo önerisi üretir.", "cyan"),
+                ("06", "Model Confidence / Risk", "Ne yapar: Benzer ihale sayısı, veri kalitesi, band genişliği ve aykırılık sinyallerini birlikte okur. Neden var: Skorun ne kadar güvenle okunacağını gösterir. Katkı: AI Danışman ve manuel inceleme kararını destekler.", "blue"),
+                ("07", "Linear Regression Baz Modeli", "Ne yapar: Ürün grubu, bölge, ihale tipi, miktar, teslim süresi ve tahmini rakip sayısı gibi alanlardan beklenen fiyat için doğrusal referans üretir. Neden var: Emsal tabanlı fiyat koridorunu basit ve açıklanabilir bir fiyat tahminiyle kıyaslamak için kullanılır. Katkı: Backtestte koridor yaklaşımının basit doğrusal modele göre ne kadar tutarlı olduğunu gösterir.", "green"),
+                ("08", "XGBoost / Ağaç Tabanlı Kontrol", "Ne yapar: Doğrusal olmayan fiyat ilişkilerini yakalayabilen ağaç tabanlı referans model ailesini temsil eder. Neden var: Miktar, bölge ve ürün grubunun fiyat üzerindeki doğrusal olmayan etkilerini kontrol etmek için kullanılır. Katkı: Nihai P-Win üretmez; fiyat koridorunun regresyon bazlı tahminlerle tutarlılığını değerlendirmek için metodolojik karşılaştırma sağlar.", "amber"),
+            ]
+        )
+        st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+        with st.expander("Sıra dışı durum örnekleri", expanded=False):
+            st.markdown("- çok yüksek veya çok düşük miktar\n- alışılmadık ürün-kurum kombinasyonu\n- çok kısa teslim süresi\n- çok yüksek veya çok düşük fiyat\n- düşük benzer ihale sayısı")
+        with st.expander("Fiyat koridoru nasıl oluşuyor?", expanded=True):
+            info_callout(
+                "Sistem seçili ihaleye en çok benzeyen kazanılmış ihaleleri bulur. Ana fiyat koridoru bu emsal ihalelerdeki normalize fiyatların alt, orta ve üst yüzdeliklerinden üretilir. Lineer regresyon ve XGBoost/ağaç tabanlı modeller ise bu koridorun basit ve daha esnek fiyat tahminleriyle kıyaslanması için metodolojik kontrol katmanı olarak anlatılır; gerçek kazanma olasılığı üretmez. Koridor çok genişse tek başına güçlü kanıt sayılmaz, bu yüzden backtestte band genişliği de ölçülür.",
+                "Fiyat Koridoru",
+            )
+            render_method_grid(
+                [
+                    ("Alt Bant", "Daha agresif fiyat seviyesi."),
+                    ("Orta Bant", "Dengeli fiyat seviyesi."),
+                    ("Üst Bant", "Daha muhafazakar fiyat seviyesi."),
+                ],
+                ["blue", "green", "amber"],
+            )
+
+    with tabs[3]:
+        section_header("Senaryo Skoru", "Tek bir model çıktısı değildir; beş bileşen birlikte değerlendirilir.", "Skor")
+        render_formula_card()
+        st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+        render_model_grid(
+            [
+                ("🧭", "Profil Uyumu", "Yeni ihalenin geçmiş kazanılmış ihalelere benzerliği.", "blue"),
+                ("🎯", "Fiyat Bandı Uyumu", "Önerilen fiyatın geçmiş fiyat koridoruna yakınlığı.", "green"),
+                ("💹", "Marj Skoru", "Beklenen karlılık ve katkı karı sağlığı.", "purple"),
+                ("🛡️", "Model Güveni", "Yeterli benzer ihale ve veri kalitesi olup olmadığı.", "cyan"),
+                ("⚠️", "Risk Cezası", "Sıra dışı durumlar, düşük benzerlik, düşük güven ve kısıt ihlalleri.", "amber"),
+            ]
+        )
+        warning_box()
+
+    with tabs[4]:
+        section_header(
+            "Backtest ve Metrikler",
+            "Test yılındaki geçmiş kazanılmış ihaleler, sonuç fiyatı ve gerçek marjı gizlenerek sisteme o gün yeni gelmiş canlı ihale gibi verilir; sistem önce emsal, profil, koridor ve senaryo çıktısı üretir, sonra gerçek sonuç açılarak bu çıktılarla karşılaştırılır.",
+            "Ölçüm",
+        )
+        info_callout(
+            "Backtest’in amacı kazanma/kaybetme tahmini doğruluğunu ölçmek değildir. Amaç, sistemin geçmişte kazanılmış ama sonucu gizlenmiş ihaleleri geçmiş başarı profillerine doğru yerleştirip yerleştiremediğini ve fiyat/senaryo önerilerinin tarihsel sonuçlarla ne kadar tutarlı olduğunu ölçmektir.",
+            "Backtest amacı:",
+        )
+        render_method_grid(
+            [
+                ("Zaman bazlı ayrım", "Model geçmişi bilir, geleceği bilmez. Random split canlı karar anını yeterince temsil etmez."),
+                ("Sonuç gizleme", "Kazanılmış fiyat ve marj reveal adımına kadar retrieval, scorer, optimizer ve advisor katmanlarından maskelenir."),
+                ("Karşılaştırma", "Fiyat koridoru, senaryo sıralaması, segment metrikleri ve sızıntı kontrolü birlikte raporlanır."),
+            ],
+            ["blue", "amber", "green"],
+        )
+        st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+        with st.expander("Başarıyı hangi metriklerle ölçüyoruz?", expanded=True):
+            metrics_table = pd.DataFrame(
+                [
+                    ["Fiyat Koridoru Kapsama Oranı", "Gerçek kazanılmış fiyat sistemin önerdiği fiyat bandının içinde mi?"],
+                    ["MAE", "Tahmin edilen orta fiyat ile gerçek fiyat arasındaki ortalama mutlak fark."],
+                    ["MAPE / SMAPE / WAPE", "Hatanın yüzde olarak farklı okuma biçimleri."],
+                    ["Ortalama Koridor Genişliği", "Bandın ne kadar geniş olduğunu gösterir."],
+                    ["Coverage Adjusted Band Score", "Kapsama oranını band genişliğiyle birlikte değerlendirir."],
+                    ["Gerçek Kazanılmış Senaryo Sıralaması", "Tarihsel gerçek konfigürasyon aday senaryolar arasında ne kadar üstte kaldı?"],
+                    ["Kazanılmış test ihalelerini geçmiş profile uygun tanıma oranı", "Profil modelinin kazanılmış test kayıtlarını inlier görme oranı."],
+                    ["Synthetic outlier detection rate", "Sentetik sıra dışı örneklerin model tarafından riskli veya aykırı görülme oranı."],
+                    ["Yasak iddia üretme oranı", "AI Danışman garanti, kesin sonuç veya gerçek P(win) iddiası üretiyor mu? Hedef sıfırdır."],
+                ],
+                columns=["Metrik", "Ne anlatır?"],
+            )
+            st.dataframe(metrics_table, hide_index=True, width="stretch")
+        with st.expander("Sızıntı kontrolü nedir?", expanded=False):
+            st.markdown(
+                """
+                Sızıntı, test sırasında modelin normalde bilmemesi gereken gerçek sonucu önceden görmesidir.
+                Test ihalesinin kazanılmış fiyatı, final tutarı veya gerçek marjı modele verilirse test güvenilir olmaz.
+                """
+            )
+            blocked = pd.DataFrame(
+                [
+                    ["won_unit_price"],
+                    ["won_total_amount"],
+                    ["actual_margin_pct"],
+                    ["actual_unit_margin"],
+                    ["final_contract_amount"],
+                    ["actual_award_result"],
+                    ["revealed_actual_result"],
+                ],
+                columns=["Sonuç açılmadan önce engellenen alan örnekleri"],
+            )
+            st.dataframe(blocked, hide_index=True, width="stretch")
+
+    with tabs[5]:
+        section_header("AI Danışman", "Skor hesaplamaz; mevcut model çıktılarını güvenli Türkçe açıklamaya dönüştürür.", "LLM Guardrails")
+        render_model_grid(
+            [
+                ("💬", "Açıklama Üretir", "Profil uyumu, fiyat koridoru, marj, risk ve benzer ihaleleri anlaşılır hale getirir.", "blue"),
+                ("🧱", "Guardrail Uygular", "Garanti, kesin sonuç veya gerçek P(win) iddiası üretirse çıktı reddedilir.", "amber"),
+                ("🔒", "Reveal Kuralına Uyar", "Gerçek sonuç açılmadıysa kazanılmış fiyat veya gerçek marjı kullanamaz.", "purple"),
+                ("🧰", "Fallback Çalışır", "LLM sağlayıcısı yoksa deterministik danışman aynı sohbet akışında yanıt verir.", "green"),
+            ]
+        )
+def render_test_simulator() -> None:
+    page_header(
+        "Test İhalesi Simülatörü",
+        "Geçmişte kazanılmış bir ihale, gerçek sonucu gizlenmiş şekilde sisteme yeni gelen canlı ihale gibi verilir. Sistem; emsal benzerlik, başarı profili, sıra dışılık, fiyat bandı, risk/güven ve senaryo uygunluğunu birlikte analiz eder. Gerçek sonuç daha sonra açılarak bu çıktılarla karşılaştırılır.",
+        "Simülasyon",
+    )
+    warning_box()
+    info_callout(PWIN_PROXY_EXPLANATION, "P-Win yerine ne var?")
+    info_callout(
+        "Bu ekran sadece fiyat koridorunu test etmez. Seçilen ihale; emsal benzerlik, K-Means profil ataması, Isolation Forest uygunluğu, profil uyum skoru, fiyat bandı, risk/güven ve senaryo skoru açısından birlikte analiz edilir.",
+        "Bu ekranın kapsamı:",
+    )
+    split = get_split()
+    test = split["test"]
+    selected = st.selectbox("Test ihalesi seç", test["tender_id"].astype(str).tolist())
+    st.session_state.selected_tender_id = selected
+    st.session_state.revealed = False if st.session_state.get("last_selected_tender") != selected else st.session_state.get("revealed", False)
+    st.session_state.last_selected_tender = selected
+
+    row = test[test["tender_id"].astype(str) == selected].iloc[0]
+    masked = mask_actual_result_fields(row.to_dict())
+    audit = audit_pre_reveal_input(selected, masked)
+    st.session_state.masked_tender = masked
+    st.session_state.leakage_audit = audit
+
+    section_header("Bu ekran neyi test eder?", "Simülasyon fiyat bandından ibaret değildir; geçmiş başarı profiline yerleştirme kalitesini de gösterir.")
+    test_cards = [
+        ("Emsal Bulma", "Sistem, yeni ihale için geçmişte kazanılmış en benzer ihaleleri bulur."),
+        ("Profil Atama", "K-Means ile ihale geçmiş kazanılmış başarı kümelerinden birine yerleştirilir."),
+        ("Sıra Dışılık Kontrolü", "Isolation Forest, ihalenin geçmiş kazanım profiline normal mi yoksa sıra dışı mı uyduğunu kontrol eder."),
+        ("Profil Uyum Skoru", "Sistem, ihalenin geçmiş kazanılmış ihale profiline ne kadar uyduğunu 0-100 arası skorlar."),
+        ("Fiyat ve Senaryo Analizi", "Benzer ihalelerden fiyat koridoru ve teklif senaryo skorları üretilir."),
+    ]
+    for start_idx in range(0, len(test_cards), 3):
+        cols = st.columns(3, gap="medium")
+        for offset, (title, body) in enumerate(test_cards[start_idx : start_idx + 3]):
+            with cols[offset]:
+                render_small_card(title, body)
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    selected_body = (
+        f"İhale ID: {selected} | Ürün grubu: {masked.get('product_group', '-')} | "
+        f"Bölge: {masked.get('region', '-')} | Kurum: {masked.get('buyer_institution', '-')}"
+    )
+    glass_card("Seçili İhale", selected_body, "Canlı simülasyon", badge("Gerçek sonuç gizli", "warning"))
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+
+    section_header("Canlı İhale Girdileri", "Bu alanlar simülasyon için düzenlenebilir; gerçek kazanılmış fiyat ve marj maskelidir.", "Kontrol paneli")
     with st.container(border=True):
-        st.markdown(
-            """
-            <div class="section-kicker">Yeni ihale</div>
-            <div class="section-title">İhale bilgilerini girin</div>
-            """,
-            unsafe_allow_html=True,
-        )
-        row_1 = st.columns([1.5, 1.0, 1.0, 1.1, 1.4], gap="small")
-        with row_1[0]:
-            product_name = st.selectbox(
-                "Ürün adı",
-                product_names,
-                index=product_names.index("%0.9 NaCl 500 ml")
-                if "%0.9 NaCl 500 ml" in product_names
-                else 0,
-            )
-        with row_1[1]:
-            product_group = product_group_by_name.get(product_name, "")
-            st.text_input(
-                "Ürün grubu",
-                value=product_group,
-                disabled=True,
-            )
-        with row_1[2]:
-            region = st.selectbox(
-                "Bölge",
-                regions,
-                index=regions.index("Marmara") if "Marmara" in regions else 0,
-            )
-        with row_1[3]:
-            procedure_type = st.selectbox(
-                "İhale usulü",
-                procedure_types,
-                index=procedure_types.index("Açık İhale") if "Açık İhale" in procedure_types else 0,
-            )
-        with row_1[4]:
-            buyer_institution = st.selectbox(
-                "Alıcı kurum",
-                buyer_institutions,
-                index=buyer_institutions.index("İstanbul Kamu Hastaneleri Birliği")
-                if "İstanbul Kamu Hastaneleri Birliği" in buyer_institutions
-                else 0,
-            )
+        c1, c2, c3, c4 = st.columns(4)
+        masked["quantity"] = int(c1.number_input("Miktar", min_value=1, value=int(masked.get("quantity", 1))))
+        masked["delivery_months"] = int(c2.number_input("Teslim Süresi (Ay)", min_value=1, value=int(masked.get("delivery_months", 6))))
+        masked["competitor_count_estimate"] = int(c3.number_input("Tahmini Rakip Sayısı", min_value=0, value=int(masked.get("competitor_count_estimate", 3))))
+        masked["estimated_unit_cost"] = float(c4.number_input("Tahmini Birim Maliyet", min_value=0.01, value=float(masked.get("estimated_unit_cost", 1.0))))
+    st.session_state.adjusted_tender = masked
 
-        row_2 = st.columns([1.0, 1.0, 1.0, 1.0, 0.9], gap="small")
-        with row_2[0]:
-            estimated_unit_cost_try = st.number_input(
-                "Tahmini birim maliyet",
-                min_value=0.01,
-                max_value=10_000.0,
-                value=18.00,
-                step=0.50,
-                format="%.2f",
-            )
-        with row_2[1]:
-            quantity = st.number_input(
-                "Miktar",
-                min_value=1,
-                max_value=5_000_000,
-                value=100_000,
-                step=1_000,
-                format="%d",
-            )
-        with row_2[2]:
-            delivery_months = st.selectbox("Teslim süresi (ay)", [3, 6, 9, 12], index=1)
-        with row_2[3]:
-            competitor_count = st.number_input(
-                "Tahmini rakip sayısı",
-                min_value=1,
-                max_value=20,
-                value=3,
-                step=1,
-            )
-        with row_2[4]:
-            analyze_clicked = st.button("Analiz Et", type="primary")
+    if st.button("Simülasyonu çalıştır", type="primary"):
+        st.session_state.pop("scenario_result", None)
+        result = ensure_scenario_result()
+        write_audit_event({"event_type": "test_tender_simulation", "tender_id": selected, "leakage_audit": audit})
+        if result:
+            st.success("Simülasyon tamamlandı. Senaryo Analizi sayfasında detayları görebilirsiniz.")
 
-    if "analysis_ready" not in st.session_state:
-        st.session_state.analysis_ready = False
+    result = ensure_scenario_result()
+    best = result["scenarios"].iloc[0].to_dict() if result else {}
+    similar = result.get("similar", pd.DataFrame()) if result else pd.DataFrame()
+    quality = retrieval_quality_from_result(result, masked) if result else {}
+    top10_avg_similarity = float(result.get("top10_avg_similarity", 0.0)) if result else 0.0
+    profile_label = "Geçmiş profile uygun" if bool(best.get("is_inlier", best.get("won_profile_fit_score", 0) >= 55)) else "Sıra dışı / manuel inceleme önerilir"
+    profile_status = "good" if profile_label == "Geçmiş profile uygun" else "warn"
+    risk_fit_score = max(0.0, 100 - float(best.get("risk_penalty_score", 0)))
+    cluster_display = best.get("cluster_name") or "Hesaplanamadı"
 
-    if analyze_clicked:
-        st.session_state.analysis_ready = True
+    section_header("Ana Analiz Skorları", "Kazanılmış Profil Uyum Skoru ana karar destek göstergesidir; gerçek kazanma olasılığı değildir.")
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        metric_card("Kazanılmış Profil Uyum Skoru", format_score(best.get("won_profile_fit_score")), "Yeni ihalenin geçmişte kazanılmış ihale profillerine yakınlığı")
+    with c2:
+        metric_card("Emsal Benzerlik Gücü", f"{top10_avg_similarity:.2f}", "Bulunan benzer ihalelerin yeni ihaleyle ortalama benzerliği")
+    with c3:
+        metric_card("K-Means Profil Kümesi", str(best.get("cluster_id", "Hesaplanamadı")), cluster_display)
+    with c4:
+        metric_card("Isolation Forest Durumu", profile_label, "İhale geçmiş kazanılmış profile normal mi, sıra dışı mı?")
 
-    if not st.session_state.analysis_ready:
-        st.info("İhale bilgilerini girin ve geçmiş kazanımlara göre fiyat aralığını görmek için Analiz Et'e tıklayın.")
-    else:
-        query = {
-            "product_name": product_name,
-            "product_group": product_group,
-            "region": region,
-            "procedure_type": procedure_type,
-            "buyer_institution": buyer_institution,
-            "quantity": int(quantity),
-            "delivery_months": int(delivery_months),
-            "competitor_count_estimate": int(competitor_count),
-        }
+    c5, c6, c7 = st.columns(3, gap="medium")
+    with c5:
+        metric_card("Fiyat Bandı Uyumu", format_score(best.get("price_band_fit_score")), "Önerilen fiyatın geçmiş kazanılmış fiyat koridoruna uyumu")
+    with c6:
+        metric_card("Model Güveni", format_score(best.get("model_confidence_score")), "Veri kalitesi, benzer ihale sayısı ve skor tutarlılığına göre güven seviyesi")
+    with c7:
+        metric_card("Risk Uygunluk Skoru", format_score(risk_fit_score), "Yüksek risk uygunluğu, belirgin risk sinyalinin düşük olduğunu gösterir.")
 
-        models = train_price_models(df, PRICE_MODEL_VERSION, data_mtime_ns)
-        profile_models = train_success_profile_models(df, SUCCESS_PROFILE_VERSION, data_mtime_ns)
-        similar = retrieve_similar_tenders(df, query, top_k=SIMILAR_TENDER_COUNT)
-        similar_display = similar.head(DISPLAY_TENDER_COUNT)
-        price_corridor = percentile_metrics(similar[PRIMARY_PRICE_FIELD])
-        nominal_reference = percentile_metrics(similar[REFERENCE_PRICE_FIELD])
-        margin_benchmark = {
-            "average": float(similar["gross_margin_pct"].mean()),
-            "median": float(similar["gross_margin_pct"].median()),
-            "p25": float(similar["gross_margin_pct"].quantile(0.25)),
-            "p75": float(similar["gross_margin_pct"].quantile(0.75)),
-        }
-        discount_benchmark = {
-            "average": float(similar["discount_to_estimated_cost_pct"].mean()),
-            "median": float(similar["discount_to_estimated_cost_pct"].median()),
-        }
-
-        model_predictions = predict_model_prices(models, query)
-        model_corridor = build_model_supported_corridor(price_corridor, model_predictions, models)
-        scenario_prices = {
-            "Düşük fiyat": model_corridor["low"],
-            "Orta fiyat": model_corridor["middle"],
-            "Yüksek fiyat": model_corridor["high"],
-        }
-        model_confidence = model_confidence_level(
-            float(similar["overall_similarity_score"].mean()),
-            price_corridor["median"],
-            model_predictions["linear"],
-            model_predictions["xgboost"],
-        )
-        model_center_values = np.array(
-            [price_corridor["median"], model_predictions["linear"], model_predictions["xgboost"]],
-            dtype=float,
-        )
-        model_disagreement_pct = (
-            (model_center_values.max() - model_center_values.min())
-            / max(float(model_center_values.mean()), 1.0)
-            * 100
-        )
-        margins = scenario_margins(model_corridor, estimated_unit_cost_try)
-        average_similarity = float(similar["overall_similarity_score"].mean())
-        confidence = confidence_level(len(similar), average_similarity)
-        balanced_margin = margins["Orta fiyat"]
-        price_fit = historical_price_fit(
-            scenario_prices["Orta fiyat"],
-            price_corridor,
-            balanced_margin,
-        )
-        profile_query_frame = build_profile_query_frame(
-            query,
-            scenario_prices["Orta fiyat"],
-            balanced_margin,
-        )
-        success_profile_scores = score_success_profiles(profile_models, profile_query_frame)
-        high_similarity_share = float((similar["overall_similarity_score"] >= 0.70).mean() * 100)
-        strong_similar_count = int((similar["overall_similarity_score"] >= 0.70).sum())
-        empirical_pwin = empirical_pwin_score(
-            average_similarity,
-            high_similarity_share,
-            float(price_fit["score"]),
-            float(success_profile_scores["one_class_score"]),
-            float(success_profile_scores["cluster_score"]),
-        )
-        pwin_similarity_contribution = 0.30 * average_similarity * 100
-        pwin_strong_case_contribution = 0.15 * high_similarity_share
-        pwin_price_fit_contribution = 0.25 * float(price_fit["score"])
-        pwin_one_class_contribution = 0.15 * float(success_profile_scores["one_class_score"])
-        pwin_cluster_contribution = 0.15 * float(success_profile_scores["cluster_score"])
-        pwin_contributions = {
-            "average_similarity": pwin_similarity_contribution,
-            "strong_similar_share": pwin_strong_case_contribution,
-            "historical_price_fit": pwin_price_fit_contribution,
-            "isolation_forest_profile_fit": pwin_one_class_contribution,
-            "kmeans_success_profile_fit": pwin_cluster_contribution,
-        }
-
-        similarity_component = average_similarity * 100
-        margin_component = margin_score(balanced_margin)
-        strategic_fit_component = float(similar["strategic_fit_score"].mean())
-        competition_component = competition_score(int(competitor_count))
-        delivery_component = delivery_score(int(delivery_months))
-        similarity_contribution = 0.25 * similarity_component
-        margin_contribution = 0.30 * margin_component
-        strategic_fit_contribution = 0.20 * strategic_fit_component
-        competition_contribution = 0.15 * competition_component
-        delivery_contribution = 0.10 * delivery_component
-
-        final_attractiveness_score = (
-            similarity_contribution
-            + margin_contribution
-            + strategic_fit_contribution
-            + competition_contribution
-            + delivery_contribution
-        )
-        final_label = attractiveness_label(final_attractiveness_score)
-        llm_context = build_llm_context(
-            query=query,
-            estimated_unit_cost_try=float(estimated_unit_cost_try),
-            similar=similar,
-            price_corridor=price_corridor,
-            nominal_reference=nominal_reference,
-            margin_benchmark=margin_benchmark,
-            discount_benchmark=discount_benchmark,
-            model_corridor=model_corridor,
-            scenario_prices=scenario_prices,
-            margins=margins,
-            model_predictions=model_predictions,
-            models=models,
-            model_confidence=model_confidence,
-            model_disagreement_pct=model_disagreement_pct,
-            price_fit=price_fit,
-            success_profile_scores=success_profile_scores,
-            empirical_pwin=empirical_pwin,
-            pwin_contributions=pwin_contributions,
-            final_score_components={
-                "similarity_component_raw": similarity_component,
-                "similarity_contribution": similarity_contribution,
-                "margin_component_raw": margin_component,
-                "margin_contribution": margin_contribution,
-                "strategic_fit_component_raw": strategic_fit_component,
-                "strategic_fit_contribution": strategic_fit_contribution,
-                "competition_component_raw": competition_component,
-                "competition_contribution": competition_contribution,
-                "delivery_component_raw": delivery_component,
-                "delivery_contribution": delivery_contribution,
-            },
-            final_attractiveness_score=final_attractiveness_score,
-            final_label=final_label,
-            strong_similar_count=strong_similar_count,
-        )
-        st.session_state.latest_llm_context = llm_context
-
-        st.markdown("---")
-        st.markdown(
-            """
-            <div class="section-kicker">Bulguların özeti</div>
-            <div class="section-title">Yönetici Özeti</div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        top_metrics = st.columns(3, gap="medium")
-        with top_metrics[0]:
-            metric_card("Emsal p(win)", format_pct(empirical_pwin), "Emsal bazlı oran")
-        with top_metrics[1]:
-            metric_card("Model orta fiyat", format_try(scenario_prices["Orta fiyat"]), "Mayıs 2026 seviyesinde")
-        with top_metrics[2]:
-            metric_card("Orta fiyat kazancı", format_pct(balanced_margin), "Birim fiyat ve maliyete göre")
-
-        support_metrics = st.columns(2, gap="medium")
-        with support_metrics[0]:
-            metric_card("Emsal havuzu", f"{len(similar)} ihale", f"Güçlü emsal: {strong_similar_count}")
-        with support_metrics[1]:
-            metric_card("Model güveni", model_confidence, f"Ortalama benzerlik: {average_similarity:.2f}")
-        st.caption(
-            "Bu bölüm bulguların kısa özetidir. Emsal havuzu, fiyat hesabında kullanılan en benzer 50 kazanılmış ihaleyi gösterir. "
-            f"Güçlü emsal sayısı, bu 50 ihale içinde benzerlik skoru 0.70 ve üzeri olan kayıt adedidir; bu analizde {strong_similar_count}. "
-            "Emsal p(win), geçmişte kazanılmış emsallere dayanarak üretilen oran formatında bir karar destek göstergesidir. "
-            "Ortalama benzerlik, güçlü emsal sayısı, fiyatın tarihsel kazanım bandına uyumu, One-Class profil yakınlığı "
-            "ve başarı profili eşleşmesi birlikte değerlendirilir."
-        )
-        st.caption(
-            "Ortalama benzerlik şöyle bulunur: sistem önce veri tabanındaki her geçmiş ihaleye 0-1 arası benzerlik skoru verir, "
-            "sonra en yüksek skorlu 50 ihalenin ortalamasını alır. Metin tarafında bu sürüm yerel embedding kullanır: "
-            "ihale metinleri dense vektöre çevrilir ve cosine similarity ile karşılaştırılır. Ürün grubu, ürün adı, bölge, "
-            "usul, miktar, teslim süresi ve rakip sayısı da ayrıca ağırlıklandırılır."
-        )
-        st.caption(
-            f"Model güveni {model_confidence.lower()} çünkü benzer ihale medyanı, Linear tahmin ve "
-            f"XGBoost tahmin arasındaki ayrışma yaklaşık %{model_disagreement_pct:.1f}. "
-            "Ayrışma yükseldikçe sistem sonucu daha dikkatli yorumlamak gerekir."
-        )
-
-        section_1 = st.container()
-
-        with section_1:
-            with st.container(border=True):
-                st.markdown(
-                    """
-                    <div class="section-kicker">1. Emsal bulma</div>
-                    <div class="section-title">En Benzer 10 Kazanılmış İhale</div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                table = similar_display[
-                    [
-                        "tender_id",
-                        "year",
-                        "product_name",
-                        "product_group",
-                        "region",
-                        "procedure_type",
-                        "winning_unit_price_try",
-                        PRIMARY_PRICE_FIELD,
-                        "gross_margin_pct",
-                        "discount_to_estimated_cost_pct",
-                        "overall_similarity_score",
-                    ]
-                ].copy()
-                table.columns = [
-                    "İhale ID",
-                    "Yıl",
-                    "Ürün",
-                    "Grup",
-                    "Bölge",
-                    "Usul",
-                    "O günkü fiyat",
-                    "Mayıs 2026 fiyatı",
-                    "Birim kazanç %",
-                    "Yaklaşık maliyet altı %",
-                    "Benzerlik",
-                ]
-                st.dataframe(
-                    table,
-                    hide_index=True,
-                    width="stretch",
-                    column_config={
-                        "O günkü fiyat": st.column_config.NumberColumn(format="%.2f TL"),
-                        "Mayıs 2026 fiyatı": st.column_config.NumberColumn(format="%.2f TL"),
-                        "Birim kazanç %": st.column_config.NumberColumn(format="%.2f"),
-                        "Yaklaşık maliyet altı %": st.column_config.NumberColumn(format="%.2f"),
-                        "Benzerlik": st.column_config.NumberColumn(format="%.3f"),
-                    },
-                )
-                st.caption(
-                    "Benzerlik skoru; metin benzerliği, ürün grubu, ürün adı, bölge, ihale usulü, "
-                    "miktar, teslim süresi ve tahmini rakip sayısını birlikte ölçer. "
-                    "Bu sürümde metin tarafı yerel embedding ile hesaplanır: ihale metinleri vektöre çevrilir ve "
-                    "cosine similarity ile karşılaştırılır. Üretim versiyonunda bu katman transformer tabanlı embedding "
-                    "modeliyle daha da güçlendirilebilir. Mevcut ağırlıklar: 0.45 metin embedding benzerliği, "
-                    "0.12 ürün grubu, 0.10 ürün adı, 0.08 bölge, 0.05 ihale usulü, 0.10 miktar, "
-                    "0.05 teslim süresi, 0.05 rakip sayısı."
-                )
-
-        section_3 = st.container()
-        section_4 = st.container()
-
-        with section_3:
-            with st.container(border=True):
-                st.markdown(
-                    """
-                    <div class="section-title">2. Fiyat Aralığı - Model Destekli Fiyat Aralığı</div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                corridor_rows = pd.DataFrame(
-                    [
-                        [
-                            "Benzer ihale medyanı",
-                            price_corridor["median"],
-                            "En benzer 50 kazanılmış ihalenin Mayıs 2026 seviyesindeki orta fiyatı.",
-                        ],
-                        [
-                            "Linear Regression tahmini",
-                            model_predictions["linear"],
-                            "Basit ve açıklanabilir fiyat modeli tahmini.",
-                        ],
-                        [
-                            "XGBoost tahmini",
-                            model_predictions["xgboost"],
-                            "Ürün, bölge, miktar ve usul kombinasyonlarını yakalayan model tahmini.",
-                        ],
-                        [
-                            "Model destekli düşük",
-                            scenario_prices["Düşük fiyat"],
-                            "Geçmiş fiyat alt bandı ve model düşük sınırları birlikte değerlendirilir.",
-                        ],
-                        [
-                            "Model destekli orta",
-                            scenario_prices["Orta fiyat"],
-                            "Ana referans fiyat; birim kazanç ve toplam tutar hesaplarında kullanılır.",
-                        ],
-                        [
-                            "Model destekli yüksek",
-                            scenario_prices["Yüksek fiyat"],
-                            "Geçmiş fiyat üst bandı ve model yüksek sınırları birlikte değerlendirilir.",
-                        ],
-                        [
-                            "Top-k p90 üst eşiği",
-                            price_corridor["p90"],
-                            "Benzer kazanılmış ihalelerde fiyatların %90'ının altında kaldığı eşik.",
-                        ],
-                        [
-                            "Top-k dağılım",
-                            price_corridor["std"],
-                            "Benzer ihalelerde fiyatların birbirinden ne kadar ayrıştığını gösterir.",
-                        ],
-                    ],
-                    columns=["Gösterge", "Mayıs 2026 değeri", "Açıklama"],
-                )
-                st.dataframe(
-                    corridor_rows,
-                    hide_index=True,
-                    width="stretch",
-                    column_config={
-                        "Mayıs 2026 değeri": st.column_config.NumberColumn(format="%.2f TL"),
-                    },
-                )
-                st.caption(
-                    "Buradaki üç öneri tek bir modelden gelmez. Düşük fiyat; en benzer 50 ihalenin "
-                    "p25 fiyatı, Linear modelin düşük sınırı ve XGBoost modelin düşük sınırı arasından "
-                    "ortadaki değer seçilerek hesaplanır. Orta fiyat; top-k medyan, Linear tahmin ve "
-                    "XGBoost tahmin arasından ortadaki değerdir. Yüksek fiyat; top-k p75, Linear yüksek "
-                    "sınır ve XGBoost yüksek sınır arasından ortadaki değerdir."
-                )
-                st.markdown(
-                    f'<span class="confidence">Model güveni: {model_confidence}</span>',
-                    unsafe_allow_html=True,
-                )
-                st.caption(
-                    f"Bu analizde model güvenini belirleyen üç merkez değer: benzer ihale medyanı "
-                    f"{format_try(price_corridor['median'])}, Linear tahmin "
-                    f"{format_try(model_predictions['linear'])}, XGBoost tahmin "
-                    f"{format_try(model_predictions['xgboost'])}. Bu değerler birbirinden uzaklaştığında "
-                    "güven düşer; yakınlaştığında güven artar."
-                )
-                st.caption(
-                    f"Tarihsel kazanım fiyat uyumu: {price_fit['label']} ({price_fit['level']}). "
-                    f"Model destekli orta fiyat {format_try(scenario_prices['Orta fiyat'])}; "
-                    f"top-k p25 {format_try(price_corridor['p25'])}, p75 {format_try(price_corridor['p75'])}, "
-                    f"p90 {format_try(price_corridor['p90'])}. {price_fit['explanation']}"
-                )
-                st.markdown("##### Önerilen fiyat seçenekleri")
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            ["Düşük fiyat", scenario_prices["Düşük fiyat"]],
-                            ["Orta fiyat", scenario_prices["Orta fiyat"]],
-                            ["Yüksek fiyat", scenario_prices["Yüksek fiyat"]],
-                        ],
-                        columns=["Seçenek", "Önerilen birim fiyat"],
-                    ),
-                    hide_index=True,
-                    width="stretch",
-                    column_config={
-                        "Önerilen birim fiyat": st.column_config.NumberColumn(format="%.2f TL")
-                    },
-                )
-                st.caption(
-                    f"Bu analizde düşük fiyat {format_try(scenario_prices['Düşük fiyat'])}, "
-                    f"orta fiyat {format_try(scenario_prices['Orta fiyat'])}, "
-                    f"yüksek fiyat {format_try(scenario_prices['Yüksek fiyat'])} olarak oluştu."
-                )
-
-        with section_4:
-            with st.container(border=True):
-                st.markdown(
-                    """
-                    <div class="section-title">3. Maliyet ve Kazanç - Birim Fiyata Göre Kazanç Oranı</div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            ["Düşük fiyat", scenario_prices["Düşük fiyat"], margins["Düşük fiyat"]],
-                            ["Orta fiyat", scenario_prices["Orta fiyat"], margins["Orta fiyat"]],
-                            ["Yüksek fiyat", scenario_prices["Yüksek fiyat"], margins["Yüksek fiyat"]],
-                        ],
-                    columns=["Seçenek", "Birim fiyat", "Birim kazanç %"],
-                ),
-                    hide_index=True,
-                    width="stretch",
-                    column_config={
-                        "Birim fiyat": st.column_config.NumberColumn(format="%.2f TL"),
-                        "Birim kazanç %": st.column_config.NumberColumn(format="%.2f"),
-                    },
-                )
-                st.caption(
-                    f"Birim kazanç oranı, satış fiyatından tahmini birim maliyet çıkarıldıktan sonra "
-                    f"fiyatın yüzde kaçının kazanç olarak kaldığını gösterir. Bu analizde tahmini birim "
-                    f"maliyet {format_try(estimated_unit_cost_try)}."
-                )
-                st.markdown("##### Geçmiş ihalelerde birim kazanç")
-                st.caption(
-                    "Birim kazanç oranı, geçmiş ihalede kazanan fiyat ile iç maliyet arasındaki yüzde ilişkiyi gösterir."
-                )
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            ["Ortalama birim kazanç", margin_benchmark["average"]],
-                            ["Orta birim kazanç", margin_benchmark["median"]],
-                            ["Düşük seviye", margin_benchmark["p25"]],
-                            ["Yüksek seviye", margin_benchmark["p75"]],
-                        ],
-                        columns=["Gösterge", "Değer"],
-                    ),
-                    hide_index=True,
-                    width="stretch",
-                    column_config={"Değer": st.column_config.NumberColumn(format="%.2f")},
-                )
-
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="section-kicker">3. Maliyet ve kazanç</div>
-                <div class="section-title">Yaklaşık Maliyete Göre Geçmiş Teklif Seviyesi</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                """
-                <div class="explain-box">
-                    Kamu ihalelerinde “yaklaşık maliyet”, alıcının ihale öncesi tahmini maliyet seviyesidir.
-                    Bu bölüm, benzer kazanılmış
-                    ihalelerde kazanan fiyatların bu yaklaşık maliyetin ortalama ne kadar altında kaldığını
-                    gösterir. Amaç, geçmişte kazanılan tekliflerin ne kadar agresif veya normal fiyatlandığını okumaktır.
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            cost_cols = st.columns(3, gap="medium")
-            with cost_cols[0]:
-                metric_card(
-                    "Ortalama yaklaşık maliyet altı",
-                    format_pct(discount_benchmark["average"]),
-                    f"Benzer {len(similar)} kazanılmış ihale",
-                )
-            with cost_cols[1]:
-                metric_card(
-                    "Orta yaklaşık maliyet altı",
-                    format_pct(discount_benchmark["median"]),
-                    "Benzer ihalelerin orta seviyesi",
-                )
-            with cost_cols[2]:
-                metric_card(
-                    "Tahmini toplam ihale tutarı",
-                    format_try(scenario_prices["Orta fiyat"] * quantity),
-                    "Birim fiyat x miktar",
-                )
-            st.caption(
-                f"Tahmini toplam ihale tutarı, bu ihalenin yaklaşık parasal büyüklüğünü gösterir. "
-                f"Hesap: model destekli orta birim fiyat ({format_try(scenario_prices['Orta fiyat'])}) "
-                f"x girilen miktar ({int(quantity):,}).".replace(",", ".")
-            )
-
-        profile = success_profile_scores["profile"]
-        st.markdown(
-            """
-            <div class="section-kicker">4. Kazanım profili analizi</div>
-            <div class="section-title">One-Class ve KMeans Profil Modelleri</div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.caption(
-            "Bu bölüm fiyat tahmini yapmaz. Buradaki amaç, yeni ihalenin geçmişte kazanılmış iş tiplerine "
-            "ne kadar benzediğini ve hangi başarı profiline yakın durduğunu göstermektir."
-        )
+    left, right = st.columns([1, 1], gap="medium")
+    with left:
+        section_header("Maskelenmiş Girdi", "Sonuç açılmadan önce görünen alanlar.", "Girdi")
+        safe_preview = pd.DataFrame([masked]).T.reset_index()
+        safe_preview.columns = ["Alan", "Değer"]
+        safe_preview["Değer"] = safe_preview["Değer"].astype(str)
+        st.dataframe(safe_preview, hide_index=True, width="stretch")
+    with right:
+        cluster_text = f"Cluster: {best.get('cluster_id', 'Kazanılmış profil kümesi')}"
+        isolation_text = "Isolation Forest: " + profile_label
         st.markdown(
             f"""
-            <div class="profile-card-grid">
-                <div class="profile-card-panel">
-                    <div class="section-kicker">One-Class modeli</div>
-                    <div class="section-title">Kazanım Profili Yakınlığı</div>
-                    <div class="profile-summary">
-                        <div class="profile-status">{escape(success_profile_scores["one_class_label"])}</div>
-                        <div class="profile-score">{success_profile_scores["one_class_score"]:.0f}/100</div>
-                        <div class="profile-note">Geçmiş kazanım profiline benzerlik</div>
-                    </div>
-                    <span class="method-badge">Yöntem: One-Class / Isolation Forest</span>
-                    <p>
-                        Bu skor, yeni ihalenin geçmişte kazanılmış işlerin genel şekline ne kadar benzediğini gösterir.
-                        Skor yükseldikçe ihale daha tanıdık; skor düştükçe daha sıra dışı görünür.
-                    </p>
+            <div class='glass-card'>
+                <div class='section-title'>Sızıntı ve Profil Durumu</div>
+                <div style='display:flex; flex-wrap:wrap; gap:.5rem; margin:.7rem 0'>
+                    {badge("Sızıntı yok" if audit["audit_status"] == "pass" else "Sızıntı var", "good" if audit["audit_status"] == "pass" else "bad")}
+                    {badge(profile_label, profile_status)}
+                    {badge(cluster_text, "success")}
+                    {badge(isolation_text, profile_status)}
                 </div>
-                <div class="profile-card-panel">
-                    <div class="section-kicker">Kümeleme modeli</div>
-                    <div class="section-title">Başarı Profili</div>
-                    <div class="profile-summary">
-                        <div class="profile-status">En yakın başarı grubu</div>
-                        <div class="profile-score">{escape(success_profile_scores["cluster_label"])}</div>
-                        <div class="profile-note">{escape(profile["name"])}</div>
-                    </div>
-                    <span class="method-badge green">Yöntem: KMeans başarı grupları</span>
-                    <p>
-                        KMeans geçmiş kazanılmış ihaleleri 4 başarı grubuna ayırır. Bu ihale en çok
-                        {escape(profile["name"])} grubuna benziyor. Grup {profile["count"]} ihale içerir;
-                        tipik fiyat {escape(format_try(profile["median_price"]))}, tipik birim kazanç
-                        {escape(format_pct(profile["median_margin"]))}. Eşleşme gücü
-                        {success_profile_scores["cluster_score"]:.0f}/100 olduğu için bu sonuç
-                        {escape(success_profile_scores["cluster_label"].lower())} olarak yorumlanır.
-                    </p>
-                </div>
+                <div class='metric-note'>Gerçek kazanılmış fiyat ve marj bu ekranda gösterilmez.</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="section-kicker">5. Emsal kazanım değerlendirmesi</div>
-                <div class="section-title">Emsal p(win) - Karar Destek Oranı</div>
-                """,
-                unsafe_allow_html=True,
-            )
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Profil ve Sıra Dışılık Analizi", "K-Means ve Isolation Forest sonuçları simülasyonun ana parçasıdır.")
+    left, right = st.columns(2, gap="medium")
+    with left:
+        render_kv_card(
+            "K-Means Profil Ataması",
+            [
+                ("Cluster adı", str(cluster_display)),
+                ("Cluster ID", str(best.get("cluster_id", "Hesaplanamadı"))),
+                ("Geçmiş ihale sayısı", format_int(best.get("cluster_count"))),
+                ("Baskın ürün grubu", str(best.get("cluster_dominant_product_group", "Hesaplanamadı"))),
+                ("Ortalama/medyan fiyat", format_try(best.get("cluster_median_price"))),
+                ("Medyan marj", format_pct(best.get("cluster_median_margin"))),
+            ],
+            "Bu ihale, geçmişte kazanılmış benzer başarı profillerinden biriyle ilişkilendiriliyorsa skor daha okunabilir hale gelir.",
+        )
+    with right:
+        render_kv_card(
+            "Isolation Forest Kontrolü",
+            [
+                ("Durum", profile_label),
+                ("Inlier skoru", format_score(best.get("inlier_score"))),
+                ("Manuel inceleme", "Önerilir" if profile_status == "warn" else "Şu an güçlü sinyal yok"),
+            ],
+            "Bu sonuç kazanma olasılığı değildir; yalnızca ihalenin geçmiş kazanılmış veri dağılımına aykırı görünüp görünmediğini anlatır.",
+        )
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Bu ihaleye benzeyen geçmiş kazanılmış ihaleler", "Bu liste, sistemin yeni ihaleyi hangi geçmiş kazanılmış ihalelerle karşılaştırdığını gösterir. Profil uyumu, fiyat koridoru ve senaryo analizi bu emsal havuzundan beslenir.")
+    similar_display = similar.head(10)[
+        [
+            "tender_id",
+            "product_group",
+            "product_name",
+            "buyer_institution",
+            "region",
+            "quantity",
+            "overall_similarity_score",
+            CANONICAL_PRICE_COLUMN,
+        ]
+    ].copy()
+    similar_display.columns = [
+        "İhale ID",
+        "Ürün grubu",
+        "Ürün adı",
+        "Kurum",
+        "Bölge",
+        "Miktar",
+        "Benzerlik skoru",
+        "Geçmiş kazanılmış fiyat",
+    ]
+    st.dataframe(
+        similar_display,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Benzerlik skoru": st.column_config.ProgressColumn(format="%.3f", min_value=0, max_value=1),
+            "Geçmiş kazanılmış fiyat": st.column_config.NumberColumn(format="%.2f TL"),
+        },
+    )
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Fiyat Koridoru — Emsal İhalelerden Üretilen Fiyat Bandı", "Fiyat koridoru, benzer geçmiş kazanılmış ihalelerde oluşan fiyatlardan üretilir. Bu, sistemin çıktılarından sadece biridir. Ana analiz; emsal benzerlik, profil uyumu, K-Means segmenti, Isolation Forest uygunluğu, risk/güven ve senaryo skoru ile birlikte değerlendirilmelidir.")
+    corridor = result.get("corridor", {}) if result else {}
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        metric_card("Alt bant", format_try(corridor.get("predicted_low_price")), "Daha agresif fiyat seviyesi")
+    with c2:
+        metric_card("Orta bant", format_try(corridor.get("predicted_mid_price")), "Dengeli fiyat seviyesi")
+    with c3:
+        metric_card("Üst bant", format_try(corridor.get("predicted_high_price")), "Daha muhafazakar fiyat seviyesi")
+    with c4:
+        metric_card("Senaryo skoru", format_score(best.get("scenario_score")), "En yüksek sıralı teklif senaryosu")
+
+
+def scenario_name(index: int) -> str:
+    names = ["Muhafazakâr Senaryo", "Dengeli Senaryo", "Agresif Senaryo"]
+    return names[index] if index < len(names) else f"Alternatif Senaryo {index + 1}"
+
+
+def render_scenario_analysis() -> None:
+    page_header(
+        "Senaryo Analizi",
+        "Aday teklif fiyatlarını, beklenen marjı, katkı kârını, riskleri ve senaryo skorunu birlikte görün.",
+        "Senaryo",
+    )
+    result = ensure_scenario_result()
+    if not result:
+        st.info("Önce Test İhalesi Simülatörü sayfasında bir ihale seçin.")
+        return
+    scenarios = result["scenarios"].copy()
+    st.session_state.best_scenario = scenarios.iloc[0].to_dict()
+
+    c1, c2, c3 = st.columns(3, gap="medium")
+    with c1:
+        metric_card("Model Güven Skoru", f"{result['model_confidence_score']:.1f}/100", "Benzer ihale sayısı ve uyumu", "blue", "🛡️")
+    with c2:
+        metric_card("Orta Fiyat", format_try(result["corridor"]["predicted_mid_price"]), "Fiyat koridoru merkezi", "green", "🎯")
+    with c3:
+        metric_card("Geçerli Senaryo", format_int(scenarios["hard_constraints_valid"].sum()), "Sert kuralları geçen", "amber", "✅")
+
+    section_header("Öne Çıkan Senaryolar", "Her kart teklif fiyatı, marj, katkı, risk, kural durumu ve senaryo skorunu birlikte gösterir.", "Senaryo kartları")
+    top_cards = scenarios.head(3).reset_index(drop=True)
+    cols = st.columns(3, gap="medium")
+    card_colors = ["blue", "green", "amber"]
+    for idx, (_, scenario) in enumerate(top_cards.iterrows()):
+        with cols[idx]:
+            status = "good" if bool(scenario["hard_constraints_valid"]) else "bad"
+            contribution = float(scenario["proposed_unit_price"]) * float(current_tender().get("quantity", 0)) * float(scenario["computed_margin_pct"]) / 100
+            risk_value = max(0.0, 100 - float(scenario["risk_penalty_score"]))
+            risk_label = "Düşük" if risk_value >= 75 else "Orta" if risk_value >= 55 else "Yüksek"
             st.markdown(
                 f"""
-                <div class="explain-box">
-                    <b>Emsal p(win): {format_pct(empirical_pwin)}</b><br>
-                    Bu yüzde, “bu ihale geçmişte kazandığımız işlere ve fiyat davranışımıza ne kadar yakın?”
-                    sorusunun özetidir. 100'e yaklaştıkça yeni ihale, geçmiş kazanılmış emsallere daha çok benzer
-                    ve önerilen fiyat geçmiş kazanım bandına daha iyi oturur. Veri setinde kaybedilen ihaleler
-                    olmadığı için bu değer gerçek kazan/kaybet olasılığı değil, emsal bazlı kazanım göstergesidir.
+                <div class="scenario-card scenario-card-{card_colors[idx % len(card_colors)]}">
+                    <div class="scenario-title">{escape(scenario_name(idx))}</div>
+                    <div class="scenario-price">{escape(format_try(scenario["proposed_unit_price"]))}</div>
+                    <div class="metric-note">Önerilen Birim Fiyat</div>
+                    <div style="margin-top:.65rem">
+                    {badge("Kurallara uygun" if scenario["hard_constraints_valid"] else "Kural ihlali", status)}
+                    </div>
+                    <div class="scenario-row"><span>Beklenen Marj</span><b>{escape(format_pct(scenario["computed_margin_pct"]))}</b></div>
+                    <div class="scenario-row"><span>Beklenen Katkı</span><b>{escape(format_try(contribution))}</b></div>
+                    <div class="scenario-row"><span>Risk Seviyesi</span><b>{escape(risk_label)}</b></div>
+                    <div class="scenario-row"><span>Profil Uyumu</span><b>{scenario["won_profile_fit_score"]:.1f}/100</b></div>
+                    <div class="scenario-row"><span>Senaryo Skoru</span><b>{scenario["scenario_score"]:.0f}/100</b></div>
+                    <div class="metric-note">Kısa yorum: fiyat bandı, marj ve risk cezası birlikte okunmalıdır.</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-            pwin_rows = pd.DataFrame(
-                [
-                    [
-                        "Ortalama benzerlik",
-                        "%30",
-                        f"{average_similarity:.2f}",
-                        f"{pwin_similarity_contribution:.1f} puan",
-                        "Yeni ihale, en benzer 50 kazanılmış ihaleye ne kadar benziyor?",
-                    ],
-                    [
-                        "Güçlü emsal oranı",
-                        "%15",
-                        f"{strong_similar_count}/{len(similar)}",
-                        f"{pwin_strong_case_contribution:.1f} puan",
-                        "Top-50 içinde benzerlik skoru 0.70 üstü olan güçlü emsal sayısı.",
-                    ],
-                    [
-                        "Tarihsel fiyat bandı uyumu",
-                        "%25",
-                        price_fit["label"],
-                        f"{pwin_price_fit_contribution:.1f} puan",
-                        "Önerilen orta fiyat, geçmişte kazanılmış benzer fiyatların içinde mi?",
-                    ],
-                    [
-                        "Kazanım profili yakınlığı",
-                        "%15",
-                        f"{success_profile_scores['one_class_label']} ({success_profile_scores['one_class_score']:.0f}/100)",
-                        f"{pwin_one_class_contribution:.1f} puan",
-                        "Yeni ihale, geçmişte kazandığımız işlerin genel şekline benziyor mu?",
-                    ],
-                    [
-                        "Başarı grubu eşleşmesi",
-                        "%15",
-                        success_profile_scores["cluster_label"],
-                        f"{pwin_cluster_contribution:.1f} puan",
-                        "Yeni ihale, geçmiş kazanılmış iş gruplarından hangisine benziyor?",
-                    ],
-                ],
-                columns=[
-                    "Bileşen",
-                    "p(win) içindeki ağırlık",
-                    "Bu analizde sonuç",
-                    "100 üzerinden katkı puanı",
-                    "Ne anlatır?",
-                ],
-            )
-            st.dataframe(
-                pwin_rows,
-                hide_index=True,
-                width="stretch",
-            )
 
-            detail_cols = st.columns(3, gap="medium")
-            with detail_cols[0]:
-                mini_summary(
-                    "One-Class yorumu",
-                    success_profile_scores["one_class_label"],
-                    f"{success_profile_scores['one_class_score']:.0f}/100 profil yakınlığı",
-                )
-                st.caption(
-                    "One-Class / Isolation Forest modeli sadece kazanılmış ihalelerden öğrenir. Skor yüksekse yeni ihale "
-                    "geçmiş kazanım profilimize benzer; skor düşükse bu ihale alışılmış kazanım profilimizin dışında kalır."
-                )
-            with detail_cols[1]:
-                mini_summary(
-                    "Başarı profili",
-                    success_profile_scores["cluster_label"],
-                    profile["name"],
-                )
-                st.caption(
-                    f"Geçmiş kazanılmış ihaleler 4 başarı grubuna ayrılır. Seçilen grup {profile['count']} "
-                    f"ihale içerir; tipik fiyat {format_try(profile['median_price'])}, tipik birim kazanç oranı "
-                    f"{format_pct(profile['median_margin'])}."
-                )
-            with detail_cols[2]:
-                mini_summary(
-                    "Fiyat uyumu",
-                    price_fit["level"],
-                    price_fit["label"],
-                )
-                st.caption(
-                    f"Model destekli orta fiyat {format_try(scenario_prices['Orta fiyat'])}. "
-                    f"Benzer kazanılmış ihalelerde p25 {format_try(price_corridor['p25'])}, "
-                    f"p75 {format_try(price_corridor['p75'])}, p90 {format_try(price_corridor['p90'])}."
-                )
+    table = scenarios[
+        [
+            "scenario_id",
+            "proposed_unit_price",
+            "computed_margin_pct",
+            "won_profile_fit_score",
+            "price_band_fit_score",
+            "margin_score",
+            "risk_penalty_score",
+            "model_confidence_score",
+            "scenario_score",
+            "hard_constraints_valid",
+            "risk_flags",
+        ]
+    ].copy()
+    table.columns = [
+        "Senaryo ID",
+        "Önerilen Birim Fiyat",
+        "Beklenen Marj",
+        "Profil Uyumu",
+        "Fiyat Bandı Uyumu",
+        "Marj Skoru",
+        "Risk Cezası",
+        "Güven Skoru",
+        "Senaryo Skoru",
+        "Sert Kural Durumu",
+        "Yumuşak Ceza / Risk Notları",
+    ]
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    st.dataframe(
+        table,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Önerilen Birim Fiyat": st.column_config.NumberColumn(format="%.2f TL"),
+            "Beklenen Marj": st.column_config.NumberColumn(format="%.2f"),
+            "Senaryo Skoru": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=100),
+        },
+    )
 
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="section-kicker">6. Fırsat önceliği</div>
-                <div class="section-title">İhale Öncelik Puanı</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.plotly_chart(
-                build_gauge(final_attractiveness_score),
-                config={"displayModeBar": False, "staticPlot": True},
-            )
-            st.markdown(
-                f"""
-                <div class="score-card">
-                    <div class="score-value">{final_attractiveness_score:.0f}</div>
-                    <div class="score-label">{final_label}</div>
-                    <p class="metric-note">
-                        Bu puan, ihalenin teklif sürecinde ne kadar öncelikli ele alınabileceğini gösterir.
-                        Fiyat tahmini veya kazanma olasılığı değildir.
-                    </p>
-                    <span class="confidence">Güven: {confidence}</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.caption(
-                f"Bu puan, satış/ihale ekibinin fırsatı önceliklendirmesi için kullanılır. "
-                f"Katkılar: geçmiş emsale benzerlik {similarity_contribution:.1f} puan, "
-                f"birim kazanç sağlığı {margin_contribution:.1f} puan, stratejik uyum "
-                f"{strategic_fit_contribution:.1f} puan, rekabet koşulu "
-                f"{competition_contribution:.1f} puan, teslim süresi "
-                f"{delivery_contribution:.1f} puan. Toplam {final_attractiveness_score:.0f}/100."
-            )
 
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="section-kicker">7. Model kontrolü</div>
-                <div class="section-title">5-Fold Backtest Metrikleri</div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        [
-                            "Linear Regression",
-                            models["linear_residuals"]["mae"],
-                            models["linear_residuals"]["mape"],
-                            models["linear_residuals"]["coverage"],
-                        ],
-                        [
-                            "XGBoost",
-                            models["xgboost_residuals"]["mae"],
-                            models["xgboost_residuals"]["mape"],
-                            models["xgboost_residuals"]["coverage"],
-                        ],
-                    ],
-                    columns=["Model", "MAE", "MAPE %", "Koridor coverage %"],
+def render_reveal_compare() -> None:
+    page_header(
+        "Gerçek Sonuçla Karşılaştır",
+        "Simülasyon sırasında gizlenen gerçek kazanılmış sonuç bu adımda açılır. Amaç yalnızca fiyat koridorunu kontrol etmek değildir; profil uyumu, emsal kalitesi, cluster ataması, sıra dışılık kontrolü ve senaryo sıralaması birlikte değerlendirilir.",
+        "Sonuç Açma",
+    )
+    row = selected_test_tender()
+    result = ensure_scenario_result()
+    if row is None or not result:
+        st.info("Önce test ihalesi seçip senaryo analizini çalıştırın.")
+        return
+
+    if not st.session_state.get("revealed", False):
+        warning_box()
+        info_callout(
+            "Gerçek sonuç açıldığında yalnızca fiyat bandı değil; profil uyumu, emsal kalitesi, cluster ataması, sıra dışılık kontrolü ve senaryo sıralaması da değerlendirilir.",
+            "Reveal sonrası ne değişir?",
+        )
+        st.info("Gerçek kazanılmış fiyat ve marj henüz gizli. Bu bilgi model, senaryo skoru ve AI danışmana verilmedi.")
+        if st.button("Gerçek sonucu aç", type="primary"):
+            st.session_state.revealed = True
+            write_audit_event({"event_type": "actual_result_revealed", "tender_id": row["tender_id"]})
+        return
+
+    actual_price = float(row[CANONICAL_PRICE_COLUMN])
+    actual_margin = float(row[CANONICAL_MARGIN_COLUMN])
+    corridor = result["corridor"]
+    scenarios_with_actual = generate_candidate_scenarios(
+        current_tender(),
+        corridor,
+        include_actual={"actual_won_unit_price": actual_price},
+    )
+    scored = []
+    for scenario in scenarios_with_actual:
+        validation = validate_scenario(scenario, current_tender(), corridor)
+        profile_output = {
+            "won_profile_fit_score": result["scenarios"].iloc[0]["won_profile_fit_score"],
+        }
+        scored.append(score_scenario(scenario, current_tender(), corridor, profile_output, result["model_confidence_score"], validation))
+    scored_df = pd.DataFrame(scored)
+    rank_pct = actual_rank_percentile(scored_df)
+    best = result["scenarios"].iloc[0]
+    inside = corridor["predicted_low_price"] <= actual_price <= corridor["predicted_high_price"]
+    abs_error = abs(actual_price - corridor["predicted_mid_price"])
+    pct_error = abs_error / max(abs(actual_price), 1) * 100
+    tender = current_tender() or {}
+    similar = result.get("similar", pd.DataFrame())
+    quality = retrieval_quality_from_result(result, tender)
+    top10_avg_similarity = float(result.get("top10_avg_similarity", 0.0))
+    top50_avg_similarity = float(result.get("top50_avg_similarity", quality.get("topk_avg_similarity", 0.0)))
+    isolation_status = "Geçmiş profile uygun" if bool(best.get("is_inlier", best.get("won_profile_fit_score", 0) >= 55)) else "Sıra dışı / manuel inceleme önerilir"
+
+    section_header("Profil Uyum Karşılaştırması", "Gerçekten kazanılmış bir test ihalesi için skorun orta veya yüksek çıkması beklenir.")
+    c1, c2, c3 = st.columns(3, gap="medium")
+    with c1:
+        metric_card("Kazanılmış Profil Uyum Skoru", format_score(best.get("won_profile_fit_score")), "Gerçek P-Win değildir")
+    with c2:
+        metric_card("Uyum seviyesi", fit_level(best.get("won_profile_fit_score")), "Geçmiş başarı profiline yakınlık")
+    with c3:
+        metric_card("Model Güveni", format_score(best.get("model_confidence_score")), "Benzer ihale ve veri sinyali")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    left, right = st.columns(2, gap="medium")
+    with left:
+        render_kv_card(
+            "K-Means Profil Karşılaştırması",
+            [
+                ("Atandığı cluster", str(best.get("cluster_name", "Hesaplanamadı"))),
+                ("Cluster ID", str(best.get("cluster_id", "Hesaplanamadı"))),
+                ("Geçmiş ihale sayısı", format_int(best.get("cluster_count"))),
+                ("Baskın ürün grubu", str(best.get("cluster_dominant_product_group", "Hesaplanamadı"))),
+                ("Medyan fiyat", format_try(best.get("cluster_median_price"))),
+                ("Medyan marj", format_pct(best.get("cluster_median_margin"))),
+            ],
+            "Bu cluster, test ihalesinin geçmişte kazanılmış hangi başarı profiline yakın konumlandığını gösterir.",
+        )
+    with right:
+        render_kv_card(
+            "Isolation Forest Karşılaştırması",
+            [
+                ("Durum", isolation_status),
+                ("Inlier skoru", format_score(best.get("inlier_score"))),
+                ("Yorum", "Model bu kazanılmış test ihalesini geçmiş profile uygun tanımış." if isolation_status == "Geçmiş profile uygun" else "Bu ihale kazanılmış olsa bile geçmiş profilden sıra dışı olabilir; manuel inceleme gerekir."),
+            ],
+            "Bu sonuç kazanma olasılığı değildir; geçmiş kazanılmış veri dağılımına uygunluk kontrolüdür.",
+        )
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Emsal İhale Kalitesi", "Sistemin gerçek sonucu açmadan önce seçtiği emsal havuzunun ne kadar tutarlı olduğunu gösterir.")
+    e1, e2, e3, e4 = st.columns(4, gap="medium")
+    with e1:
+        metric_card("Top-10 Ortalama Benzerlik", f"{top10_avg_similarity:.2f}", "En yakın emsal seti")
+    with e2:
+        metric_card("Top-50 Ortalama Benzerlik", f"{top50_avg_similarity:.2f}", "Geniş emsal havuzu")
+    with e3:
+        metric_card("Ürün Grubu Eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Emsal havuzunda aynı ürün grubu")
+    with e4:
+        metric_card("Bölge Eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Emsal havuzunda aynı bölge")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Fiyat Koridoru Karşılaştırması", "Fiyat bandı çıktılardan yalnızca biridir; profil, emsal ve senaryo sinyalleriyle birlikte okunmalıdır.")
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        metric_card("Tahmin düşük", format_try(corridor["predicted_low_price"]), "Koridor alt bandı")
+    with c2:
+        metric_card("Tahmin orta", format_try(corridor["predicted_mid_price"]), "Koridor merkezi")
+    with c3:
+        metric_card("Tahmin yüksek", format_try(corridor["predicted_high_price"]), "Koridor üst bandı")
+    with c4:
+        metric_card("Gerçek kazanılmış fiyat", format_try(actual_price), "Reveal sonrası")
+
+    c5, c6, c7 = st.columns(3, gap="medium")
+    with c5:
+        metric_card("Band içinde mi?", "Evet" if inside else "Hayır", "Gerçek fiyat band kontrolü")
+    with c6:
+        metric_card("Mutlak hata", format_try(abs_error), "Orta fiyata göre")
+    with c7:
+        metric_card("Yüzde hata", format_pct(pct_error), "Orta fiyata göre")
+
+    chart_df = pd.DataFrame(
+        {
+            "Gösterge": ["Düşük", "Orta", "Yüksek", "Gerçek", "Seçilen"],
+            "Birim Fiyat": [
+                corridor["predicted_low_price"],
+                corridor["predicted_mid_price"],
+                corridor["predicted_high_price"],
+                actual_price,
+                float(best["proposed_unit_price"]),
+            ],
+        }
+    )
+    st.bar_chart(chart_df, x="Gösterge", y="Birim Fiyat", color="#2563eb")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Senaryo Sıralaması", "Gerçek kazanılmış senaryonun aday senaryo skorları içindeki konumu.")
+    r1, r2 = st.columns(2, gap="medium")
+    with r1:
+        metric_card("Gerçek kazanılmış senaryo sıralaması", format_pct(rank_pct), "Percentile değeri yükseldikçe daha iyi")
+    with r2:
+        render_small_card("Yorum", scenario_rank_comment(rank_pct))
+
+    comparison = pd.DataFrame(
+        [
+            {
+                "İhale ID": row["tender_id"],
+                "Gerçek Kazanılmış Birim Fiyat": actual_price,
+                "Tahmin Düşük": corridor["predicted_low_price"],
+                "Tahmin Orta": corridor["predicted_mid_price"],
+                "Tahmin Yüksek": corridor["predicted_high_price"],
+                "Band İçinde mi": "Evet" if inside else "Hayır",
+                "Mutlak Hata": abs_error,
+                "Yüzde Hata": pct_error,
+                "Gerçek Marj": actual_margin,
+                "Senaryo Skoru": float(best["scenario_score"]),
+                "Profil Uyum Skoru": float(best.get("won_profile_fit_score", 0)),
+                "Cluster": best.get("cluster_name", "Hesaplanamadı"),
+                "Isolation Forest": isolation_status,
+                "Top-10 Ortalama Benzerlik": top10_avg_similarity,
+                "Gerçek Senaryo Sıralaması": rank_pct,
+            }
+        ]
+    )
+    st.dataframe(comparison, hide_index=True, width="stretch")
+    message = (
+        "Gerçek kazanılmış fiyat, sistemin önerdiği fiyat koridorunun içinde kaldı. "
+        "Bu, fiyat koridorunun bu ihale tipi için geçmiş kazanım davranışını makul şekilde yakaladığını gösterir."
+        if inside
+        else "Gerçek kazanılmış fiyat koridorun dışında kaldı. Bu ihale tipi için manuel fiyat incelemesi önerilir."
+    )
+    st.markdown(f"<div class='info-box'>{escape(message)}</div>", unsafe_allow_html=True)
+    st.download_button("Karşılaştırma CSV indir", dataframe_to_csv_bytes(comparison), "senaryo_karsilastirma.csv")
+
+
+def render_backtest() -> None:
+    page_header(
+        "Backtest Sonuçları",
+        "Test yılındaki ihaleler, gerçek sonucu gizlenerek simüle edilir. Sonra sonuç açılır ve sistem performansı ölçülür.",
+        "Backtest",
+    )
+    data = load_active_data()
+    with st.spinner("Backtest çalışıyor..."):
+        split = temporal_split(data)
+        results = cached_backtest(data)
+    st.session_state.backtest_results = results
+    metrics = price_corridor_metrics(results)
+    opt = optimizer_metrics(results)
+    forbidden_rate = 1 - float((results["advisor_validation_status"] == "pass").mean()) if not results.empty else 0
+    inlier_recall = float((results["won_profile_fit_score"] >= 45).mean()) if not results.empty else 0
+
+    info_callout(
+        "Bu ekran pseudo-live test mantığıyla çalışır: test ihalesinin gerçek kazanılmış fiyatı ve marjı model girdisinden gizlenir, sistem çıktı ürettikten sonra gerçek sonuçla karşılaştırılır.",
+        "Backtest okuma notu:",
+    )
+    info_callout(
+        "Backtest’in amacı kazanma/kaybetme tahmini doğruluğunu ölçmek değildir. Amaç, sistemin geçmişte kazanılmış ama sonucu gizlenmiş ihaleleri geçmiş başarı profillerine doğru yerleştirip yerleştiremediğini ve fiyat/senaryo önerilerinin tarihsel sonuçlarla ne kadar tutarlı olduğunu ölçmektir.",
+        "Backtest amacı:",
+    )
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3, gap="medium")
+    with c1:
+        metric_card("Fiyat Koridoru Kapsama Oranı", format_pct(metrics["band_coverage"] * 100), "Gerçek kazanılmış fiyatların ne kadarı önerilen fiyat bandının içinde kaldı?", "green", "🎯")
+    with c2:
+        metric_card("MAPE", format_pct(metrics["mape"]), "Orta fiyatın gerçek fiyattan ortalama yüzde sapması.", "blue", "📉")
+    with c3:
+        metric_card("Ortalama Koridor Genişliği", format_try(metrics["average_band_width"]), "Bandın ne kadar geniş olduğunu gösterir.", "amber", "↔️")
+
+    c4, c5, c6 = st.columns(3, gap="medium")
+    with c4:
+        metric_card("Coverage Adjusted Band Score", f"{metrics['coverage_adjusted_band_score']:.2f}", "Kapsama oranını band genişliğiyle birlikte değerlendirir.", "purple", "⚖️")
+    with c5:
+        metric_card("Kazanılmış Test İhalelerini Geçmiş Profile Uygun Tanıma Oranı", format_pct(inlier_recall * 100), "Profil modelinin inlier yakalama gücü.", "green", "✅")
+    with c6:
+        metric_card("Yasak İddia Üretme Oranı", format_pct(forbidden_rate * 100), "AI Danışman güvenlik kontrolü. Hedef sıfırdır.", "red", "🛡️")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Baz Model Karşılaştırması", "Mevcut yöntem basit ortalama/medyan ve benzeri baz yaklaşımlarla kıyaslanır.", "Kıyas")
+    baseline = baseline_predictions(pd.concat([split["train"], split["validation"]]), split["test"])
+    baseline = baseline.rename(
+        columns={
+            "Model": "Yöntem",
+            "MAE": "Ortalama Mutlak Hata",
+            "MAPE": "Ortalama Yüzde Hata",
+            "Coverage": "Kapsama",
+            "Avg Band Width": "Ortalama Band Genişliği",
+        }
+    )
+    current_row = pd.DataFrame(
+        [
+            {
+                "Yöntem": "Tender IQ mevcut yöntem",
+                "Ortalama Mutlak Hata": metrics["mae"],
+                "Ortalama Yüzde Hata": metrics["mape"],
+                "Kapsama": metrics["band_coverage"],
+                "Ortalama Band Genişliği": metrics["average_band_width"],
+            }
+        ]
+    )
+    st.dataframe(pd.concat([baseline, current_row], ignore_index=True), hide_index=True, width="stretch")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Segment Bazlı Performans", "Ürün, bölge ve profil kırılımlarında hata ve kapsama değerleri.", "Segment")
+    segment_display = segment_level_metrics(results)
+    if "segment_value" in segment_display.columns:
+        segment_display["segment_value"] = segment_display["segment_value"].astype(str)
+    st.dataframe(segment_display, hide_index=True, width="stretch")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Sızıntı Kontrolü", "Sonuç açılmadan önce gerçek sonuç alanlarının modele girmediği doğrulanır.", "Audit")
+    leak_status = results["leakage_audit_status"].value_counts().reset_index()
+    leak_status.columns = ["Audit durumu", "İhale sayısı"]
+    status = "success" if (results["leakage_audit_status"] == "pass").all() else "danger"
+    st.markdown(
+        f"<div class='glass-card'>{badge('Sızıntı yok' if status == 'success' else 'Sızıntı uyarısı', status)}</div>",
+        unsafe_allow_html=True,
+    )
+    st.dataframe(leak_status, hide_index=True, width="stretch")
+
+    with st.expander("İhale bazlı sonuç detayı", expanded=False):
+        st.dataframe(results, hide_index=True, width="stretch")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Export", "Backtest çıktıları dışa aktarılabilir.", "Rapor")
+    e1, e2, e3 = st.columns(3, gap="medium")
+    with e1:
+        st.download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([metrics])), "backtest_raporu.csv")
+    with e2:
+        st.download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "tender_level_sonuclar.csv")
+    with e3:
+        st.download_button("Leakage Audit", dataframe_to_csv_bytes(leak_status), "leakage_audit.csv")
+
+
+def render_similar_tenders() -> None:
+    page_header(
+        "Benzer İhaleler",
+        "Seçili test ihalesine benzeyen geçmiş kazanılmış ihaleleri ve eşleşme oranlarını gösterir.",
+        "Emsal",
+    )
+    tender = current_tender()
+    if not tender:
+        st.info("Önce Test İhalesi Simülatörü sayfasında bir ihale seçin.")
+        return
+    info_callout(
+        "Benzerlik motoru ürün adı, ürün grubu, kurum, bölge, ihale tipi ve miktar bilgisinden ihale profili oluşturur. TF-IDF bu profili sayısal vektöre çevirir; cosine similarity en yakın geçmiş kazanılmış ihaleleri sıralar.",
+        "TF-IDF + cosine similarity:",
+    )
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    retriever = RetrievalEngine.fit(get_history_frame())
+    similar = retriever.retrieve(tender, top_k=50)
+    quality = retrieval_quality(similar, tender)
+
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        metric_card("Ortalama Benzerlik", f"{quality['topk_avg_similarity']:.2f}", "İlk 50 benzer ihale", "blue", "🔎")
+    with c2:
+        metric_card("Ürün Grubu Eşleşme Oranı", format_pct(quality["product_group_match_rate"] * 100), "Top-K içinde aynı ürün grubu", "green", "🧭")
+    with c3:
+        metric_card("Bölge Eşleşme Oranı", format_pct(quality["region_match_rate"] * 100), "Top-K içinde aynı bölge", "purple", "📍")
+    with c4:
+        metric_card("Miktar Bandı Eşleşme Oranı", format_pct(quality["quantity_band_match_rate"] * 100), "Yakın ölçek oranı", "amber", "📦")
+
+    display = similar[
+        [
+            "tender_id",
+            "product_group",
+            "product_name",
+            "buyer_institution",
+            "region",
+            "quantity",
+            "overall_similarity_score",
+            CANONICAL_PRICE_COLUMN,
+            CANONICAL_MARGIN_COLUMN,
+        ]
+    ].copy()
+    display.columns = [
+        "İhale ID",
+        "Ürün Grubu",
+        "Ürün",
+        "Kurum",
+        "Bölge",
+        "Miktar",
+        "Benzerlik Skoru",
+        "Tarihsel Kazanılmış Fiyat",
+        "Marj",
+    ]
+    section_header("Top-K Benzer İhaleler", "Benzerlik skoru yükseldikçe yeni ihale geçmiş kazanılmış profile daha yakın görünür.", "Emsal liste")
+    st.dataframe(
+        display.head(25),
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Benzerlik Skoru": st.column_config.ProgressColumn(format="%.3f", min_value=0, max_value=1),
+            "Tarihsel Kazanılmış Fiyat": st.column_config.NumberColumn(format="%.2f TL"),
+            "Marj": st.column_config.NumberColumn(format="%.2f"),
+        },
+    )
+
+
+def render_advisor() -> None:
+    page_header(
+        "AI Danışman",
+        "Sistem çıktısını Türkçe ve güvenli şekilde yorumlar. Soru sorabilir, gerekirse deterministik sistem yorumu alabilirsiniz.",
+        "AI Danışman",
+    )
+    warning_box()
+    info_callout(PWIN_PROXY_EXPLANATION, "P-Win yerine ne var?")
+    result = ensure_scenario_result()
+    if not result:
+        st.info("Önce Test İhalesi Simülatörü sayfasında bir ihale seçin.")
+        return
+    best = result["scenarios"].iloc[0].to_dict()
+    context = advisor_context(result, best)
+    advisor = build_fallback_advisor(context)
+    validation = validate_advisor_output(advisor)
+    st.session_state.advisor_output = advisor
+    st.session_state.advisor_validation = validation
+
+    context_signature = json.dumps(
+        {
+            "tender_id": context.get("tender_id"),
+            "scenario_score": round(float(context.get("scenario_score", 0)), 3),
+            "revealed": context.get("revealed", False),
+        },
+        sort_keys=True,
+    )
+    if st.session_state.get("advisor_chat_context_signature") != context_signature:
+        st.session_state.advisor_chat_context_signature = context_signature
+        st.session_state.advisor_chat_messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    "Analiz bağlamı hazır. Bu ihalenin profil uyumunu, fiyat koridorunu, marjını, risklerini "
+                    "ve benzer ihalelerini açıklayabilirim."
                 ),
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    "MAE": st.column_config.NumberColumn(format="%.2f TL"),
-                    "MAPE %": st.column_config.NumberColumn(format="%.2f"),
-                    "Koridor coverage %": st.column_config.NumberColumn(format="%.1f"),
-                },
-            )
-            st.caption(
-                "MAE ortalama TL hatasını, MAPE ortalama yüzde hatayı, coverage ise geçmiş testlerde "
-                "gerçek fiyatın model hata payı koridoruna düşme oranını gösterir."
-            )
+            }
+        ]
 
+    quick_questions = [
+        "Bu ihale neden bu skoru aldı?",
+        "Benzer ihaleler ne söylüyor?",
+        "Fiyat koridoru nasıl yorumlanmalı?",
+        "Riskli görünen noktalar neler?",
+        "Manuel inceleme gerekir mi?",
+        "Bu ihale hangi cluster’a benziyor?",
+        "Isolation Forest sonucu ne demek?",
+    ]
+
+    left, right = st.columns([0.9, 1.55], gap="large")
+    with left:
+        section_header("Bağlam Paneli", "Danışman yalnızca bu yapılandırılmış çıktıları yorumlar.", "Güvenli bağlam")
+        corridor = context.get("corridor", {})
+        risk_flags = context.get("risk_flags", [])
+        risk_status = "Uyarı var" if risk_flags else "Düşük"
+        leak = st.session_state.get("leakage_audit", {"audit_status": "pass"})
+        context_rows = [
+            ("Seçili ihale", str(context.get("tender_id", "-"))),
+            ("Ürün grubu", str(context.get("product_group", "-"))),
+            ("Profil uyumu", f"{context.get('won_profile_fit_score', 0):.1f}/100"),
+            ("Fiyat koridoru", f"{format_try(corridor.get('predicted_low_price'))} - {format_try(corridor.get('predicted_high_price'))}"),
+            ("Risk seviyesi", risk_status),
+            ("Model güveni", f"{context.get('model_confidence_score', 0):.1f}/100"),
+            ("Cluster", str(context.get("cluster_name", "Kazanılmış profil kümesi"))),
+        ]
+        rows_html = "".join(
+            f"<div class='scenario-row'><span>{escape(label)}</span><b>{escape(value)}</b></div>"
+            for label, value in context_rows
+        )
+        st.markdown(
+            f"""
+            <div class='glass-card'>
+                <div class='section-title'>Seçili ihale bağlamı</div>
+                <div class='metric-note'>Bu panel dışındaki bilgi danışman yanıtına dayanak yapılmaz.</div>
+                {rows_html}
+                <div style='margin-top:.85rem'>{badge("Sızıntı yok" if leak.get("audit_status") == "pass" else "Sızıntı uyarısı", "success" if leak.get("audit_status") == "pass" else "danger")}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with right:
         with st.container(border=True):
             st.markdown(
                 """
-                <div class="section-kicker">8. Kısa açıklama</div>
-                <div class="section-title">Bu Sonuç Ne Anlama Geliyor?</div>
+                <div class='chat-shell'>
+                    <div class='chat-header'>
+                        <div class='chat-avatar'>AI</div>
+                        <div>
+                            <div class='chat-header-title'>AI Danışman</div>
+                            <div class='chat-header-subtitle'>Model çıktıları üzerinden güvenli açıklama üretir. Gerçek kazanma olasılığı vermez.</div>
+                        </div>
+                    </div>
+                </div>
                 """,
                 unsafe_allow_html=True,
             )
-            model_note = (
-                "Model tahminleri benzer ihale medyanıyla uyumlu görünüyor."
-                if model_confidence == "Yüksek"
-                else "Model tahminleri ile benzer ihale medyanı ayrışıyor; manuel inceleme önerilir."
-                if model_confidence == "Düşük"
-                else "Model tahminleri ve benzer ihale koridoru orta seviyede uyumlu."
-            )
-            corridor_calculation_note = (
-                f"Düşük fiyat hesabında üç değer karşılaştırıldı: top-k p25 "
-                f"({format_try(price_corridor['p25'])}), Linear düşük sınır "
-                f"({format_try(model_corridor['linear_low'])}) ve XGBoost düşük sınır "
-                f"({format_try(model_corridor['xgboost_low'])}). Bu üç değerin ortadaki değeri "
-                f"{format_try(scenario_prices['Düşük fiyat'])} olduğu için nihai düşük fiyat bu oldu. "
-                f"Orta fiyat hesabında top-k medyan ({format_try(price_corridor['median'])}), "
-                f"Linear tahmin ({format_try(model_predictions['linear'])}) ve XGBoost tahmin "
-                f"({format_try(model_predictions['xgboost'])}) karşılaştırıldı. Ortadaki değer "
-                f"{format_try(scenario_prices['Orta fiyat'])} olduğu için nihai orta fiyat bu oldu. "
-                f"Yüksek fiyat hesabında top-k p75 ({format_try(price_corridor['p75'])}), "
-                f"Linear yüksek sınır ({format_try(model_corridor['linear_high'])}) ve XGBoost yüksek sınır "
-                f"({format_try(model_corridor['xgboost_high'])}) karşılaştırıldı. Ortadaki değer "
-                f"{format_try(scenario_prices['Yüksek fiyat'])} olduğu için nihai yüksek fiyat bu oldu."
-            )
-            explanation = (
-                f"Emsal p(win) {format_pct(empirical_pwin)}. Bu oran; ortalama benzerlik "
-                f"{average_similarity:.2f}, güçlü emsal sayısı {strong_similar_count}/{len(similar)}, "
-                f"fiyat uyumu {price_fit['label'].lower()}, kazanım profili yakınlığı "
-                f"{success_profile_scores['one_class_score']:.0f}/100 ve başarı profili yakınlığı "
-                f"{success_profile_scores['cluster_score']:.0f}/100 sinyallerinden oluşur. "
-                f"{len(similar)} benzer kazanılmış ihale bulundu. Güven seviyesi {confidence.lower()}. "
-                f"Benzer ihale medyanı, en benzer 50 geçmiş ihalenin orta fiyatıdır ve bu analizde "
-                f"{format_try(price_corridor['median'])}. Linear Regression modeli aynı ihale için "
-                f"{format_try(model_predictions['linear'])} tahmin etti; bu model daha basit ve açıklanabilir "
-                f"bir fiyat referansı verir. XGBoost modeli {format_try(model_predictions['xgboost'])} tahmin etti; "
-                f"bu model ürün, bölge, miktar ve usul gibi değişkenlerin kombinasyon etkilerini yakalamaya çalışır. "
-                f"Cluster analizi bu ihaleyi '{success_profile_scores['profile']['name']}' tipindeki geçmiş başarı "
-                f"profiline en yakın buldu. One-Class model ise ihalenin genel kazanım profiline "
-                f"{success_profile_scores['one_class_label'].lower()} olduğunu gösterdi. "
-                f"Bu üç kaynak birlikte değerlendirildiğinde model destekli orta fiyat "
-                f"{format_try(scenario_prices['Orta fiyat'])} oldu. Girilen "
-                f"{format_try(estimated_unit_cost_try)} birim maliyete göre orta fiyat birim kazanç oranı "
-                f"{format_pct(balanced_margin)}. İhale puanı {final_attractiveness_score:.0f}/100 ve sonuç "
-                f"{final_label}. {model_note} {corridor_calculation_note}"
-            )
-            st.markdown(f'<div class="explain-box">{explanation}</div>', unsafe_allow_html=True)
-with llm_tab:
-    latest_llm_context = st.session_state.get("latest_llm_context")
-    if not latest_llm_context:
-        st.info("LLM yorumu için önce Analiz tabında ihale bilgilerini girip Analiz Et'e tıklayın.")
-    else:
-        render_llm_chatbot(latest_llm_context)
+            st.markdown("<div class='chat-input-area quick-question'>", unsafe_allow_html=True)
+            qcols = st.columns(3, gap="small")
+            selected_question = None
+            for idx, question in enumerate(quick_questions):
+                with qcols[idx % 3]:
+                    if st.button(question, key=f"quick_advisor_{idx}", width="stretch"):
+                        selected_question = question
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            st.markdown("<div class='chat-body'>", unsafe_allow_html=True)
+            for message in st.session_state.get("advisor_chat_messages", []):
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        typed_question = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
+        user_question = selected_question or typed_question
+        if user_question:
+            st.session_state.advisor_chat_messages.append({"role": "user", "content": user_question})
+            with st.spinner("Yanıt hazırlanıyor..."):
+                llm_payload = call_guarded_llm(context, user_question)
+                if llm_payload:
+                    assistant_text = advisor_payload_to_chat_text(llm_payload)
+                    st.session_state.advisor_output = llm_payload
+                    st.session_state.advisor_validation = validate_advisor_output(llm_payload)
+                else:
+                    assistant_text = fallback_chat_answer(user_question, context, advisor)
+                    st.session_state.advisor_validation = validation
+            st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text})
+            st.rerun()
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
+        st.markdown(f"**Özet:** {advisor['summary']}")
+        st.markdown(f"**Profil uyumu:** {advisor['profile_fit_explanation']}")
+        st.markdown(f"**Fiyat koridoru:** {advisor['price_corridor_explanation']}")
+        st.markdown(f"**Risk:** {advisor['risk_explanation']}")
+        st.json(st.session_state.get("advisor_validation", validation))
+        safe_context = dict(context)
+        if not safe_context.get("revealed"):
+            safe_context.pop("revealed_actual", None)
+        st.json(safe_context, expanded=False)
+
+
+def render_reports() -> None:
+    page_header(
+        "Raporlar ve Kontroller",
+        "Backtest, senaryo, sızıntı kontrolü, segment metrikleri, expert review ve model card çıktıları.",
+        "Rapor",
+    )
+    results = st.session_state.get("backtest_results")
+    if results is None:
+        with st.spinner("Raporlar için backtest hazırlanıyor..."):
+            results = cached_backtest(load_active_data())
+            st.session_state.backtest_results = results
+    segment = segment_level_metrics(results)
+    if "segment_value" in segment.columns:
+        segment["segment_value"] = segment["segment_value"].astype(str)
+    model_card = generate_model_card(price_corridor_metrics(results))
+    advisor_validation = st.session_state.get("advisor_validation", {"advisor_validation_status": "henüz çalışmadı"})
+    leakage_ok = bool((results["leakage_audit_status"] == "pass").all())
+    advisor_ok = advisor_validation.get("advisor_validation_status") in {"pass", "geçti", "henüz çalışmadı"}
+    hard_violation_rate = float((~results["hard_constraints_valid"].astype(bool)).mean() * 100)
+    audit_cards = [
+        (
+            "Leakage Audit",
+            "Sızıntı kontrolü",
+            "Sonuç açılmadan önce gerçek kazanılmış fiyat, final tutar ve gerçek marj alanlarının modele girmediğini kontrol eder.",
+            "Sızıntı yok" if leakage_ok else "Uyarı",
+            "success" if leakage_ok else "danger",
+        ),
+        (
+            "Forbidden Claim Detector",
+            "Yasak iddia kontrolü",
+            "AI Danışman çıktısında garanti, kesin sonuç veya gerçek P(win) iddiası olup olmadığını denetler.",
+            "Geçti" if advisor_ok else "Uyarı",
+            "success" if advisor_ok else "danger",
+        ),
+        (
+            "Advisor Validation",
+            "Danışman doğrulama",
+            "Yanıtların yapılandırılmış bağlama ve guardrail kurallarına uyduğunu izler.",
+            str(advisor_validation.get("advisor_validation_status", "henüz çalışmadı")),
+            "success" if advisor_ok else "warning",
+        ),
+        (
+            "Hard Constraint Check",
+            "Sert kural kontrolü",
+            "Minimum marj ve kural ihlali gibi geçersiz senaryo durumlarını raporlar.",
+            format_pct(hard_violation_rate),
+            "success" if hard_violation_rate == 0 else "warning",
+        ),
+        (
+            "Export Status",
+            "Dışa aktarım",
+            "Backtest, tender-level sonuç, senaryo, audit, model card ve expert review çıktıları hazırlanır.",
+            "Hazır",
+            "success",
+        ),
+    ]
+    for start in range(0, len(audit_cards), 3):
+        columns = st.columns(3, gap="medium")
+        for offset, (title, tr_title, body, status_text, status) in enumerate(audit_cards[start : start + 3]):
+            idx = start + offset
+            color = ["blue", "green", "purple", "amber", "cyan"][idx % 5]
+            with columns[offset]:
+                st.markdown(
+                    f"""
+                    <div class='model-card model-card-{color}'>
+                        <div class='model-title'>{escape(tr_title)}</div>
+                        <div class='method-body'>{escape(body)}</div>
+                        <div style='margin-top:.75rem'>{badge(status_text, status)}</div>
+                        <div class='metric-note'>Son çalışma: oturum içi son hesaplama</div>
+                        <div class='metric-note'>{escape(title)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Export Grupları", "Rapor ve denetim çıktıları.", "Dışa aktar")
+    c1, c2, c3 = st.columns(3, gap="medium")
+    with c1:
+        st.download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([price_corridor_metrics(results)])), "backtest_ozeti.csv")
+        st.download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "ihale_bazli_sonuclar.csv")
+    with c2:
+        scenario_result = st.session_state.get("scenario_result", {}).get("scenarios", pd.DataFrame())
+        if isinstance(scenario_result, pd.DataFrame) and not scenario_result.empty:
+            st.download_button("Senaryo Karşılaştırması", dataframe_to_csv_bytes(scenario_result), "senaryo_karsilastirma.csv")
+        st.download_button("Leakage Audit", dataframe_to_csv_bytes(results[["tender_id", "leakage_audit_status"]]), "leakage_audit.csv")
+    with c3:
+        st.download_button("Model Card", model_card, "model_karti.md")
+        st.download_button("Expert Review Template", dataframe_to_csv_bytes(expert_review_template(results)), "uzman_inceleme_sablonu.csv")
+    with st.expander("Segment metrikleri ve audit tablo detayı", expanded=False):
+        st.dataframe(segment, hide_index=True, width="stretch")
+
+
+page = render_sidebar()
+
+if page == "Ana Sayfa":
+    render_home()
+elif page == "Veri Seti ve Kalite Kontrol":
+    render_data_quality()
+elif page == "Metodoloji":
+    render_methodology()
+elif page == "Test İhalesi Simülatörü":
+    render_test_simulator()
+elif page == "Senaryo Analizi":
+    render_scenario_analysis()
+elif page == "Gerçek Sonuçla Karşılaştır":
+    render_reveal_compare()
+elif page == "Backtest Sonuçları":
+    render_backtest()
+elif page == "Benzer İhaleler":
+    render_similar_tenders()
+elif page == "AI Danışman":
+    render_advisor()
+elif page == "Raporlar ve Kontroller":
+    render_reports()

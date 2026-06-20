@@ -1,0 +1,17 @@
+app:
+  name: Tender IQ Agentic Bid Advisor
+  language: tr
+  default_top_k: 50
+
+scenario_scoring:
+  won_profile_fit_score: 0.30
+  price_band_fit_score: 0.25
+  margin_score: 0.20
+  model_confidence_score: 0.15
+  risk_penalty_score: -0.10
+
+backtest:
+  train_end_year: 2023
+  validation_year: 2024
+  test_year: 2025
+
