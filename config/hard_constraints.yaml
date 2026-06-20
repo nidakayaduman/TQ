@@ -1,7 +1,10 @@
 minimum_margin_pct: 8.0
 minimum_delivery_months: 3
+maximum_delivery_months: 36
 allow_product_alternative_default: false
 max_deviation_above_historical_p90_pct: 30.0
+minimum_quantity: 1
+minimum_unit_cost: 0.01
 required_fields:
   - product_name
   - product_group
@@ -11,4 +14,3 @@ required_fields:
   - quantity
   - delivery_months
   - estimated_unit_cost
-

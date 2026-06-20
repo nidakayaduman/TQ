@@ -18,7 +18,7 @@ Kritik bağlam:
 - Veri sadece geçmişte kazanılmış ihalelerden oluşur; kaybedilen ihale yoktur.
 - Bu nedenle gerçek kazan/kaybet olasılığı, supervised classification veya rakip bazlı kazanma tahmini yapılamaz.
 - Ana gösterge gerçek kazanma olasılığı değildir; "bu yeni ihale geçmişte kazandığımız işlere, fiyat bandımıza ve başarı profillerimize ne kadar benziyor?" sorusunun emsal bazlı karar destek göstergesidir.
-- Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, normalize fiyat koridoru, Linear Regression Baseline, Random Forest Baseline, Cost Plus Margin referansı, Isolation Forest kazanım profili yakınlığı, K-Means başarı profili eşleşmesi ve senaryo skoru.
+- Kazanılmış verilerden şunlar yapılabildi: benzer ihale retrieval, normalize fiyat koridoru, Linear Regression Baseline, Random Forest / Ağaç Tabanlı Baseline, Cost Plus Margin referansı, Isolation Forest kazanım profili yakınlığı, K-Means başarı profili eşleşmesi ve senaryo skoru.
 - Verilmeyen bilgiyi uydurma, sayısal değerleri değiştirme, sadece MODEL_CONTEXT_JSON içeriğine dayan.
 - {DISCLAIMER}
 

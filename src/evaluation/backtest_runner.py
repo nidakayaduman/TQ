@@ -14,6 +14,7 @@ from ..confidence import confidence_from_similarity_and_count
 from ..constants import CANONICAL_MARGIN_COLUMN, CANONICAL_PRICE_COLUMN
 from ..feature_masking import mask_actual_result_fields
 from ..leakage_audit import audit_pre_reveal_input
+from ..model_version import MODEL_VERSION
 from ..optimizer.scenario_generator import generate_candidate_scenarios
 from ..optimizer.scenario_scorer import score_scenario
 from ..optimizer.scenario_validator import validate_scenario
@@ -130,10 +131,12 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
                 "advisor_validation_status": advisor_validation["advisor_validation_status"],
                 "risk_flags": "; ".join(best["risk_flags"]),
                 "hard_constraints_valid": bool(best["hard_constraints_valid"]),
+                "invalid_reason": best.get("invalid_reason", ""),
                 "retrieval_product_group_match_rate": retrieval["product_group_match_rate"],
                 "retrieval_region_match_rate": retrieval["region_match_rate"],
                 "retrieval_quantity_band_match_rate": retrieval["quantity_band_match_rate"],
                 "soft_penalty_score": best["soft_penalty_score"],
+                **MODEL_VERSION,
             }
         )
     output = pd.DataFrame(rows)

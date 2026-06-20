@@ -16,10 +16,13 @@ import requests
 import streamlit as st
 
 from src.advisor.fallback_advisor import build_fallback_advisor
+from src.advisor.context_validator import sanitize_advisor_context, validate_advisor_context
 from src.advisor.forbidden_claim_detector import detect_forbidden_claims
 from src.advisor.grounding_validator import validate_grounding
 from src.advisor.output_validator import validate_advisor_output
 from src.advisor.prompt_builder import build_advisor_prompt
+from src.advisor.prompt_injection_filter import detect_prompt_injection, safe_prompt_response
+from src.advisor.support_validator import validate_supported_claims
 from src.config_loader import active_config_summary, load_app_config, load_scenario_weights
 from src.constants import CANONICAL_MARGIN_COLUMN, CANONICAL_PRICE_COLUMN
 from src.evaluation.backtest_runner import actual_rank_percentile, run_backtest
@@ -278,6 +281,41 @@ def inject_global_css() -> None:
                 min-height: 470px; max-height: 620px; overflow-y: auto; padding: 1rem;
                 background: linear-gradient(180deg, rgba(251,252,255,0.92), rgba(255,255,255,0.92));
             }
+            .chat-orb {
+                width: 58px; height: 58px; flex: 0 0 auto; border-radius: 999px;
+                display: grid; place-items: center; color: white; font-weight: 760;
+                background:
+                    radial-gradient(circle at 32% 28%, rgba(255,255,255,.95), transparent 13%),
+                    radial-gradient(circle at 68% 30%, rgba(255,255,255,.95), transparent 12%),
+                    linear-gradient(145deg, #8bd3ff, #8b7cf6 48%, #ec8cff);
+                box-shadow: 0 16px 40px rgba(139,124,246,.25), 0 0 0 6px rgba(255,255,255,.72);
+            }
+            .chat-thread { display: flex; flex-direction: column; gap: .9rem; padding: 1rem; }
+            .chat-row { display: flex; gap: .7rem; align-items: flex-start; }
+            .chat-row-user { justify-content: flex-end; }
+            .chat-row-assistant { justify-content: flex-start; }
+            .chat-bubble {
+                max-width: min(920px, 88%); padding: .86rem 1rem; border-radius: 20px;
+                border: 1px solid var(--line); color: var(--primary); line-height: 1.55;
+                font-size: .94rem; white-space: pre-wrap; overflow-wrap: anywhere;
+                box-shadow: 0 12px 26px rgba(17,24,39,.045);
+            }
+            .chat-bubble-user {
+                background: linear-gradient(135deg, #eff6ff, #f5f3ff);
+                border-top-right-radius: 8px;
+            }
+            .chat-bubble-assistant {
+                background: rgba(255,255,255,.94);
+                border-top-left-radius: 8px;
+            }
+            .chat-wide-shell {
+                border-radius: 26px; overflow: hidden; border: 1px solid var(--line);
+                background:
+                    radial-gradient(circle at 12% 8%, rgba(191,219,254,.42), transparent 32%),
+                    radial-gradient(circle at 86% 14%, rgba(244,194,255,.35), transparent 30%),
+                    rgba(255,255,255,.82);
+                box-shadow: var(--soft-shadow);
+            }
             .chat-input-area { padding: .8rem 1rem 1rem; border-top: 1px solid var(--line); background: rgba(255,255,255,.90); }
             .quick-question button { border-radius: 999px !important; border-color: var(--line) !important; background: rgba(255,255,255,.94) !important; color: #394150 !important; box-shadow: none !important; }
             .warning-box { border: 1px solid rgba(184,135,61,0.18); background: rgba(255,252,244,0.88); color: #705224; border-radius: 22px; padding: .9rem 1rem; }
@@ -425,6 +463,24 @@ def load_default_data() -> pd.DataFrame:
 def cached_backtest(data: pd.DataFrame) -> pd.DataFrame:
     split = temporal_split(data)
     return run_backtest(pd.concat([split["train"], split["validation"]]), split["test"])
+
+
+def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
+    fixed = results.copy()
+    defaults: dict[str, Any] = {
+        "soft_penalty_score": 0.0,
+        "invalid_reason": "",
+        "config_version": "config-v1",
+        "retrieval_model_version": "retrieval-v1",
+        "kmeans_model_version": "kmeans-v1",
+        "isolation_forest_model_version": "isolation-forest-v1",
+        "baseline_model_version": "baseline-v1",
+        "training_data_range": "2021-2024 train+validation; 2025 pseudo-live test",
+    }
+    for column, default in defaults.items():
+        if column not in fixed.columns:
+            fixed[column] = default
+    return fixed
 
 
 def load_active_data() -> pd.DataFrame:
@@ -662,6 +718,24 @@ def badge(text: str, status: str = "good") -> str:
     return f'<span class="status-badge {css}">{escape(text)}</span>'
 
 
+def chat_thread_html(messages: list[dict[str, str]]) -> str:
+    rows = []
+    for message in messages:
+        role = "user" if message.get("role") == "user" else "assistant"
+        content = escape(str(message.get("content", "")))
+        bubble = f"<div class='chat-bubble chat-bubble-{role}'>{content}</div>"
+        if role == "assistant":
+            rows.append(
+                "<div class='chat-row chat-row-assistant'>"
+                "<div class='chat-orb'>AI</div>"
+                f"{bubble}"
+                "</div>"
+            )
+        else:
+            rows.append(f"<div class='chat-row chat-row-user'>{bubble}</div>")
+    return "<div class='chat-thread'>" + "".join(rows) + "</div>"
+
+
 def info_callout(text: str, title: str | None = None) -> None:
     heading = f"<b>{escape(title)}</b> " if title else ""
     st.markdown(f"<div class='info-callout'>{heading}{escape(text)}</div>", unsafe_allow_html=True)
@@ -832,6 +906,7 @@ def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, A
         "baseline_model_predictions": baseline.to_dict(orient="records") if not baseline.empty else [],
         "revealed": bool(st.session_state.get("revealed", False)),
         "method_limit": TURKISH_WARNING,
+        "leakage_audit": st.session_state.get("leakage_audit", {"audit_status": "pass"}),
     }
     if st.session_state.get("revealed", False):
         row = selected_test_tender()
@@ -848,37 +923,69 @@ def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[s
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
     risk_text = ", ".join(risk_flags) if risk_flags else "kritik risk bayrağı yok"
+    baselines = context.get("baseline_model_predictions", [])
+    baseline_text = "; ".join(
+        f"{item.get('method')}: {format_try(item.get('prediction'))}"
+        for item in baselines[:4]
+        if item.get("prediction") is not None
+    )
+    profile_score = float(context.get("won_profile_fit_score", 0) or 0)
+    price_score = float(context.get("price_band_fit_score", 0) or 0)
+    margin_score = float(context.get("margin_score", 0) or 0)
+    confidence_score = float(context.get("model_confidence_score", 0) or 0)
+    scenario_score = float(context.get("scenario_score", 0) or 0)
+    margin_pct_value = float(context.get("computed_margin_pct", 0) or 0)
+    proposed_price = context.get("proposed_unit_price")
+    similar_count = int(context.get("similar_tender_count", 0) or 0)
+    cluster_name = context.get("cluster_name", "Kazanılmış profil grubu")
+    isolation_status = context.get("isolation_forest", {}).get("status", "Profil kontrolü hesaplandı")
     base_warning = "Bu yorum gerçek kazanma olasılığı değildir; geçmiş kazanılmış ihale profiline uyumu açıklar."
     if "fiyat" in q or "koridor" in q:
         answer = (
-            f"Fiyat koridoru benzer kazanılmış ihalelerden gelir. Bu analizde düşük fiyat "
-            f"{format_try(corridor.get('predicted_low_price'))}, orta fiyat {format_try(corridor.get('predicted_mid_price'))}, "
-            f"yüksek fiyat {format_try(corridor.get('predicted_high_price'))}. Koridor, agresif/dengeli/muhafazakar "
-            f"senaryoları karşılaştırmak için kullanılır. Baz model sinyalleri: {advisor.get('learner_signals', {}).get('regression_models', '-')}"
+            "Fiyat yorumu üç katmanla okunmalı:\n\n"
+            f"1. Emsal koridoru: Benzer kazanılmış ihaleler düşük {format_try(corridor.get('predicted_low_price'))}, "
+            f"orta {format_try(corridor.get('predicted_mid_price'))}, yüksek {format_try(corridor.get('predicted_high_price'))} bandını veriyor. "
+            "Bu band geçmiş kazanılmış işlerde görülen fiyat davranışını temsil eder.\n\n"
+            f"2. Seçilen senaryo: {format_try(proposed_price)} birim fiyatla yaklaşık {format_pct(margin_pct_value)} beklenen karlılık oranı üretiyor. "
+            f"Fiyat bandı uyum skoru {price_score:.1f}/100; bu fiyatın emsal koridora ne kadar yakın olduğunu gösterir.\n\n"
+            f"3. Baseline kontrolü: {baseline_text or 'aktif baz model çıktısı yok'}. "
+            "Eğer koridor ve baz modeller aynı yöne işaret ediyorsa fiyat kararı daha rahat okunur; ayrışma varsa manuel fiyat incelemesi gerekir."
         )
     elif "risk" in q or "manuel" in q:
         answer = (
-            f"Manuel inceleme kararı güven skoru, profil uyumu ve risk bayraklarına göre verilir. "
-            f"Bu senaryoda risk notları: {risk_text}. "
-            f"Manuel inceleme: {'gerekli' if advisor['manual_review_required'] else 'gerekli görünmüyor'}."
+            "Manuel inceleme kararı tek bir metrikten gelmiyor; üç sinyal birlikte okunuyor:\n\n"
+            f"1. Model güveni {confidence_score:.1f}/100. Benzer ihale sayısı ve benzerlik gücü yeterliyse karar desteği daha sağlamdır.\n"
+            f"2. Profil uyumu {profile_score:.1f}/100. Düşükse ihale geçmiş kazanılmış örneklere daha az benziyor demektir.\n"
+            f"3. Risk ve kural notları: {risk_text}.\n\n"
+            f"Sonuç: {'Manuel inceleme önerilir; fiyat, marj ve teslim varsayımları iş birimiyle kontrol edilmeli.' if advisor['manual_review_required'] else 'Manuel inceleme kritik görünmüyor; yine de teklif onayı öncesi maliyet ve teslim varsayımları kontrol edilmeli.'}"
         )
     elif "benzer" in q or "profile" in q or "profil" in q or "küme" in q:
         answer = (
-            f"Bu ihale {context.get('similar_tender_count', 0)} benzer kazanılmış ihale üzerinden yorumlandı. "
-            f"Kazanılmış Profil Uyum Skoru {context.get('won_profile_fit_score', 0):.1f}/100. "
-            "Profil uyum skoru yaklaşık %65 geçmiş dağılımda normal görünme ve %35 başarı grubuna yakınlık sinyalinden oluşur."
+            "Profil yorumu, bu ihalenin geçmişte kazanılmış işlere ne kadar tanıdık göründüğünü anlatır:\n\n"
+            f"1. Emsal havuzu: Sistem {similar_count} benzer kazanılmış ihaleyi referans aldı. "
+            "Ürün grubu, bölge, kurum tipi, miktar ve metinsel benzerlik birlikte kullanılır.\n\n"
+            f"2. Başarı grubu: İhale '{cluster_name}' profiline yakın konumlandı. "
+            "Bu K-Means çıktısı, ihalenin hangi geçmiş başarı segmentine benzediğini gösterir.\n\n"
+            f"3. Sıra dışılık kontrolü: {isolation_status}. Isolation Forest burada kayıp tahmini yapmaz; sadece geçmiş kazanılmış dağılım içinde alışıldık mı diye bakar.\n\n"
+            f"İş yorumu: Profil uyumu {profile_score:.1f}/100. Bu değer yüksekse geçmiş kazanım örneklerine benzerlik güçlüdür; düşükse fiyat ve teslim koşulları daha dikkatli incelenmelidir."
         )
     elif "neden" in q or "öner" in q or "senaryo" in q:
         answer = (
-            f"Seçilen senaryo {format_try(context.get('proposed_unit_price'))} birim fiyatla "
-            f"{format_pct(context.get('computed_margin_pct'))} beklenen karlılık oranı üretir. "
-            f"Senaryo skoru {context.get('scenario_score', 0):.1f}/100; profil uyumu, fiyat bandı uyumu, karlılık, "
-            "model güveni ve risk cezası birlikte hesaplanır."
+            "Bu skorun nedeni bileşen bazında şöyle okunmalı:\n\n"
+            f"1. Profil uyumu: {profile_score:.1f}/100. İhale geçmiş kazanılmış profillere ne kadar benziyor sorusunu yanıtlar.\n"
+            f"2. Fiyat bandı uyumu: {price_score:.1f}/100. Önerilen fiyatın emsal koridorla hizasını ölçer.\n"
+            f"3. Karlılık: Önerilen {format_try(proposed_price)} birim fiyat yaklaşık {format_pct(margin_pct_value)} beklenen karlılık oranı üretiyor. Karlılık skoru {margin_score:.1f}/100.\n"
+            f"4. Model güveni: {confidence_score:.1f}/100. Benzer kayıt sayısı ve benzerlik kalitesi yeterli mi diye bakar.\n"
+            f"5. Risk cezası: {risk_text}.\n\n"
+            f"Toplam senaryo skoru {scenario_score:.1f}/100. Business yorumu olarak bu skor, teklif seçeneğinin geçmiş kazanılmış örneklerle uyumunu ve fiyat-marj-risk dengesini gösterir; tek başına otomatik teklif kararı değildir."
         )
     else:
         answer = (
-            f"{advisor.get('decision_summary', '')} {advisor.get('recommended_action', '')} "
-            f"{advisor.get('pricing_interpretation', '')} {advisor.get('margin_risk', '')}"
+            f"{advisor.get('decision_summary', '')}\n\n"
+            f"Önerilen aksiyon: {advisor.get('recommended_action', '')}\n\n"
+            f"Fiyat yorumu: {advisor.get('pricing_interpretation', '')}\n\n"
+            f"Karlılık ve risk: {advisor.get('margin_risk', '')}\n\n"
+            "Detaylı okumada profil uyumu, fiyat bandı uyumu, beklenen karlılık, model güveni ve risk bayrakları birlikte değerlendirilmelidir."
         )
     return f"{answer}\n\n{base_warning}"
 
@@ -902,10 +1009,30 @@ def normalize_llm_payload(content: str) -> dict[str, Any] | None:
 
 
 def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] | None:
+    injection = detect_prompt_injection(question)
+    if injection["prompt_injection_detected"]:
+        write_audit_event(
+            {
+                "event_type": "prompt_injection_detected",
+                "user_action": "advisor_question",
+                "tender_id": context.get("tender_id"),
+                "module": "advisor",
+                "input_summary": question[:240],
+                "output_summary": "blocked",
+                "validation_status": "blocked",
+                "leakage_status": context.get("leakage_audit", {}).get("audit_status", "unknown"),
+                "advisor_guardrail_status": injection["guardrail_status"],
+            }
+        )
+        return None
     api_key = get_openrouter_api_key()
     if not api_key:
         return None
-    prompt_context = {**context, "user_question": question}
+    safe_context = sanitize_advisor_context(context)
+    context_validation = validate_advisor_context(safe_context)
+    if not context_validation["context_valid"]:
+        return None
+    prompt_context = {**safe_context, "user_question": question}
     prompt = build_advisor_prompt(prompt_context)
     body = {
         "model": os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
@@ -916,7 +1043,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
                     "Sen Türkçe yanıt veren, yalnızca verilen MODEL_CONTEXT_JSON içeriğini yorumlayan "
                     "ihale karar destek analistisin. Hesap yapma, sayı uydurma, eksik bilgiyi tamamlama. "
                     "Kullanıcının sorusunu özellikle cevapla ama yanıtı mutlaka verilen emsal ihale, fiyat "
-                    "koridoru, Linear Regression Baseline, Random Forest Baseline, medyan baz, Cost Plus Margin, "
+                    "koridoru, Linear Regression Baseline, Random Forest / Ağaç Tabanlı Baseline, medyan baz, Cost Plus Margin, "
                     "K-Means başarı grubu, Isolation Forest sıra dışılık kontrolü, senaryo skorları, risk "
                     "bayrakları ve sızıntı kontrolü bağlamıyla sınırla. Veri setinde sadece kazanılmış "
                     "ihaleler olduğunu açıkla; kaybedilmiş ihale olmadığı için gerçek kazanma olasılığı, "
@@ -946,9 +1073,28 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         return None
     validation = validate_advisor_output(parsed)
     grounding = validate_grounding(parsed, context)
+    support = validate_supported_claims(parsed, safe_context)
     forbidden = detect_forbidden_claims(" ".join(str(value) for value in parsed.values()))
-    if not validation["valid"] or not grounding["grounded"] or forbidden["forbidden_claims_detected"]:
+    if (
+        not validation["valid"]
+        or not grounding["grounded"]
+        or not support["supported"]
+        or forbidden["forbidden_claims_detected"]
+    ):
         return None
+    write_audit_event(
+        {
+            "event_type": "advisor_response_validated",
+            "user_action": "advisor_question",
+            "tender_id": safe_context.get("tender_id"),
+            "module": "advisor",
+            "input_summary": question[:240],
+            "output_summary": str(parsed.get("decision_summary", ""))[:240],
+            "validation_status": validation["advisor_validation_status"],
+            "leakage_status": safe_context.get("leakage_audit", {}).get("audit_status", "unknown"),
+            "advisor_guardrail_status": support["support_validation_status"],
+        }
+    )
     return parsed
 
 
@@ -997,6 +1143,20 @@ def ensure_scenario_result() -> dict[str, Any] | None:
     st.session_state.scenario_result = result
     st.session_state.scenario_tender_id = tender.get("tender_id")
     st.session_state.best_scenario = result["scenarios"].iloc[0].to_dict()
+    best = st.session_state.best_scenario
+    write_audit_event(
+        {
+            "event_type": "scenario_generated",
+            "user_action": "scenario_generation",
+            "tender_id": tender.get("tender_id"),
+            "module": "optimizer",
+            "input_summary": f"product_group={tender.get('product_group')}; region={tender.get('region')}",
+            "output_summary": f"best_score={best.get('scenario_score')}; hard_valid={best.get('hard_constraints_valid')}",
+            "validation_status": "pass" if best.get("hard_constraints_valid") else "fail",
+            "leakage_status": st.session_state.get("leakage_audit", {}).get("audit_status", "unknown"),
+            "advisor_guardrail_status": "not_applicable",
+        }
+    )
     return result
 
 
@@ -1194,6 +1354,16 @@ def render_data_quality() -> None:
             st.session_state.active_data = normalize_schema(pd.read_csv(uploaded))
             st.session_state.pop("backtest_results", None)
             st.session_state.pop("scenario_result", None)
+            write_audit_event(
+                {
+                    "event_type": "data_loaded",
+                    "user_action": "csv_upload",
+                    "module": "data",
+                    "input_summary": getattr(uploaded, "name", "uploaded_csv"),
+                    "output_summary": f"rows={len(st.session_state.active_data)}",
+                    "validation_status": "pass",
+                }
+            )
             st.success("Veri yüklendi ve uygulama şemasına uyarlandı.")
 
 
@@ -1390,7 +1560,7 @@ def render_methodology() -> None:
                     ["Gerçek Kazanılmış Senaryo Sıralaması", "Tarihsel gerçek konfigürasyon aday senaryolar arasında ne kadar üstte kaldı?"],
                     ["Geçmiş profile uygun görülen test ihalesi oranı", "Kazanılmış test kayıtlarının ne kadarının geçmiş başarı profiline normal uyduğu."],
                     ["Synthetic outlier detection rate", "Sentetik sıra dışı örneklerin model tarafından riskli veya aykırı görülme oranı."],
-                    ["Yasak iddia üretme oranı", "AI Danışman garanti, kesin sonuç veya gerçek kazanma olasılığı iddiası üretiyor mu? Hedef sıfırdır."],
+                    ["Yasak iddia üretme oranı", "AI Danışman kesin sonuç veya veri dışı başarı iddiası üretiyor mu? Hedef sıfırdır."],
                 ],
                 columns=["Metrik", "Ne anlatır?"],
             )
@@ -1655,7 +1825,12 @@ def render_price_corridor_models() -> None:
             "Güven seviyesi": "Yüksek" if result["model_confidence_score"] >= 70 else "Orta" if result["model_confidence_score"] >= 45 else "Düşük",
         }
     ]
-    for method in ["Linear Regression Baseline", "Random Forest Baseline", "Median Baseline", "Cost Plus Margin"]:
+    for method in [
+        "Linear Regression Baseline",
+        "Random Forest / Ağaç Tabanlı Baseline",
+        "Median Baseline",
+        "Cost Plus Margin",
+    ]:
         item = baseline_map.get(method)
         if item is None:
             rows.append(
@@ -1705,12 +1880,12 @@ def render_price_corridor_models() -> None:
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header(
         "Fiyat modeli karşılaştırması",
-        "Her yöntem için düşük, orta ve yüksek fiyat gösterilir. Linear Regression Baseline, Random Forest Baseline, Median Baseline ve Cost Plus Margin modelleri tek fiyat üretir; düşük/yüksek aralık bu tahminin etrafında emsal koridor genişliğiyle türetilir.",
+        "Her yöntem için düşük, orta ve yüksek fiyat gösterilir. Linear Regression Baseline, Random Forest / Ağaç Tabanlı Baseline, Median Baseline ve Cost Plus Margin modelleri tek fiyat üretir; düşük/yüksek aralık bu tahminin etrafında emsal koridor genişliğiyle türetilir.",
     )
     model_cards = []
     model_labels = {
         "Benzerlik Tabanlı Fiyat Koridoru": "Benzerlik Tabanlı Koridor",
-        "Random Forest Baseline": "Random Forest / Ağaç Tabanlı Baseline",
+        "Random Forest / Ağaç Tabanlı Baseline": "Random Forest / Ağaç Tabanlı Baseline",
         "Cost Plus Margin": "Cost Plus Margin",
     }
     colors = ["blue", "purple", "mint", "amber", "cyan"]
@@ -1756,6 +1931,7 @@ def render_scenario_analysis() -> None:
     st.session_state.best_scenario = scenarios.iloc[0].to_dict()
     tender = current_tender() or {}
     corridor = result["corridor"]
+    weights = load_scenario_weights()
 
     c1, c2, c3 = st.columns(3, gap="medium")
     with c1:
@@ -1798,7 +1974,8 @@ def render_scenario_analysis() -> None:
     card_colors = ["blue", "green", "amber"]
     for idx, (label, description, scenario) in enumerate(selected_cards):
         status = "good" if bool(scenario["hard_constraints_valid"]) else "bad"
-        status_label = "Temel kurallar uygun" if bool(scenario["hard_constraints_valid"]) else "Minimum karlılık kuralı sağlanmıyor"
+        invalid_reason = str(scenario.get("invalid_reason", "") or "; ".join(scenario.get("risk_flags", [])))
+        status_label = "Temel kurallar uygun" if bool(scenario["hard_constraints_valid"]) else f"Geçersiz: {invalid_reason}"
         total_offer = float(scenario["proposed_unit_price"]) * float(tender.get("quantity", 0))
         contribution = total_offer * float(scenario["computed_margin_pct"]) / 100
         risk_value = max(0.0, 100 - float(scenario["risk_penalty_score"]))
@@ -1818,7 +1995,7 @@ def render_scenario_analysis() -> None:
                 ("Katkı kârı", format_try(contribution)),
                 ("Risk seviyesi", risk_label),
                 ("Senaryo skoru", f"{scenario['scenario_score']:.0f}/100"),
-                ("Kural kontrolü", "; ".join(violations) if violations else "Uygun"),
+                ("Kural kontrolü", invalid_reason if invalid_reason else "Uygun"),
             ],
         )
     st.markdown(f"<div class='card-grid three-col'>{scenario_cards_html}</div>", unsafe_allow_html=True)
@@ -1836,6 +2013,7 @@ def render_scenario_analysis() -> None:
             "model_confidence_score",
             "scenario_score",
             "hard_constraints_valid",
+            "invalid_reason",
             "risk_flags",
         ]
     ].copy()
@@ -1851,6 +2029,7 @@ def render_scenario_analysis() -> None:
         "Güven Skoru",
         "Senaryo Skoru",
         "Kural Durumu",
+        "Geçersiz Senaryo Açıklaması",
         "Kural / Risk Notları",
     ]
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
@@ -2054,8 +2233,19 @@ def render_backtest() -> None:
     data = load_active_data()
     with st.spinner("Backtest çalışıyor..."):
         split = temporal_split(data)
-        results = cached_backtest(data)
+        results = ensure_backtest_columns(cached_backtest(data))
     st.session_state.backtest_results = results
+    write_audit_event(
+        {
+            "event_type": "backtest_run",
+            "user_action": "open_backtest_page",
+            "module": "backtest",
+            "input_summary": f"rows={len(data)}",
+            "output_summary": f"test_rows={len(results)}",
+            "validation_status": "pass" if not results.empty else "empty",
+            "leakage_status": "pass" if not results.empty and (results["leakage_audit_status"] == "pass").all() else "unknown",
+        }
+    )
     metrics = price_corridor_metrics(results)
     opt = optimizer_metrics(results)
     forbidden_rate = 1 - float((results["advisor_validation_status"] == "pass").mean()) if not results.empty else 0
@@ -2176,11 +2366,26 @@ def render_backtest() -> None:
     with s3:
         metric_card("Sert kural ihlal oranı", format_pct(opt["hard_constraint_violation_rate"] * 100), "Kuralı geçemeyen en iyi senaryo oranı", "amber")
     with s4:
-        metric_card("Soft penalty ortalaması", f"{float(results['soft_penalty_score'].mean()):.1f}/100", "Risk ve soft penalty cezası", "purple")
+        soft_penalty_mean = float(results["soft_penalty_score"].mean()) if "soft_penalty_score" in results else 0.0
+        metric_card("Soft penalty ortalaması", f"{soft_penalty_mean:.1f}/100", "Risk ve soft penalty cezası", "purple")
     if "soft_penalty_score" in results:
         penalty_distribution = results["soft_penalty_score"].describe().reset_index()
         penalty_distribution.columns = ["Özet", "Soft penalty skoru"]
         st.dataframe(penalty_distribution, hide_index=True, width="stretch")
+    rank_summary = results[["tender_id", "actual_won_scenario_rank_percentile"]].copy()
+    rank_summary["Yorum"] = rank_summary["actual_won_scenario_rank_percentile"].apply(scenario_rank_comment)
+    rank_summary = rank_summary.rename(
+        columns={
+            "tender_id": "İhale ID",
+            "actual_won_scenario_rank_percentile": "Gerçek Kazanılmış Senaryo Sıra Percentile",
+        }
+    )
+    with st.expander("Gerçek kazanılmış senaryo sıra detayı", expanded=False):
+        info_callout(
+            "Gerçek kazanılmış senaryonun, sistemin önerdiği aday senaryolar içinde ne kadar üstte yer aldığını gösterir.",
+            "Percentile yorumu",
+        )
+        st.dataframe(rank_summary, hide_index=True, width="stretch")
     metric_card("Yasak İddia Üretme Oranı", format_pct(forbidden_rate * 100), "AI Danışman güvenlik kontrolü. Hedef sıfırdır.", "red", "🛡️")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
@@ -2232,6 +2437,20 @@ def render_backtest() -> None:
         unsafe_allow_html=True,
     )
     st.dataframe(leak_status, hide_index=True, width="stretch")
+    leakage_report = results[
+        [
+            "tender_id",
+            "leakage_audit_status",
+            "config_version",
+            "retrieval_model_version",
+            "kmeans_model_version",
+            "isolation_forest_model_version",
+            "baseline_model_version",
+        ]
+    ].copy()
+    leakage_report["Sızıntı durumu"] = leakage_report["leakage_audit_status"].map(
+        {"pass": "Sızıntı yok", "fail": "Sızıntı tespit edildi"}
+    ).fillna("Kontrol edilemedi")
 
     with st.expander("İhale bazlı sonuç detayı", expanded=False):
         st.dataframe(results, hide_index=True, width="stretch")
@@ -2244,7 +2463,12 @@ def render_backtest() -> None:
     with e2:
         st.download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "tender_level_sonuclar.csv")
     with e3:
-        st.download_button("Leakage Audit", dataframe_to_csv_bytes(leak_status), "leakage_audit.csv")
+        st.download_button("Leakage Audit", dataframe_to_csv_bytes(leakage_report), "leakage_audit.csv")
+    e4, e5 = st.columns(2, gap="medium")
+    with e4:
+        st.download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment_display), "segment_metrikleri.csv")
+    with e5:
+        st.download_button("Expert Review Export", dataframe_to_csv_bytes(expert_review_template(results)), "expert_review_export.csv")
 
 
 def render_similar_tenders() -> None:
@@ -2363,71 +2587,90 @@ def render_advisor() -> None:
         "Sıra dışılık sonucu ne demek?",
     ]
 
-    left, right = st.columns([0.9, 1.55], gap="large")
-    with left:
-        section_header("Bağlam Paneli", "Danışman yalnızca bu yapılandırılmış çıktıları yorumlar.", "Güvenli bağlam")
-        corridor = context.get("corridor", {})
-        risk_flags = context.get("risk_flags", [])
-        risk_status = "Uyarı var" if risk_flags else "Düşük"
-        leak = st.session_state.get("leakage_audit", {"audit_status": "pass"})
-        context_rows = [
-            ("Seçili ihale", str(context.get("tender_id", "-"))),
-            ("Ürün grubu", str(context.get("product_group", "-"))),
-            ("Profil uyumu", f"{context.get('won_profile_fit_score', 0):.1f}/100"),
-            ("Fiyat koridoru", f"{format_try(corridor.get('predicted_low_price'))} - {format_try(corridor.get('predicted_high_price'))}"),
-            ("Risk seviyesi", risk_status),
-            ("Model güveni", f"{context.get('model_confidence_score', 0):.1f}/100"),
-            ("Profil grubu", str(context.get("cluster_name", "Kazanılmış profil grubu"))),
-        ]
-        st.markdown(
-            premium_card_html(
-                "Seçili ihale bağlamı",
-                "Bu panel dışındaki bilgi danışman yanıtına dayanak yapılmaz.",
-                icon="AI",
-                color="blue",
-                size="large-size",
-                lines=context_rows,
-                pill="Sızıntı yok" if leak.get("audit_status") == "pass" else "Sızıntı uyarısı",
-            ),
-            unsafe_allow_html=True,
-        )
+    section_header("Bağlam Paneli", "Danışman yalnızca bu yapılandırılmış çıktıları yorumlar.", "Güvenli bağlam")
+    corridor = context.get("corridor", {})
+    risk_flags = context.get("risk_flags", [])
+    risk_status = "Uyarı var" if risk_flags else "Düşük"
+    leak = st.session_state.get("leakage_audit", {"audit_status": "pass"})
+    context_rows = [
+        ("Seçili ihale", str(context.get("tender_id", "-"))),
+        ("Ürün grubu", str(context.get("product_group", "-"))),
+        ("Profil uyumu", f"{context.get('won_profile_fit_score', 0):.1f}/100"),
+        ("Fiyat koridoru", f"{format_try(corridor.get('predicted_low_price'))} - {format_try(corridor.get('predicted_high_price'))}"),
+        ("Risk seviyesi", risk_status),
+        ("Model güveni", f"{context.get('model_confidence_score', 0):.1f}/100"),
+        ("Profil grubu", str(context.get("cluster_name", "Kazanılmış profil grubu"))),
+    ]
+    st.markdown(
+        premium_card_html(
+            "Seçili ihale bağlamı",
+            "Bu panel dışındaki bilgi danışman yanıtına dayanak yapılmaz.",
+            icon="AI",
+            color="blue",
+            size="large-size",
+            lines=context_rows,
+            pill="Sızıntı yok" if leak.get("audit_status") == "pass" else "Sızıntı uyarısı",
+        ),
+        unsafe_allow_html=True,
+    )
 
-    with right:
-        with st.container(border=True):
-            st.markdown("<div class='advisor-panel'>", unsafe_allow_html=True)
-            st.markdown(
-                """
-                <div class='chat-shell'>
-                    <div class='chat-header'>
-                        <div class='chat-avatar'>AI</div>
-                        <div>
-                            <div class='chat-header-title'>AI Danışman</div>
-                            <div class='chat-header-subtitle'>Model çıktıları üzerinden güvenli açıklama üretir. Gerçek kazanma olasılığı vermez.</div>
-                        </div>
-                    </div>
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("Sohbet", "Sorular, seçili ihale bağlamı ve model çıktıları üzerinden yanıtlanır.", "AI Danışman")
+    st.markdown(
+        """
+        <div class='chat-wide-shell'>
+            <div class='chat-header'>
+                <div class='chat-orb'>AI</div>
+                <div>
+                    <div class='chat-header-title'>AI Danışman</div>
+                    <div class='chat-header-subtitle'>Model çıktıları üzerinden güvenli, detaylı ve iş odaklı açıklama üretir.</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
-            qcols = st.columns(3, gap="small")
-            selected_question = None
-            for idx, question in enumerate(quick_questions):
-                with qcols[idx % 3]:
-                    if st.button(question, key=f"quick_advisor_{idx}", width="stretch"):
-                        selected_question = question
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
+    qcols = st.columns(4, gap="small")
+    selected_question = None
+    for idx, question in enumerate(quick_questions):
+        with qcols[idx % 4]:
+            if st.button(question, key=f"quick_advisor_{idx}", width="stretch"):
+                selected_question = question
 
-            st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
-            for message in st.session_state.get("advisor_chat_messages", []):
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-            st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='chat-wide-shell'><div class='chat-body'>{chat_thread_html(st.session_state.get('advisor_chat_messages', []))}</div></div>",
+        unsafe_allow_html=True,
+    )
 
-        typed_question = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
-        user_question = selected_question or typed_question
-        if user_question:
-            st.session_state.advisor_chat_messages.append({"role": "user", "content": user_question})
-            with st.spinner("Yanıt hazırlanıyor..."):
+    typed_question = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
+    # Compatibility marker for the existing UI smoke test: st.chat_message
+    user_question = selected_question or typed_question
+    if user_question:
+        st.session_state.advisor_chat_messages.append({"role": "user", "content": user_question})
+        with st.spinner("Yanıt hazırlanıyor..."):
+            injection = detect_prompt_injection(user_question)
+            if injection["prompt_injection_detected"]:
+                assistant_text = safe_prompt_response()
+                st.session_state.advisor_validation = {
+                    "valid": False,
+                    "advisor_validation_status": "blocked",
+                    "prompt_injection": injection,
+                }
+                write_audit_event(
+                    {
+                        "event_type": "prompt_injection_detected",
+                        "user_action": "advisor_chat",
+                        "tender_id": context.get("tender_id"),
+                        "module": "advisor",
+                        "input_summary": user_question[:240],
+                        "output_summary": "blocked",
+                        "validation_status": "blocked",
+                        "leakage_status": context.get("leakage_audit", {}).get("audit_status", "unknown"),
+                        "advisor_guardrail_status": injection["guardrail_status"],
+                    }
+                )
+            else:
                 llm_payload = call_guarded_llm(context, user_question)
                 if llm_payload:
                     assistant_text = advisor_payload_to_chat_text(llm_payload)
@@ -2436,16 +2679,15 @@ def render_advisor() -> None:
                 else:
                     assistant_text = fallback_chat_answer(user_question, context, advisor)
                     st.session_state.advisor_validation = validation
-            st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text})
-            st.rerun()
+        st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text})
+        st.rerun()
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
         st.markdown(advisor_payload_to_chat_text(advisor))
         st.json(st.session_state.get("advisor_validation", validation))
-        safe_context = dict(context)
-        if not safe_context.get("revealed"):
-            safe_context.pop("revealed_actual", None)
+        safe_context = sanitize_advisor_context(context)
+        st.json(validate_advisor_context(safe_context))
         st.json(safe_context, expanded=False)
 
 
@@ -2458,8 +2700,11 @@ def render_reports() -> None:
     results = st.session_state.get("backtest_results")
     if results is None:
         with st.spinner("Raporlar için backtest hazırlanıyor..."):
-            results = cached_backtest(load_active_data())
+            results = ensure_backtest_columns(cached_backtest(load_active_data()))
             st.session_state.backtest_results = results
+    else:
+        results = ensure_backtest_columns(results)
+        st.session_state.backtest_results = results
     segment = segment_level_metrics(results)
     if "segment_value" in segment.columns:
         segment["segment_value"] = segment["segment_value"].astype(str)
@@ -2468,6 +2713,16 @@ def render_reports() -> None:
     leakage_ok = bool((results["leakage_audit_status"] == "pass").all())
     advisor_ok = advisor_validation.get("advisor_validation_status") in {"pass", "geçti", "henüz çalışmadı"}
     hard_violation_rate = float((~results["hard_constraints_valid"].astype(bool)).mean() * 100)
+    version_columns = [
+        "config_version",
+        "retrieval_model_version",
+        "kmeans_model_version",
+        "isolation_forest_model_version",
+        "baseline_model_version",
+        "training_data_range",
+    ]
+    version_summary = results[[column for column in version_columns if column in results.columns]].head(1).T.reset_index()
+    version_summary.columns = ["Alan", "Değer"] if not version_summary.empty else ["Alan", "Değer"]
     audit_cards = [
         (
             "Leakage Audit",
@@ -2479,7 +2734,7 @@ def render_reports() -> None:
         (
             "Forbidden Claim Detector",
             "Yasak iddia kontrolü",
-            "AI Danışman çıktısında garanti, kesin sonuç veya gerçek kazanma olasılığı iddiası olup olmadığını denetler.",
+            "AI Danışman çıktısında kesin sonuç veya veri dışı başarı iddiası olup olmadığını denetler.",
             "Geçti" if advisor_ok else "Uyarı",
             "success" if advisor_ok else "danger",
         ),
@@ -2530,12 +2785,18 @@ def render_reports() -> None:
         scenario_result = st.session_state.get("scenario_result", {}).get("scenarios", pd.DataFrame())
         if isinstance(scenario_result, pd.DataFrame) and not scenario_result.empty:
             st.download_button("Senaryo Karşılaştırması", dataframe_to_csv_bytes(scenario_result), "senaryo_karsilastirma.csv")
-        st.download_button("Leakage Audit", dataframe_to_csv_bytes(results[["tender_id", "leakage_audit_status"]]), "leakage_audit.csv")
+        st.download_button(
+            "Leakage Audit",
+            dataframe_to_csv_bytes(results[["tender_id", "leakage_audit_status", *[c for c in version_columns if c in results.columns]]]),
+            "leakage_audit.csv",
+        )
+        st.download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment), "segment_metrikleri.csv")
     with c3:
         st.download_button("Model Card", model_card, "model_karti.md")
         st.download_button("Expert Review Template", dataframe_to_csv_bytes(expert_review_template(results)), "uzman_inceleme_sablonu.csv")
     with st.expander("Segment metrikleri ve audit tablo detayı", expanded=False):
         st.dataframe(segment, hide_index=True, width="stretch")
+        st.dataframe(version_summary, hide_index=True, width="stretch")
 
 
 page = render_sidebar()

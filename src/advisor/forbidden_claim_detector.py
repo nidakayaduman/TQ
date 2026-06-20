@@ -12,10 +12,10 @@ def detect_forbidden_claims(text: str) -> dict[str, object]:
     detected: list[str] = []
     for term in FORBIDDEN_CLAIM_TERMS:
         if term.casefold() in lowered:
-            if term == "kazanma olasılığı":
+            if term in {"kazanma olasılığı", "gerçek kazanma olasılığı", "garanti"}:
                 idx = lowered.find(term)
                 window = lowered[max(0, idx - 30) : idx + len(term) + 40]
-                if any(safe in window for safe in ["değil", "hesaplamaz", "üretmez", "yoktur"]):
+                if any(safe in window for safe in ["değil", "hesaplamaz", "üretmez", "yoktur", "vermez", "iddia etme"]):
                     continue
             detected.append(term)
 

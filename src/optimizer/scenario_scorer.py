@@ -23,6 +23,8 @@ def risk_penalty_score(
     flags: list[str],
     hard_constraint_valid: bool,
     low_confidence: bool = False,
+    unusual_profile: bool = False,
+    high_delivery: bool = False,
     penalties: dict[str, float] | None = None,
 ) -> float:
     cfg = {**DEFAULT_SOFT_PENALTIES, **(penalties or load_soft_penalties())}
@@ -30,6 +32,9 @@ def risk_penalty_score(
     score += float(cfg["low_margin_penalty"]) if not hard_constraint_valid else 0.0
     score += min(35.0, len(flags) * float(cfg["high_risk_flag_penalty"]))
     score += float(cfg["insufficient_similar_count_penalty"]) if low_confidence else 0.0
+    score += float(cfg.get("low_model_confidence_penalty", 0.0)) if low_confidence else 0.0
+    score += float(cfg.get("unusual_profile_penalty", 0.0)) if unusual_profile else 0.0
+    score += float(cfg.get("high_delivery_penalty", 0.0)) if high_delivery else 0.0
     if any("fiyat bandının dışında" in flag.casefold() for flag in flags):
         score += float(cfg["price_outside_band_penalty"])
     return float(np.clip(score, 0, 100))
@@ -52,6 +57,8 @@ def score_scenario(
     risk_flags = list(validation.get("violations", []))
     if proposed_price < corridor["predicted_low_price"] or proposed_price > corridor["predicted_high_price"]:
         risk_flags.append("Fiyat tarihsel fiyat bandının dışında.")
+    unusual_profile = not bool(profile_output.get("is_inlier", True)) or float(profile_output.get("won_profile_fit_score", 0)) < 45
+    high_delivery = int(scenario.get("delivery_months", tender.get("delivery_months", 0)) or 0) > int(tender.get("delivery_months", 0) or 0)
 
     components = {
         "won_profile_fit_score": float(profile_output["won_profile_fit_score"]),
@@ -62,10 +69,14 @@ def score_scenario(
             risk_flags,
             bool(validation.get("valid", False)),
             model_confidence_score < 45,
+            unusual_profile,
+            high_delivery,
             soft_penalties,
         ),
     }
     scenario_score = sum(cfg[key] * components[key] for key in cfg)
+    if not validation.get("valid", False) and not scenario.get("is_actual_configuration_candidate", False):
+        scenario_score = 0.0
     return {
         **scenario,
         **{
@@ -97,6 +108,7 @@ def score_scenario(
         "scenario_score": float(np.clip(scenario_score, 0, 100)),
         "computed_margin_pct": float(computed_margin),
         "risk_flags": risk_flags,
+        "invalid_reason": "; ".join(validation.get("violations", [])) if not validation.get("valid", False) else "",
         "soft_penalty_score": components["risk_penalty_score"],
         "hard_constraints_valid": bool(validation.get("valid", False)),
     }

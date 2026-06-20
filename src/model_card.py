@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .constants import DISCLAIMER
+from .model_version import MODEL_VERSION
 
 
 def generate_model_card(metrics_summary: dict[str, object] | None = None) -> str:
@@ -26,6 +27,9 @@ Ana yöntem pseudo-live temporal backtesting yaklaşımıdır. Test yılındaki 
 
 ## Metrikler
 {metrics_text}
+
+## Model ve Config Versiyonları
+{MODEL_VERSION}
 
 ## Ne Zaman Kullanılmamalı
 Kaybedilmiş/no-bid veri olmadan gerçek kazan/kaybet kararı, kesin sonuç beklentisi veya competitor davranışı tahmini için kullanılmamalıdır.

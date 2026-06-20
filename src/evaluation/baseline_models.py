@@ -69,16 +69,17 @@ def baseline_predictions(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFram
 
     models = {
         "Linear Regression Baseline": _pipeline(LinearRegression()),
-        "Random Forest Baseline": _pipeline(RandomForestRegressor(n_estimators=120, random_state=42, min_samples_leaf=3)),
+        "Random Forest / Ağaç Tabanlı Baseline": _pipeline(
+            RandomForestRegressor(n_estimators=120, random_state=42, min_samples_leaf=3)
+        ),
     }
     predictions = {
-        "Product group median": test_data["product_group"].map(product_medians).fillna(global_median).astype(float),
+        "Median Baseline": test_data["product_group"].map(product_medians).fillna(global_median).astype(float),
         "Cost Plus Margin": cost_plus.astype(float),
     }
     for name, model in models.items():
         model.fit(train_data[FEATURES], train_data[CANONICAL_PRICE_COLUMN].astype(float))
-        predictions[name] = _predict_model_series(model, test_data[FEATURES], predictions["Product group median"])
-    predictions["Ensemble"] = clean_numeric_outputs(pd.concat(predictions.values(), axis=1).mean(axis=1), predictions["Product group median"])
+        predictions[name] = _predict_model_series(model, test_data[FEATURES], predictions["Median Baseline"])
 
     actual = test_data[CANONICAL_PRICE_COLUMN].astype(float)
     for name, predicted in predictions.items():
@@ -127,7 +128,9 @@ def predict_baseline_prices(train: pd.DataFrame, tender: dict[str, object]) -> p
     ]
     models = {
         "Linear Regression Baseline": _pipeline(LinearRegression()),
-        "Random Forest Baseline": _pipeline(RandomForestRegressor(n_estimators=120, random_state=42, min_samples_leaf=3)),
+        "Random Forest / Ağaç Tabanlı Baseline": _pipeline(
+            RandomForestRegressor(n_estimators=120, random_state=42, min_samples_leaf=3)
+        ),
     }
     for name, model in models.items():
         model.fit(train_data[FEATURES], train_data[CANONICAL_PRICE_COLUMN].astype(float))
@@ -138,7 +141,7 @@ def predict_baseline_prices(train: pd.DataFrame, tender: dict[str, object]) -> p
         base_description = (
             "Sayısal ve kategorik alanlardan doğrusal fiyat referansı."
             if name == "Linear Regression Baseline"
-            else "Random Forest tabanlı baseline; miktar, bölge ve ürün grubu ilişkilerini daha esnek okur."
+            else "Random Forest / ağaç tabanlı baseline; miktar, bölge ve ürün grubu ilişkilerini daha esnek okur."
         )
         description = (
             f"{base_description} Model {adjustment_reason} fiyat ürettiği için ürün grubu medyanı güvenli referans olarak kullanıldı."

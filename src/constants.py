@@ -74,7 +74,10 @@ FORBIDDEN_CLAIM_TERMS = [
     "guaranteed" + "_win",
     "p(" + "win)",
     "kazanma olasılığı",
+    "gerçek kazanma olasılığı",
     "kesin kazanır",
+    "kesin alınır",
+    "garanti",
     "kazanım garantisi",
     "award is guaranteed",
 ]

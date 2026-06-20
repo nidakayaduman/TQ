@@ -63,3 +63,5 @@ Gerçek API anahtarları repo'ya commit edilmemelidir. Yerel kullanım için `.s
 
 - `.env.example`
 - `.streamlit/secrets.example.toml`
+
+Eğer gerçek bir API anahtarı daha önce paylaşılmış, loglanmış veya yanlışlıkla commit edilmişse ilgili sağlayıcı panelinden anahtarı revoke/rotate edin ve yeni anahtarı sadece yerel secret dosyasında tutun.

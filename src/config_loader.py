@@ -37,8 +37,11 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
 DEFAULT_HARD_CONSTRAINTS: dict[str, Any] = {
     "minimum_margin_pct": 8.0,
     "minimum_delivery_months": 3,
+    "maximum_delivery_months": 36,
     "allow_product_alternative_default": False,
     "max_deviation_above_historical_p90_pct": 30.0,
+    "minimum_quantity": 1,
+    "minimum_unit_cost": 0.01,
     "required_fields": [
         "product_name",
         "product_group",
@@ -58,6 +61,9 @@ DEFAULT_SOFT_PENALTIES: dict[str, float] = {
     "low_margin_penalty": 12.0,
     "insufficient_similar_count_penalty": 15.0,
     "high_risk_flag_penalty": 10.0,
+    "low_model_confidence_penalty": 10.0,
+    "unusual_profile_penalty": 10.0,
+    "high_delivery_penalty": 6.0,
 }
 
 
