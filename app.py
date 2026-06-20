@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import uuid
 import warnings
 from html import escape
 from pathlib import Path
@@ -40,6 +41,8 @@ from src.optimizer.scenario_scorer import score_scenario
 from src.optimizer.scenario_validator import validate_scenario
 from src.reporting.audit_log import write_audit_event
 from src.reporting.export_csv import dataframe_to_csv_bytes
+from src.reporting.model_artifacts import write_backtest_artifacts
+from src.reporting.structured_logging import configure_json_logging, log_event, log_exception, recent_log_events
 from src.retrieval import RetrievalEngine, retrieval_quality
 from src.schema import normalize_schema, schema_quality_summary, validate_schema
 from src.split_strategy import temporal_split
@@ -49,6 +52,22 @@ ROOT = Path(__file__).resolve().parent
 SAMPLE_DATA = ROOT / "data" / "x_ilac_synthetic_tenders_2021_2025.csv"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free"
+
+
+def load_local_env_file() -> None:
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_local_env_file()
+configure_json_logging()
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"sklearn\..*")
 
@@ -448,11 +467,44 @@ inject_global_css()
 
 
 def init_session_state_defaults() -> None:
+    st.session_state.setdefault("session_id", f"st-{uuid.uuid4().hex[:12]}")
+    st.session_state.setdefault("user_id", os.getenv("USER_ID", "anonymous"))
     st.session_state.setdefault("llm_primary_label", DEFAULT_OPENROUTER_MODEL)
     st.session_state.setdefault("llm_fallback_labels", [])
 
 
 init_session_state_defaults()
+
+
+def audit_event(event: dict[str, Any]) -> None:
+    enriched = {
+        "session_id": st.session_state.get("session_id"),
+        "user_id": st.session_state.get("user_id", "anonymous"),
+        "reveal_status": "revealed" if st.session_state.get("revealed", False) else event.get("reveal_status", "hidden"),
+        **event,
+    }
+    write_audit_event(enriched)
+
+
+def llm_provider() -> str:
+    return os.getenv("LLM_PROVIDER", "").strip().lower()
+
+
+def user_friendly_error_message(exc: Exception) -> str:
+    text = str(exc).casefold()
+    if "missing" in text or "required" in text or "kolon" in text:
+        return "Zorunlu kolon yok."
+    if "schema" in text or "şema" in text:
+        return "Veri şeması eksik."
+    if "temporal split" in text or "empty train" in text or "test set" in text:
+        return "Test döneminde yeterli kayıt yok."
+    if "scenario" in text or "senaryo" in text:
+        return "Geçerli senaryo üretilemedi."
+    if "llm" in text or "advisor" in text:
+        return "LLM doğrulaması başarısız."
+    if "reveal" in text:
+        return "Gerçek sonuç reveal edilmeden karşılaştırma yapılamaz."
+    return "İşlem tamamlanamadı. Lütfen veri ve seçimleri kontrol edin."
 
 
 @st.cache_data
@@ -1054,7 +1106,7 @@ def normalize_llm_payload(content: str) -> dict[str, Any] | None:
 def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] | None:
     injection = detect_prompt_injection(question)
     if injection["prompt_injection_detected"]:
-        write_audit_event(
+        audit_event(
             {
                 "event_type": "prompt_injection_detected",
                 "user_action": "advisor_question",
@@ -1068,12 +1120,29 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
             }
         )
         return None
+    if llm_provider() in {"none", "offline", "disabled", "fallback"}:
+        log_event(
+            "fallback_advisor_used",
+            module="advisor",
+            status="pass",
+            message="LLM_PROVIDER offline modda; fallback advisor kullanılacak.",
+            tender_id=str(context.get("tender_id") or "") or None,
+        )
+        return None
     api_key = get_openrouter_api_key()
     if not api_key:
         return None
     safe_context = sanitize_advisor_context(context)
     context_validation = validate_advisor_context(safe_context)
     if not context_validation["context_valid"]:
+        log_event(
+            "advisor_validation_failed",
+            module="advisor",
+            status="fail",
+            message="AI Danışman bağlam doğrulaması başarısız.",
+            tender_id=str(safe_context.get("tender_id") or "") or None,
+            validation=context_validation,
+        )
         return None
     prompt_context = {**safe_context, "user_question": question}
     prompt = build_advisor_prompt(prompt_context)
@@ -1110,6 +1179,13 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
     except Exception:
+        log_exception(
+            "advisor_llm_call_failed",
+            module="advisor",
+            status="fallback",
+            message="LLM çağrısı başarısız; fallback advisor kullanılacak.",
+            tender_id=str(safe_context.get("tender_id") or "") or None,
+        )
         return None
     parsed = normalize_llm_payload(content)
     if not parsed:
@@ -1124,9 +1200,9 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         or not support["supported"]
         or forbidden["forbidden_claims_detected"]
     ):
-        write_audit_event(
+        audit_event(
             {
-                "event_type": "advisor_response_validation_failed",
+                "event_type": "advisor_validation_failed",
                 "user_action": "advisor_question",
                 "tender_id": safe_context.get("tender_id"),
                 "module": "advisor",
@@ -1146,7 +1222,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         "prompt_injection_detected": False,
         "fallback_used": False,
     }
-    write_audit_event(
+    audit_event(
         {
             "event_type": "advisor_response_validated",
             "user_action": "advisor_question",
@@ -1218,7 +1294,7 @@ def ensure_scenario_result() -> dict[str, Any] | None:
     st.session_state.scenario_tender_id = tender.get("tender_id")
     st.session_state.best_scenario = result["scenarios"].iloc[0].to_dict()
     best = st.session_state.best_scenario
-    write_audit_event(
+    audit_event(
         {
             "event_type": "scenario_generated",
             "user_action": "scenario_generation",
@@ -1231,6 +1307,22 @@ def ensure_scenario_result() -> dict[str, Any] | None:
             "advisor_guardrail_status": "not_applicable",
         }
     )
+    rejected = result["scenarios"][~result["scenarios"]["hard_constraints_valid"].astype(bool)]
+    for _, rejected_row in rejected.head(3).iterrows():
+        audit_event(
+            {
+                "event_type": "scenario_rejected_by_constraint",
+                "user_action": "scenario_validation",
+                "tender_id": tender.get("tender_id"),
+                "scenario_id": rejected_row.get("scenario_id", rejected_row.get("scenario_name", "")),
+                "module": "optimizer",
+                "input_summary": f"price={rejected_row.get('proposed_unit_price')}",
+                "output_summary": str(rejected_row.get("invalid_reason", rejected_row.get("hard_constraint_status", "")))[:240],
+                "validation_status": "fail",
+                "leakage_status": st.session_state.get("leakage_audit", {}).get("audit_status", "unknown"),
+                "advisor_guardrail_status": "not_applicable",
+            }
+        )
     return result
 
 
@@ -1263,6 +1355,22 @@ def render_sidebar() -> str:
         )
         page = st.radio("Sayfa", PAGE_NAMES, label_visibility="collapsed")
     return page
+
+
+def audited_download_button(label: str, data: Any, file_name: str, mime: str | None = None, **kwargs: Any) -> bool:
+    clicked = st.download_button(label, data, file_name, mime=mime, **kwargs)
+    if clicked:
+        audit_event(
+            {
+                "event_type": "report_exported",
+                "user_action": "download_report",
+                "module": "export",
+                "input_summary": label,
+                "output_summary": file_name,
+                "validation_status": "pass",
+            }
+        )
+    return bool(clicked)
 
 
 def render_home() -> None:
@@ -1425,12 +1533,37 @@ def render_data_quality() -> None:
         )
         uploaded = st.file_uploader("CSV dosyası yükle", type=["csv"])
         if uploaded is not None:
-            st.session_state.active_data = normalize_schema(pd.read_csv(uploaded))
+            audit_event(
+                {
+                    "event_type": "data_upload_started",
+                    "user_action": "csv_upload",
+                    "module": "data",
+                    "input_summary": getattr(uploaded, "name", "uploaded_csv"),
+                    "validation_status": "started",
+                }
+            )
+            uploaded_df = pd.read_csv(uploaded)
+            schema_check = validate_schema(uploaded_df)
+            if not schema_check.valid:
+                audit_event(
+                    {
+                        "event_type": "schema_validation_failed",
+                        "user_action": "csv_upload",
+                        "module": "data",
+                        "input_summary": getattr(uploaded, "name", "uploaded_csv"),
+                        "output_summary": f"missing={','.join(schema_check.missing_columns)}",
+                        "validation_status": "fail",
+                    }
+                )
+                st.error("Zorunlu kolon yok. Lütfen CSV şemasını kontrol edin.")
+                return
+            st.session_state.active_data = normalize_schema(uploaded_df)
             st.session_state.pop("backtest_results", None)
             st.session_state.pop("scenario_result", None)
-            write_audit_event(
+            st.session_state.pop("latest_artifact_dir", None)
+            audit_event(
                 {
-                    "event_type": "data_loaded",
+                    "event_type": "data_upload_completed",
                     "user_action": "csv_upload",
                     "module": "data",
                     "input_summary": getattr(uploaded, "name", "uploaded_csv"),
@@ -1683,6 +1816,19 @@ def render_test_simulator() -> None:
     test = split["test"]
     selected = st.selectbox("Test ihalesi seç", test["tender_id"].astype(str).tolist())
     st.session_state.selected_tender_id = selected
+    if st.session_state.get("last_audited_selected_tender") != selected:
+        audit_event(
+            {
+                "event_type": "test_tender_selected",
+                "user_action": "test_tender_selection",
+                "tender_id": selected,
+                "module": "selection",
+                "input_summary": "test_tender_selectbox",
+                "output_summary": f"selected={selected}",
+                "validation_status": "pass",
+            }
+        )
+        st.session_state.last_audited_selected_tender = selected
     st.session_state.revealed = False if st.session_state.get("last_selected_tender") != selected else st.session_state.get("revealed", False)
     st.session_state.last_selected_tender = selected
 
@@ -1691,6 +1837,19 @@ def render_test_simulator() -> None:
     audit = audit_pre_reveal_input(selected, masked)
     st.session_state.masked_tender = masked
     st.session_state.leakage_audit = audit
+    if audit["audit_status"] != "pass":
+        audit_event(
+            {
+                "event_type": "leakage_audit_failed",
+                "user_action": "test_tender_selection",
+                "tender_id": selected,
+                "module": "leakage_audit",
+                "input_summary": "masked test tender",
+                "output_summary": ";".join(audit.get("blocked_fields_present", [])),
+                "validation_status": "fail",
+                "leakage_status": audit["audit_status"],
+            }
+        )
 
     section_header("Seçili ihale", "Bu bilgiler canlı ihale girdisi gibi kullanılır; gerçek sonuç alanları maskelidir.")
     selected_body = (
@@ -1727,7 +1886,19 @@ def render_test_simulator() -> None:
     if st.button("Simülasyonu çalıştır", type="primary"):
         st.session_state.pop("scenario_result", None)
         result = ensure_scenario_result()
-        write_audit_event({"event_type": "test_tender_simulation", "tender_id": selected, "leakage_audit": audit})
+        audit_event(
+            {
+                "event_type": "test_tender_simulation",
+                "user_action": "run_simulation",
+                "tender_id": selected,
+                "module": "simulation",
+                "input_summary": "masked_tender",
+                "output_summary": "scenario_result_created" if result else "scenario_result_empty",
+                "validation_status": "pass" if result else "fail",
+                "leakage_status": audit.get("audit_status", "unknown"),
+                "leakage_audit": audit,
+            }
+        )
         if result:
             st.success("Simülasyon tamamlandı. Sonuçları Emsal İhale Analizi sayfasından başlayarak inceleyebilirsiniz.")
 
@@ -2207,7 +2378,18 @@ def render_reveal_compare() -> None:
         st.info("Gerçek kazanılmış fiyat ve karlılık oranı henüz gizli. Bu bilgi model, senaryo skoru ve AI danışmana verilmedi.")
         if st.button("Gerçek sonucu aç", type="primary"):
             st.session_state.revealed = True
-            write_audit_event({"event_type": "actual_result_revealed", "tender_id": row["tender_id"]})
+            audit_event(
+                {
+                    "event_type": "actual_result_revealed",
+                    "user_action": "reveal_actual_result",
+                    "tender_id": row["tender_id"],
+                    "module": "reveal",
+                    "input_summary": "reveal_button",
+                    "output_summary": "actual result revealed",
+                    "validation_status": "pass",
+                    "reveal_status": "revealed",
+                }
+            )
         return
 
     actual_price = float(row[CANONICAL_PRICE_COLUMN])
@@ -2355,6 +2537,21 @@ def render_reveal_compare() -> None:
             }
         ]
     )
+    comparison_key = f"comparison_audited_{row['tender_id']}"
+    if not st.session_state.get(comparison_key):
+        audit_event(
+            {
+                "event_type": "actual_result_compared",
+                "user_action": "compare_actual_result",
+                "tender_id": row["tender_id"],
+                "module": "comparison",
+                "input_summary": "revealed actual result and scenario outputs",
+                "output_summary": f"inside_band={inside}; rank_pct={rank_pct:.2f}",
+                "validation_status": "pass",
+                "reveal_status": "revealed",
+            }
+        )
+        st.session_state[comparison_key] = True
     st.dataframe(comparison, hide_index=True, width="stretch")
     message = (
         "Gerçek kazanılmış fiyat, sistemin önerdiği fiyat koridorunun içinde kaldı. "
@@ -2363,7 +2560,7 @@ def render_reveal_compare() -> None:
         else "Gerçek kazanılmış fiyat koridorun dışında kaldı. Bu ihale tipi için manuel fiyat incelemesi önerilir."
     )
     st.markdown(f"<div class='info-box'>{escape(message)}</div>", unsafe_allow_html=True)
-    st.download_button("Karşılaştırma CSV indir", dataframe_to_csv_bytes(comparison), "senaryo_karsilastirma.csv")
+    audited_download_button("Karşılaştırma CSV indir", dataframe_to_csv_bytes(comparison), "senaryo_karsilastirma.csv")
 
 
 def render_backtest() -> None:
@@ -2375,9 +2572,26 @@ def render_backtest() -> None:
     data = load_active_data()
     with st.spinner("Backtest çalışıyor..."):
         split = temporal_split(data)
+        log_event(
+            "temporal_split_created",
+            module="backtest",
+            status="pass",
+            message="Temporal split oluşturuldu.",
+            train_rows=len(split["train"]),
+            validation_rows=len(split["validation"]),
+            test_rows=len(split["test"]),
+        )
         results = ensure_backtest_columns(cached_backtest(data))
     st.session_state.backtest_results = results
-    write_audit_event(
+    if not st.session_state.get("latest_artifact_dir"):
+        artifact_dir = write_backtest_artifacts(
+            train_df=pd.concat([split["train"], split["validation"]], ignore_index=True),
+            test_df=split["test"],
+            results=results,
+            top_k=int(load_app_config().get("app", {}).get("default_top_k", 50)),
+        )
+        st.session_state.latest_artifact_dir = str(artifact_dir)
+    audit_event(
         {
             "event_type": "backtest_run",
             "user_action": "open_backtest_page",
@@ -2386,6 +2600,7 @@ def render_backtest() -> None:
             "output_summary": f"test_rows={len(results)}",
             "validation_status": "pass" if not results.empty else "empty",
             "leakage_status": "pass" if not results.empty and (results["leakage_audit_status"] == "pass").all() else "unknown",
+            "reveal_status": "revealed_for_backtest",
         }
     )
     metrics = price_corridor_metrics(results)
@@ -2638,17 +2853,17 @@ def render_backtest() -> None:
     section_header("Export", "Backtest çıktıları dışa aktarılabilir.", "Rapor")
     e1, e2, e3 = st.columns(3, gap="medium")
     with e1:
-        st.download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([metrics])), "backtest_raporu.csv")
+        audited_download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([metrics])), "backtest_raporu.csv")
     with e2:
-        st.download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "tender_level_sonuclar.csv")
+        audited_download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "tender_level_sonuclar.csv")
     with e3:
-        st.download_button("Leakage Audit", dataframe_to_csv_bytes(leakage_report), "leakage_audit.csv")
+        audited_download_button("Leakage Audit", dataframe_to_csv_bytes(leakage_report), "leakage_audit.csv")
     e4, e5 = st.columns(2, gap="medium")
     with e4:
-        st.download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment_display), "segment_metrikleri.csv")
+        audited_download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment_display), "segment_metrikleri.csv")
     with e5:
-        st.download_button("Expert Review Export", dataframe_to_csv_bytes(expert_review_template(results)), "expert_review_export.csv")
-    st.download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
+        audited_download_button("Expert Review Export", dataframe_to_csv_bytes(expert_review_template(results)), "expert_review_export.csv")
+    audited_download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
 
 
 def render_similar_tenders() -> None:
@@ -2876,7 +3091,7 @@ def render_advisor() -> None:
                     "fallback_used": True,
                     "prompt_injection": injection,
                 }
-                write_audit_event(
+                audit_event(
                     {
                         "event_type": "prompt_injection_detected",
                         "user_action": "advisor_chat",
@@ -2911,16 +3126,37 @@ def render_advisor() -> None:
                         }
                     )
                     st.session_state.advisor_validation = fallback_validation
+            audit_event(
+                {
+                    "event_type": "advisor_answer_received",
+                    "user_action": "advisor_chat",
+                    "tender_id": context.get("tender_id"),
+                    "module": "advisor",
+                    "input_summary": user_question[:240],
+                    "output_summary": assistant_text[:240],
+                    "validation_status": st.session_state.get("advisor_validation", {}).get("advisor_validation_status", "unknown"),
+                    "leakage_status": context.get("leakage_audit", {}).get("audit_status", "unknown"),
+                    "advisor_guardrail_status": st.session_state.get("advisor_validation", {}).get("llm_validation_status", "fallback"),
+                }
+            )
         st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text})
         st.rerun()
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
         st.markdown(advisor_payload_to_chat_text(advisor))
-        st.json(st.session_state.get("advisor_validation", validation))
         safe_context = sanitize_advisor_context(context)
-        st.json(validate_advisor_context(safe_context))
-        st.json(safe_context, expanded=False)
+        context_status = validate_advisor_context(safe_context)
+        validation_rows = pd.DataFrame(
+            [
+                ["Yanıt doğrulama", st.session_state.get("advisor_validation", validation).get("advisor_validation_status", "-")],
+                ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
+                ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
+                ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
+            ],
+            columns=["Kontrol", "Durum"],
+        )
+        st.dataframe(validation_rows, hide_index=True, width="stretch")
 
 
 def render_reports() -> None:
@@ -3013,54 +3249,106 @@ def render_reports() -> None:
     )
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header(
+        "Sistem Kontrolleri",
+        "Bu bölüm, sistemin hangi config ve model versiyonuyla çalıştığını gösterir.",
+        "Kontrol",
+    )
+    system_rows = pd.DataFrame(
+        [
+            ["Config versiyonu", str(version_summary[version_summary["Alan"] == "config_version"]["Değer"].iloc[0]) if not version_summary.empty and (version_summary["Alan"] == "config_version").any() else "config-v1"],
+            ["Model versiyonu", str(version_summary[version_summary["Alan"] == "retrieval_model_version"]["Değer"].iloc[0]) if not version_summary.empty and (version_summary["Alan"] == "retrieval_model_version").any() else "retrieval-v1"],
+            ["Audit log", "Aktif"],
+            ["Offline mod", "Aktif; fallback advisor kullanılır" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
+            ["Son artifact", st.session_state.get("latest_artifact_dir", "Henüz yazılmadı")],
+        ],
+        columns=["Kontrol", "Durum"],
+    )
+    st.dataframe(system_rows, hide_index=True, width="stretch")
+    info_callout(
+        "Audit log, test sürecinde hangi işlemlerin yapıldığını kaydeder. Offline modda LLM kullanılmaz; AI Danışman güvenli fallback yorumları üretir.",
+        "Audit Durumu",
+    )
+    recent_events = recent_log_events(limit=5)
+    if recent_events:
+        logs_display = pd.DataFrame(
+            [
+                {
+                    "Zaman": event.get("timestamp", ""),
+                    "Olay": event.get("event_type", ""),
+                    "Modül": event.get("module", ""),
+                    "Durum": event.get("status", ""),
+                    "Mesaj": event.get("message", ""),
+                }
+                for event in recent_events
+            ]
+        )
+        section_header("Son Log Olayları", "Teknik JSON göstermeden son sistem olaylarının özeti.", "Log")
+        st.dataframe(logs_display, hide_index=True, width="stretch")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Export Grupları", "Rapor ve denetim çıktıları.", "Dışa aktar")
     c1, c2, c3 = st.columns(3, gap="medium")
     with c1:
-        st.download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([price_corridor_metrics(results)])), "backtest_ozeti.csv")
-        st.download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "ihale_bazli_sonuclar.csv")
+        audited_download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([price_corridor_metrics(results)])), "backtest_ozeti.csv")
+        audited_download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "ihale_bazli_sonuclar.csv")
     with c2:
         scenario_result = st.session_state.get("scenario_result", {}).get("scenarios", pd.DataFrame())
         if isinstance(scenario_result, pd.DataFrame) and not scenario_result.empty:
-            st.download_button("Senaryo Karşılaştırması", dataframe_to_csv_bytes(scenario_result), "senaryo_karsilastirma.csv")
-        st.download_button(
+            audited_download_button("Senaryo Karşılaştırması", dataframe_to_csv_bytes(scenario_result), "senaryo_karsilastirma.csv")
+        audited_download_button(
             "Leakage Audit",
             dataframe_to_csv_bytes(results[["tender_id", "leakage_audit_status", *[c for c in version_columns if c in results.columns]]]),
             "leakage_audit.csv",
         )
-        st.download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment), "segment_metrikleri.csv")
+        audited_download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment), "segment_metrikleri.csv")
     with c3:
-        st.download_button("Model Card", model_card, "model_karti.md")
-        st.download_button("Expert Review Template", dataframe_to_csv_bytes(expert_review_template(results)), "uzman_inceleme_sablonu.csv")
-        st.download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
+        audited_download_button("Model Card", model_card, "model_karti.md")
+        audited_download_button("Expert Review Template", dataframe_to_csv_bytes(expert_review_template(results)), "uzman_inceleme_sablonu.csv")
+        audited_download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
     with st.expander("Segment metrikleri ve audit tablo detayı", expanded=False):
         st.dataframe(segment, hide_index=True, width="stretch")
         st.dataframe(stress_results, hide_index=True, width="stretch")
         st.dataframe(version_summary, hide_index=True, width="stretch")
 
 
-page = render_sidebar()
+def render_page(page_name: str) -> None:
+    pages = {
+        "Ana Sayfa": render_home,
+        "Veri Seti ve Kalite Kontrol": render_data_quality,
+        "Metodoloji": render_methodology,
+        "Test için İhale Seç": render_test_simulator,
+        "Emsal İhale Analizi": render_similar_tenders,
+        "Profil Uyum Analizi": render_profile_fit_analysis,
+        "Fiyat Koridoru ve Model Karşılaştırması": render_price_corridor_models,
+        "Teklif Senaryoları": render_scenario_analysis,
+        "Gerçek Sonuçla Karşılaştır": render_reveal_compare,
+        "Backtest Sonuçları": render_backtest,
+        "AI Danışman": render_advisor,
+        "Raporlar ve Kontroller": render_reports,
+    }
+    try:
+        pages.get(page_name, render_home)()
+    except Exception as exc:
+        log_exception(
+            "ui_operation_failed",
+            module="ui",
+            status="fail",
+            message="Streamlit sayfa işlemi başarısız oldu.",
+            page=page_name,
+        )
+        audit_event(
+            {
+                "event_type": "ui_operation_failed",
+                "user_action": "page_render",
+                "module": "ui",
+                "input_summary": page_name,
+                "output_summary": user_friendly_error_message(exc),
+                "validation_status": "fail",
+            }
+        )
+        st.error(user_friendly_error_message(exc))
 
-if page == "Ana Sayfa":
-    render_home()
-elif page == "Veri Seti ve Kalite Kontrol":
-    render_data_quality()
-elif page == "Metodoloji":
-    render_methodology()
-elif page == "Test için İhale Seç":
-    render_test_simulator()
-elif page == "Emsal İhale Analizi":
-    render_similar_tenders()
-elif page == "Profil Uyum Analizi":
-    render_profile_fit_analysis()
-elif page == "Fiyat Koridoru ve Model Karşılaştırması":
-    render_price_corridor_models()
-elif page == "Teklif Senaryoları":
-    render_scenario_analysis()
-elif page == "Gerçek Sonuçla Karşılaştır":
-    render_reveal_compare()
-elif page == "Backtest Sonuçları":
-    render_backtest()
-elif page == "AI Danışman":
-    render_advisor()
-elif page == "Raporlar ve Kontroller":
-    render_reports()
+
+page = render_sidebar()
+render_page(page)

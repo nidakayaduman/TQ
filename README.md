@@ -23,22 +23,25 @@ Veri setinde kaybedilmiş veya no-bid kayıt yoktur. Bu nedenle uygulama supervi
 ## Çalıştırma
 
 ```bash
-python -m pip install -r requirements.txt
-streamlit run app.py
+make setup
+make run
 ```
 
 ## Test
 
 ```bash
-python -m pytest
+make test
+python -m compileall app.py src tests
 ```
 
 ## Docker
 
 ```bash
-docker build -t tender-iq .
-docker run -p 8501:8501 tender-iq
+make docker-build
+make docker-run
 ```
+
+Docker image Python 3.11 tabanlıdır, non-root kullanıcıyla çalışır, Streamlit 8501 portunu açar ve healthcheck içerir.
 
 ## Ana Modüller
 
@@ -55,7 +58,15 @@ docker run -p 8501:8501 tender-iq
 
 ## Konfigürasyon
 
-Skor ağırlıkları `config/app_config.yaml`, hard constraints `config/hard_constraints.yaml`, soft penalties `config/soft_penalties.yaml` içindedir.
+Skor ağırlıkları `config/app_config.yaml`, hard constraints `config/hard_constraints.yaml`, soft penalties `config/soft_penalties.yaml` içindedir. Logging, audit ve artifact dizinleri `config/observability.yaml` üzerinden yönetilir.
+
+## Production Engineering Notları
+
+- Structured JSON loglar `logs/app.jsonl` dosyasına ve stdout'a yazılır.
+- Audit event'leri `audit_logs/` altında session, kullanıcı, event tipi, reveal durumu, input/output hash ve model/config versiyon bilgileriyle saklanır.
+- Backtest artifact bilgileri `model_artifacts/{run_id}/` altında config snapshot, split manifest, metrics ve mümkün olduğunda pickle model dosyalarıyla tutulur.
+- UI ham traceback veya teknik JSON göstermez; hata detayları loglara yazılır, kullanıcıya Türkçe iş mesajı gösterilir.
+- `LLM_PROVIDER=none` olduğunda AI Danışman offline modda deterministik fallback advisor ile çalışmaya devam eder.
 
 ## Gizli Anahtarlar
 

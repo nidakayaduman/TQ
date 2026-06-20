@@ -68,6 +68,24 @@ DEFAULT_SOFT_PENALTIES: dict[str, float] = {
     "high_delivery_penalty": 6.0,
 }
 
+DEFAULT_OBSERVABILITY_CONFIG: dict[str, Any] = {
+    "logging": {
+        "enabled": True,
+        "level": "INFO",
+        "directory": "logs",
+        "application_log": "app.jsonl",
+    },
+    "audit": {
+        "enabled": True,
+        "directory": "audit_logs",
+        "default_user_id": "anonymous",
+    },
+    "artifacts": {
+        "enabled": True,
+        "directory": "model_artifacts",
+    },
+}
+
 
 def _deep_merge(default: dict[str, Any], loaded: dict[str, Any]) -> dict[str, Any]:
     merged = dict(default)
@@ -101,6 +119,10 @@ def load_soft_penalties() -> dict[str, float]:
     return {key: float(value) for key, value in merged.items()}
 
 
+def load_observability_config() -> dict[str, Any]:
+    return _deep_merge(DEFAULT_OBSERVABILITY_CONFIG, _read_yaml(CONFIG_DIR / "observability.yaml"))
+
+
 def load_scenario_weights() -> dict[str, float]:
     config = load_app_config()
     weights = config.get("scenario_scoring", {})
@@ -123,4 +145,5 @@ def active_config_summary() -> dict[str, Any]:
         "scenario_weights": load_scenario_weights(),
         "hard_constraint_keys": sorted(load_hard_constraints().keys()),
         "soft_penalty_keys": sorted(load_soft_penalties().keys()),
+        "observability_config": str(CONFIG_DIR / "observability.yaml"),
     }

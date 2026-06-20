@@ -1,0 +1,14 @@
+logging:
+  enabled: true
+  level: INFO
+  directory: logs
+  application_log: app.jsonl
+
+audit:
+  enabled: true
+  directory: audit_logs
+  default_user_id: anonymous
+
+artifacts:
+  enabled: true
+  directory: model_artifacts
