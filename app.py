@@ -1188,9 +1188,10 @@ def badge(text: str, status: str = "good") -> str:
 
 def compact_chat_text(value: Any) -> str:
     text = str(value).strip()
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = re.sub(r"\n\n(?=\d+\.)", "\n", text)
-    text = re.sub(r"(:)\n\n(?=\d+\.)", r"\1\n", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"\n{2,}", "\n", text)
+    text = re.sub(r"\n(?=- )", "\n", text)
     return text
 
 
@@ -1705,7 +1706,7 @@ def advisor_payload_to_chat_text(payload: dict[str, Any]) -> str:
         ("Senaryo Gerekçesi", payload.get("scenario_rationale")),
         ("Güven Gerekçesi", payload.get("confidence_rationale")),
     ]
-    text = "\n\n".join(f"**{title}:** {value}" for title, value in parts if value)
+    sections = [f"{title}: {str(value).strip()}" for title, value in parts if str(value or "").strip()]
     for title, key in [
         ("Kullanılan Kanıtlar", "evidence_used"),
         ("Risk Uyarıları", "risk_warnings"),
@@ -1722,10 +1723,10 @@ def advisor_payload_to_chat_text(payload: dict[str, Any]) -> str:
                     items.append(f"- {evidence_id}: {claim}")
                 else:
                     items.append(f"- {item}")
-            text += "\n\n" + f"**{title}:**\n" + "\n".join(items)
+            sections.append(f"{title}:\n" + "\n".join(items))
         elif isinstance(values, str) and values:
-            text += "\n\n" + f"**{title}:** {values}"
-    return text
+            sections.append(f"{title}: {values}")
+    return compact_chat_text("\n".join(sections))
 
 
 def selected_test_tender() -> pd.Series | None:
@@ -3596,7 +3597,6 @@ def render_advisor() -> None:
         "Sıra dışılık sonucu ne demek?",
     ]
 
-    section_header("Bağlam Paneli", "Danışman yalnızca bu yapılandırılmış çıktıları yorumlar.", "Güvenli bağlam")
     info_callout(
         "AI Danışman karar vermez. Sadece model çıktılarını açıklar. Bu skor gerçek kazanma olasılığı değildir.",
         "Güvenli kullanım notu",
@@ -3672,7 +3672,6 @@ def render_advisor() -> None:
         columns=1,
         size="metric-size",
     )
-    st.caption("API key ekranda gösterilmez. Key yoksa veya LLM doğrulaması geçmezse güvenli fallback advisor devreye girer.")
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
@@ -3876,7 +3875,7 @@ def render_advisor() -> None:
                 llm_payload = call_guarded_llm(context, user_question)
                 if llm_payload:
                     assistant_text = advisor_payload_to_chat_text(llm_payload)
-                    assistant_source = f"OpenRouter LLM - {llm_payload.get('validation_result', {}).get('llm_model', selected_openrouter_model_id())}"
+                    assistant_source = "OpenRouter LLM"
                     st.session_state.advisor_output = llm_payload
                     st.session_state.advisor_validation = llm_payload.get("validation_result", {})
                 else:

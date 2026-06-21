@@ -9,6 +9,30 @@ from typing import Any
 from .forbidden_claim_detector import detect_forbidden_claims
 
 FORBIDDEN_CLAIMS_CHECK_FIELD = "forbidden_claims_check"
+ADVISOR_TEXT_FIELDS = [
+    "executive_summary",
+    "recommended_action",
+    "scenario_rationale",
+    "confidence_rationale",
+    "summary",
+    "decision_summary",
+    "answer",
+    "response",
+    "rationale",
+    "analysis",
+]
+
+
+def _extract_json_string_fields(content: str) -> dict[str, str] | None:
+    extracted: dict[str, str] = {}
+    for field in ADVISOR_TEXT_FIELDS:
+        match = re.search(rf'"{re.escape(field)}"\s*:\s*"((?:\\.|[^"\\])*)"', content, flags=re.DOTALL)
+        if match:
+            try:
+                extracted[field] = json.loads(f'"{match.group(1)}"')
+            except json.JSONDecodeError:
+                extracted[field] = match.group(1)
+    return extracted or None
 
 
 def normalize_llm_payload(content: str) -> dict[str, Any] | None:
@@ -30,7 +54,7 @@ def normalize_llm_payload(content: str) -> dict[str, Any] | None:
         try:
             parsed = json.loads(candidate)
         except json.JSONDecodeError:
-            return None
+            return _extract_json_string_fields(candidate)
     if isinstance(parsed, dict) and "choices" in parsed:
         try:
             nested_content = parsed["choices"][0]["message"]["content"]
@@ -42,6 +66,7 @@ def normalize_llm_payload(content: str) -> dict[str, Any] | None:
 
 def safe_text(value: Any, max_length: int = 1200) -> str:
     text = str(value or "").strip()
+    text = re.sub(r"[\u3400-\u9fff]+", "", text)
     text = re.sub(r"\s+", " ", text)
     return text[:max_length]
 
@@ -152,6 +177,11 @@ def normalize_advisor_payload_schema(payload: dict[str, Any], context: dict[str,
 def payload_from_free_text(content: str, context: dict[str, Any], question: str) -> dict[str, Any] | None:
     text = str(content or "").strip()
     if not text:
+        return None
+    parsed = normalize_llm_payload(text)
+    if parsed:
+        return normalize_advisor_payload_schema(parsed, context, question)
+    if text.lstrip().startswith("{"):
         return None
     if detect_forbidden_claims(text)["forbidden_claims_detected"]:
         return None

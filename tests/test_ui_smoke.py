@@ -98,7 +98,7 @@ def test_advisor_answer_source_is_visible():
     for text in [
         "chat-source",
         "Hazır bağlam mesajı",
-        "OpenRouter LLM -",
+        "OpenRouter LLM",
         "Güvenli fallback -",
         "answer_source",
         "advisor_llm_status",

@@ -68,6 +68,23 @@ def test_llm_payload_parser_unwraps_openrouter_choices_payload():
     assert parsed == {"executive_summary": "Yanıt hazır.", "evidence_used": ["E_PROFILE_001"]}
 
 
+def test_llm_payload_parser_recovers_fields_from_truncated_json():
+    content = """
+    {
+      "executive_summary": "Önerilen fiyat koridor içinde yer alıyor ve model ayrılığı risk yaratıyor.",
+      "recommended_action": "manuel inceleme",
+      "scenario_rationale": "Fiyat koridoru orta noktaya yakın; geniş koridor karar desteğini zayıflatır.",
+      "evidence_used": [
+        {"evidence_id": "E_PRICE_001", "claim": "Fiyat koridoru kullanıldı"},
+        {"evidence_id": "E_RISK_001", "claim": "R
+    """
+    parsed = normalize_llm_payload(content)
+    assert parsed is not None
+    assert parsed["executive_summary"].startswith("Önerilen fiyat")
+    assert parsed["recommended_action"] == "manuel inceleme"
+    assert parsed["scenario_rationale"].startswith("Fiyat koridoru")
+
+
 def test_normalized_llm_payload_validates_without_false_forbidden_claim():
     context = {
         "revealed": False,
@@ -117,6 +134,12 @@ def test_free_text_payload_is_wrapped_then_validates():
 def test_free_text_payload_still_blocks_unsafe_claims():
     context = {"evidence_items": [{"evidence_id": "E_PRICE_001", "content": "Fiyat koridoru kontrol edildi."}]}
     payload = payload_from_free_text("Bu teklif kazanır ve ihale kesin kazanılır.", context, "Kazanır mıyız?")
+    assert payload is None
+
+
+def test_json_like_free_text_is_not_rendered_as_raw_json_when_unrecoverable():
+    context = {"evidence_items": [{"evidence_id": "E_PRICE_001", "content": "Fiyat koridoru kontrol edildi."}]}
+    payload = payload_from_free_text('{"executive_summary": "yarım', context, "Fiyat koridoru nasıl yorumlanmalı?")
     assert payload is None
 
 
