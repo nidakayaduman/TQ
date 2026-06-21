@@ -5,6 +5,7 @@ from src.advisor.context_validator import sanitize_advisor_context
 from src.advisor.grounding_validator import validate_grounding
 from src.advisor.llm_response import normalize_advisor_payload_schema, normalize_llm_payload, payload_from_free_text
 from src.advisor.output_validator import SAFE_FALLBACK_OUTPUT, advisor_semantic_text, validate_advisor_output
+from src.advisor.prompt_builder import build_advisor_prompt
 from src.advisor.prompt_injection_filter import detect_prompt_injection
 from src.advisor.support_validator import validate_supported_claims
 
@@ -111,6 +112,31 @@ def test_normalized_llm_payload_validates_without_false_forbidden_claim():
     result = validate_advisor_output(payload, context)
     assert result["valid"]
     assert not result["forbidden_claims_detected"]
+
+
+def test_normalized_payload_translates_raw_risk_codes():
+    context = {
+        "revealed": False,
+        "risk_flags": ["low_similarity", "wide_price_band"],
+        "evidence_items": [{"evidence_id": "E_RISK_001", "content": "Risk bayrakları kontrol edildi."}],
+    }
+    payload = normalize_advisor_payload_schema(
+        {"summary": "Riskler iş diliyle açıklanmalı.", "risk_warnings": ["low_similarity", "wide_price_band"]},
+        context,
+        "Riskli görünen noktalar neler?",
+    )
+    joined = " ".join(payload["risk_warnings"])
+    assert "low_similarity" not in joined
+    assert "wide_price_band" not in joined
+    assert "Emsal ihale benzerliği düşük" in joined
+    assert "Fiyat koridoru geniş" in joined
+
+
+def test_prompt_requests_foundational_then_technical_explanation():
+    prompt = build_advisor_prompt({"user_question": "Bu ihale hangi profile benziyor?", "cluster_name": "Injectable / Karadeniz"})
+    assert "Önce konuyu temel seviyede açıkla" in prompt
+    assert "K-Means profil grubu" in prompt
+    assert "Risk kodlarını ham teknik etiket olarak yazma" in prompt
 
 
 def test_free_text_payload_is_wrapped_then_validates():

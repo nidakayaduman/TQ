@@ -9,6 +9,13 @@ from typing import Any
 from .forbidden_claim_detector import detect_forbidden_claims
 
 FORBIDDEN_CLAIMS_CHECK_FIELD = "forbidden_claims_check"
+RISK_LABELS = {
+    "low_similarity": "Emsal ihale benzerliği düşük; geçmiş kazanılmış örneklerle yakınlık zayıf olduğu için model güveni azalır.",
+    "wide_price_band": "Fiyat koridoru geniş; olası fiyat aralığı büyüdüğü için karar desteği daha dikkatli yorumlanmalıdır.",
+    "medium_model_disagreement": "Farklı fiyat modelleri arasında belirgin ayrışma var; fiyat önerisi manuel kontrol edilmelidir.",
+    "high_model_disagreement": "Fiyat modelleri arasında yüksek ayrışma var; fiyat kararı güçlü manuel inceleme gerektirir.",
+    "low_margin": "Beklenen karlılık düşük; maliyet ve marj varsayımları kontrol edilmelidir.",
+}
 ADVISOR_TEXT_FIELDS = [
     "executive_summary",
     "recommended_action",
@@ -71,6 +78,11 @@ def safe_text(value: Any, max_length: int = 1200) -> str:
     return text[:max_length]
 
 
+def clean_risk_warning(value: Any) -> str:
+    text = safe_text(value, 360)
+    return RISK_LABELS.get(text, text)
+
+
 def default_evidence(context: dict[str, Any], claim_prefix: str = "Model çıktısı yorumlandı.") -> list[dict[str, str]]:
     evidence_items = context.get("evidence_items", [])
     if not isinstance(evidence_items, list):
@@ -122,10 +134,10 @@ def normalize_advisor_payload_schema(payload: dict[str, Any], context: dict[str,
     risk_warnings = payload.get("risk_warnings") or payload.get("risks") or payload.get("risk_flags") or []
     if not isinstance(risk_warnings, list):
         risk_warnings = [risk_warnings]
-    risk_warnings = [safe_text(item, 360) for item in risk_warnings if str(item).strip()][:4]
+    risk_warnings = [clean_risk_warning(item) for item in risk_warnings if str(item).strip()][:4]
     if not risk_warnings:
         risk_flags = context.get("risk_flags", [])
-        risk_warnings = [safe_text(item, 360) for item in risk_flags[:4]] if isinstance(risk_flags, list) else []
+        risk_warnings = [clean_risk_warning(item) for item in risk_flags[:4]] if isinstance(risk_flags, list) else []
     if not risk_warnings:
         risk_warnings = ["Belirgin ek risk uyarısı yok; yine de maliyet ve teslim varsayımları kontrol edilmeli."]
 
