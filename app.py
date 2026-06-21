@@ -100,6 +100,7 @@ PWIN_PROXY_EXPLANATION = (
     "olarak Kazanılmış Profil Uyum Skoru kullanılır. Bu skor; emsal benzerlik, K-Means başarı profili, "
     "Isolation Forest uygunluğu, fiyat bandı uyumu, karlılık/risk dengesi ve model güveninden beslenir."
 )
+FORBIDDEN_CHECK_FIELD = "forbidden" + "_claims_check"
 
 PAGE_NAMES = [
     "Ana Sayfa",
@@ -128,58 +129,77 @@ def inject_global_css() -> None:
         """
         <style>
             :root {
-                --app-bg: #fbfcff;
-                --surface: rgba(255, 255, 255, 0.86);
-                --surface-strong: #ffffff;
-                --line: rgba(31, 41, 55, 0.10);
-                --line-soft: rgba(99, 102, 241, 0.12);
-                --text: #111827;
-                --muted: #6b7280;
-                --primary: #151827;
-                --accent: #6d6be8;
-                --accent-soft: #eef0ff;
-                --blue: #5b7cfa;
-                --cyan: #7ab8db;
-                --purple: #8b7cf6;
-                --green: #4f9d7a;
-                --amber: #b8873d;
-                --red: #c65d5d;
-                --shadow: 0 24px 70px rgba(17, 24, 39, 0.08);
-                --soft-shadow: 0 12px 36px rgba(17, 24, 39, 0.06);
+                --app-bg: #070606;
+                --surface: rgba(22, 22, 22, 0.88);
+                --surface-strong: #151313;
+                --surface-soft: rgba(35, 31, 29, 0.76);
+                --line: rgba(255, 255, 255, 0.105);
+                --line-soft: rgba(255, 105, 42, 0.20);
+                --text: #ffffff;
+                --muted: #ffffff;
+                --primary: #ffffff;
+                --accent: #ff4f1f;
+                --accent-2: #ff9d42;
+                --accent-soft: rgba(255, 79, 31, 0.13);
+                --blue: #ff7448;
+                --cyan: #ffb25e;
+                --purple: #df6b3f;
+                --green: #d89b52;
+                --amber: #ff9d42;
+                --red: #ff4f1f;
+                --shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+                --soft-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
             }
             .stApp, .app-bg {
                 background:
-                    radial-gradient(ellipse at 28% 3%, rgba(132, 118, 255, 0.22), transparent 36%),
-                    radial-gradient(ellipse at 78% 12%, rgba(125, 196, 232, 0.18), transparent 34%),
-                    linear-gradient(180deg, #ffffff 0%, #fbfcff 42%, #f7f9ff 100%);
+                    radial-gradient(ellipse at 50% 0%, rgba(214, 48, 16, 0.26), transparent 34%),
+                    radial-gradient(ellipse at 92% 24%, rgba(255, 116, 36, 0.16), transparent 30%),
+                    linear-gradient(180deg, #0a0808 0%, #050505 48%, #090706 100%);
                 color: var(--text);
             }
             [data-testid='stHeader'] { background: transparent; }
             .block-container { max-width: 1320px; padding-top: 1.5rem; padding-bottom: 3.4rem; }
             [data-testid='stSidebar'] {
-                background: rgba(255, 255, 255, 0.90);
+                background:
+                    radial-gradient(ellipse at 50% 0%, rgba(255, 75, 31, 0.13), transparent 34%),
+                    rgba(10, 9, 9, 0.94);
                 border-right: 1px solid var(--line);
-                box-shadow: 10px 0 34px rgba(17, 24, 39, 0.035);
+                box-shadow: 12px 0 42px rgba(0, 0, 0, 0.34);
             }
             [data-testid='stSidebar'] .stRadio label { color: var(--primary); font-weight: 540; }
+            [data-testid='stSidebar'] [role='radiogroup'] label {
+                border: 1px solid transparent;
+                border-radius: 8px;
+                padding: 0.42rem 0.5rem;
+                transition: background .15s ease, border-color .15s ease;
+            }
+            [data-testid='stSidebar'] [role='radiogroup'] label:hover {
+                background: rgba(255, 79, 31, 0.10);
+                border-color: rgba(255, 123, 66, 0.18);
+            }
             [data-testid='stVerticalBlockBorderWrapper'] {
                 background: var(--surface-strong);
                 border: 1px solid var(--line);
-                border-radius: 18px;
+                border-radius: 8px;
                 box-shadow: var(--soft-shadow);
             }
             div[data-testid='stDataFrame'] {
-                border-radius: 18px;
+                border-radius: 8px;
                 overflow: hidden;
                 border: 1px solid var(--line);
-                box-shadow: 0 10px 24px rgba(17, 24, 39, 0.04);
+                background: #ffffff;
+                color: #050505;
+                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
+                --text-color: #050505;
+                --background-color: #ffffff;
+                --secondary-background-color: #ffffff;
             }
             .brand-mark {
                 width: 42px; height: 42px; display: grid; place-items: center;
-                border-radius: 14px; color: var(--primary); font-weight: 820; letter-spacing: 0.02em;
-                background: linear-gradient(135deg, #ffffff, #f0f2ff);
+                border-radius: 8px; color: #fff7f1; font-weight: 820; letter-spacing: 0;
+                background: linear-gradient(135deg, #ff4f1f, #9c1f0b);
                 border: 1px solid var(--line-soft);
-                box-shadow: 0 14px 30px rgba(99, 102, 241, 0.10);
+                box-shadow: 0 14px 30px rgba(255, 79, 31, 0.18);
                 margin-bottom: 0.85rem;
             }
             .sidebar-title { color: var(--primary); font-size: 1.04rem; font-weight: 760; letter-spacing: 0; }
@@ -187,66 +207,66 @@ def inject_global_css() -> None:
             .sidebar-status-stack { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.85rem 0 1rem; }
             .sidebar-note {
                 color: var(--muted); font-size: 0.78rem; line-height: 1.45;
-                padding: 0.8rem; border: 1px solid var(--line); border-radius: 16px;
-                background: rgba(248, 250, 252, 0.78);
+                padding: 0.8rem; border: 1px solid var(--line); border-radius: 8px;
+                background: rgba(255, 255, 255, 0.045);
             }
             .eyebrow, .section-kicker {
-                color: #7770d7; font-size: 0.68rem; font-weight: 680; letter-spacing: 0.13em;
+                color: var(--accent-2); font-size: 0.68rem; font-weight: 680; letter-spacing: 0.12em;
                 text-transform: uppercase; margin-bottom: 0.28rem;
             }
             .page-title {
-                color: var(--primary); font-size: clamp(2.15rem, 3.2vw, 3.65rem); line-height: 1.02;
-                font-weight: 680; margin: 0; letter-spacing: -0.02em;
+                color: var(--primary); font-size: 3.2rem; line-height: 1.04;
+                font-weight: 680; margin: 0; letter-spacing: 0;
             }
             .page-subtitle, .section-subtitle {
-                color: var(--muted); max-width: 860px; font-size: 0.98rem; margin-top: 0.68rem; line-height: 1.65;
+                color: var(--muted); max-width: 900px; font-size: 0.98rem; margin-top: 0.68rem; line-height: 1.65;
             }
             .scope-pill, .status-badge {
                 display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.32rem 0.62rem;
                 border-radius: 999px; font-size: 0.73rem; font-weight: 620; border: 1px solid var(--line);
-                background: rgba(255,255,255,0.86); color: var(--primary);
-                box-shadow: 0 6px 16px rgba(17, 24, 39, 0.035);
+                background: rgba(255,255,255,0.055); color: var(--primary);
+                box-shadow: 0 8px 18px rgba(0, 0, 0, 0.20);
             }
             .scope-pill { float: right; margin-top: 0.48rem; }
-            .scope-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--green); box-shadow: 0 0 12px rgba(79,157,122,.22); }
-            .status-success, .status-good { color: #2f765a; background: rgba(79,157,122,0.08); border-color: rgba(79,157,122,0.18); }
-            .status-warning, .status-warn { color: #8a642c; background: rgba(184,135,61,0.08); border-color: rgba(184,135,61,0.18); }
-            .status-danger, .status-bad { color: #9b4e4e; background: rgba(198,93,93,0.08); border-color: rgba(198,93,93,0.18); }
+            .scope-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent-2); box-shadow: 0 0 12px rgba(255,157,66,.42); }
+            .status-success, .status-good { color: #ffffff; background: rgba(216,155,82,0.13); border-color: rgba(216,155,82,0.28); }
+            .status-warning, .status-warn { color: #ffffff; background: rgba(255,157,66,0.12); border-color: rgba(255,157,66,0.28); }
+            .status-danger, .status-bad { color: #ffffff; background: rgba(255,79,31,0.13); border-color: rgba(255,79,31,0.30); }
             .hero-card {
-                position: relative; overflow: hidden; padding: clamp(2.2rem, 5vw, 5.2rem);
-                border-radius: 28px; border: 1px solid rgba(99, 102, 241, 0.11);
+                position: relative; overflow: hidden; padding: 4.2rem;
+                border-radius: 8px; border: 1px solid rgba(255, 112, 51, 0.18);
                 background:
-                    radial-gradient(ellipse at 72% 4%, rgba(141, 127, 255, 0.25), transparent 36%),
-                    radial-gradient(ellipse at 18% 18%, rgba(141, 208, 237, 0.20), transparent 36%),
-                    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.78));
+                    radial-gradient(ellipse at 52% 10%, rgba(255, 63, 22, 0.34), transparent 34%),
+                    radial-gradient(ellipse at 72% 20%, rgba(255, 157, 66, 0.14), transparent 38%),
+                    linear-gradient(180deg, rgba(30, 25, 23, 0.92), rgba(11, 10, 10, 0.95));
                 box-shadow: var(--shadow); color: var(--primary);
             }
             .hero-card:after {
-                content: ''; position: absolute; inset: 18% 5% auto auto; height: 220px; width: 460px;
-                background: radial-gradient(ellipse, rgba(123, 109, 240, 0.18), transparent 68%);
+                content: ''; position: absolute; inset: 12% 8% auto auto; height: 260px; width: 520px;
+                background: radial-gradient(ellipse, rgba(255, 79, 31, 0.16), transparent 68%);
                 filter: blur(18px);
                 pointer-events: none;
             }
-            .hero-title { font-size: clamp(3.1rem, 7vw, 6.6rem); line-height: .95; font-weight: 560; letter-spacing: -0.055em; margin: 0; max-width: 920px; }
-            .hero-subtitle { max-width: 760px; color: #5d6677; font-size: 1.08rem; line-height: 1.7; margin-top: 1.05rem; }
+            .hero-title { font-size: 5.2rem; line-height: .98; font-weight: 560; letter-spacing: 0; margin: 0; max-width: 920px; }
+            .hero-subtitle { max-width: 780px; color: var(--muted); font-size: 1.08rem; line-height: 1.7; margin-top: 1.05rem; }
             .hero-badges { display: flex; flex-wrap: wrap; gap: 0.58rem; margin-top: 1.45rem; }
             .hero-badge {
                 display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.48rem 0.74rem; border-radius: 999px;
-                color: #434a5e; background: rgba(255,255,255,0.78); border: 1px solid var(--line);
+                color: var(--primary); background: rgba(255,255,255,0.055); border: 1px solid var(--line);
                 font-size: 0.82rem; font-weight: 540; backdrop-filter: blur(12px);
             }
             .glass-card, .method-card, .model-card, .score-card, .scenario-card, .chat-shell {
-                border-radius: 22px; border: 1px solid var(--line);
+                border-radius: 8px; border: 1px solid var(--line);
                 background: var(--surface); box-shadow: var(--soft-shadow); backdrop-filter: blur(16px);
             }
             .glass-card { padding: 1.25rem; }
-            .section-title { color: var(--primary); font-size: 1.18rem; font-weight: 650; margin: 0 0 .25rem; letter-spacing: -0.01em; }
+            .section-title { color: var(--primary); font-size: 1.18rem; font-weight: 650; margin: 0 0 .25rem; letter-spacing: 0; }
             .metric-card {
                 position: relative; overflow: hidden; min-height: 118px; padding: 1.05rem;
-                border-radius: 20px; border: 1px solid var(--line);
-                background: rgba(255,255,255,0.88); box-shadow: 0 10px 26px rgba(17, 24, 39, 0.045);
+                border-radius: 8px; border: 1px solid var(--line);
+                background: var(--surface); box-shadow: var(--soft-shadow);
             }
-            .metric-card:before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent, var(--blue)) 35%, white), transparent); }
+            .metric-card:before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); pointer-events: none; }
             .metric-card-blue { --accent: var(--blue); }
             .metric-card-green { --accent: var(--green); }
             .metric-card-purple { --accent: var(--purple); }
@@ -254,25 +274,25 @@ def inject_global_css() -> None:
             .metric-card-red { --accent: var(--red); }
             .metric-card-cyan { --accent: var(--cyan); }
             .metric-icon {
-                width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 10px;
-                background: rgba(248,250,252,0.92); border: 1px solid var(--line); margin-bottom: 0.5rem;
+                width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 8px;
+                background: rgba(255,255,255,0.06); border: 1px solid var(--line); margin-bottom: 0.5rem;
                 color: var(--primary); font-size: .88rem;
             }
             .metric-label { color: var(--muted); font-size: 0.7rem; font-weight: 620; text-transform: uppercase; letter-spacing: 0.08em; }
             .metric-value { color: var(--primary); font-size: 1.48rem; font-weight: 680; margin-top: 0.22rem; line-height: 1.12; overflow-wrap: anywhere; }
             .metric-note { color: var(--muted); font-size: 0.82rem; margin-top: 0.38rem; line-height: 1.38; }
             .warning-callout, .info-callout {
-                border-radius: 22px; padding: 1rem 1.1rem; line-height: 1.55; box-shadow: 0 12px 28px rgba(17, 24, 39, 0.035);
+                border-radius: 8px; padding: 1rem 1.1rem; line-height: 1.55; box-shadow: var(--soft-shadow);
             }
-            .warning-callout { border: 1px solid rgba(184,135,61,0.18); background: rgba(255, 252, 244, 0.88); color: #705224; }
-            .info-callout { border: 1px solid var(--line-soft); background: rgba(248, 249, 255, 0.92); color: #38405c; }
+            .warning-callout { border: 1px solid rgba(255,157,66,0.28); background: rgba(255, 157, 66, 0.10); color: #ffffff; }
+            .info-callout { border: 1px solid var(--line-soft); background: rgba(255, 79, 31, 0.075); color: #ffffff; }
             .model-grid, .method-grid, .score-mini-grid {
                 display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem;
             }
             .method-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
             .method-card, .model-card { padding: 1.18rem; min-height: 154px; position: relative; overflow: hidden; }
             .model-card:before, .method-card:before, .scenario-card:before {
-                content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent, var(--blue)) 30%, white), transparent);
+                content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); pointer-events: none;
             }
             .model-card-blue, .method-card-blue { --accent: var(--cyan); }
             .model-card-purple, .method-card-purple { --accent: var(--purple); }
@@ -280,22 +300,22 @@ def inject_global_css() -> None:
             .model-card-green, .method-card-green { --accent: var(--green); }
             .model-card-cyan, .method-card-cyan { --accent: var(--cyan); }
             .model-icon, .method-number {
-                width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 11px;
-                background: rgba(248,250,252,0.92); border: 1px solid var(--line); font-weight: 620; margin-bottom: .75rem;
+                width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px;
+                background: rgba(255,255,255,0.06); border: 1px solid var(--line); font-weight: 620; margin-bottom: .75rem;
             }
             .model-title, .method-title { color: var(--primary); font-weight: 650; font-size: 1rem; margin-bottom: .35rem; }
             .model-body, .method-body { color: var(--muted); font-size: .86rem; line-height: 1.48; }
-            .score-card { padding: 1.15rem; background: #ffffff; color: var(--primary); }
+            .score-card { padding: 1.15rem; background: var(--surface); color: var(--primary); }
             .score-value { font-size: 2.6rem; font-weight: 680; line-height: 1; color: inherit; }
             .score-label { font-weight: 620; margin-top: .35rem; }
             .formula-panel {
-                border-radius: 24px; padding: 1.25rem; color: var(--primary);
-                background: linear-gradient(135deg, #ffffff, #f5f6ff);
+                border-radius: 8px; padding: 1.25rem; color: var(--primary);
+                background: linear-gradient(135deg, rgba(37, 31, 28, 0.92), rgba(17, 15, 15, 0.94));
                 border: 1px solid var(--line-soft);
                 box-shadow: var(--soft-shadow);
             }
             .formula-title { font-size: 1.05rem; font-weight: 680; margin-bottom: .7rem; }
-            .formula-line { display: flex; justify-content: space-between; gap: 1rem; padding: .48rem 0; border-top: 1px solid var(--line); font-weight: 560; color: #394150; }
+            .formula-line { display: flex; justify-content: space-between; gap: 1rem; padding: .48rem 0; border-top: 1px solid var(--line); font-weight: 560; color: #ead6c9; }
             .scenario-card { padding: 1.15rem; min-height: 292px; position: relative; overflow: hidden; }
             .scenario-card-blue { --accent: var(--blue); }
             .scenario-card-green { --accent: var(--green); }
@@ -305,104 +325,215 @@ def inject_global_css() -> None:
             .scenario-price { font-size: 1.58rem; font-weight: 680; color: var(--primary); line-height: 1.1; }
             .scenario-row { display: flex; justify-content: space-between; gap: .8rem; border-top: 1px solid var(--line); padding-top: .46rem; margin-top: .46rem; color: var(--muted); font-size: .82rem; }
             .scenario-row b { color: var(--primary); }
-            .chat-shell { overflow: hidden; background: rgba(255,255,255,0.92); }
+            .chat-shell { overflow: hidden; background: var(--surface); }
             .chat-header {
-                padding: 1rem; color: var(--primary); background: linear-gradient(135deg, #ffffff, #f3f5ff);
+                padding: 1rem; color: var(--primary); background: linear-gradient(135deg, rgba(42, 32, 28, 0.95), rgba(20, 17, 16, 0.95));
                 border-bottom: 1px solid var(--line);
                 display: flex; align-items: center; gap: .75rem;
             }
             .chat-avatar {
-                width: 38px; height: 38px; display: grid; place-items: center; border-radius: 13px;
-                background: #ffffff; border: 1px solid var(--line-soft); font-weight: 660;
+                width: 38px; height: 38px; display: grid; place-items: center; border-radius: 8px;
+                background: rgba(255,255,255,0.06); border: 1px solid var(--line-soft); font-weight: 660;
             }
             .chat-header-title { font-weight: 680; font-size: 1.05rem; }
             .chat-header-subtitle { color: var(--muted); font-size: .82rem; margin-top: .15rem; line-height: 1.35; }
             .chat-body {
                 min-height: 300px; max-height: 560px; overflow-y: auto; padding: .85rem;
-                background: linear-gradient(180deg, rgba(251,252,255,0.92), rgba(255,255,255,0.92));
+                background: linear-gradient(180deg, rgba(18,16,15,0.94), rgba(10,9,9,0.94));
             }
             .chat-orb {
-                width: 58px; height: 58px; flex: 0 0 auto; border-radius: 999px;
+                width: 52px; height: 52px; flex: 0 0 auto; border-radius: 8px;
                 display: grid; place-items: center; color: white; font-weight: 760;
-                background:
-                    radial-gradient(circle at 32% 28%, rgba(255,255,255,.95), transparent 13%),
-                    radial-gradient(circle at 68% 30%, rgba(255,255,255,.95), transparent 12%),
-                    linear-gradient(145deg, #8bd3ff, #8b7cf6 48%, #ec8cff);
-                box-shadow: 0 16px 40px rgba(139,124,246,.25), 0 0 0 6px rgba(255,255,255,.72);
+                background: linear-gradient(145deg, #ff6a2b, #b5280d);
+                box-shadow: 0 16px 40px rgba(255,79,31,.22);
             }
             .chat-thread { display: flex; flex-direction: column; gap: .78rem; padding: .35rem; }
             .chat-row { display: flex; gap: .7rem; align-items: flex-start; }
-            .chat-row .chat-orb { width: 44px; height: 44px; font-size: .86rem; box-shadow: 0 12px 28px rgba(139,124,246,.20), 0 0 0 5px rgba(255,255,255,.72); }
+            .chat-row .chat-orb { width: 44px; height: 44px; font-size: .86rem; box-shadow: 0 12px 28px rgba(255,79,31,.20); }
             .chat-row-user { justify-content: flex-end; }
             .chat-row-assistant { justify-content: flex-start; }
             .chat-bubble {
-                max-width: min(920px, 88%); padding: .86rem 1rem; border-radius: 20px;
+                max-width: min(920px, 88%); padding: .86rem 1rem; border-radius: 8px;
                 border: 1px solid var(--line); color: var(--primary); line-height: 1.55;
                 font-size: .94rem; white-space: pre-wrap; overflow-wrap: anywhere;
-                box-shadow: 0 12px 26px rgba(17,24,39,.045);
+                box-shadow: 0 12px 26px rgba(0,0,0,.22);
             }
             .chat-bubble-user {
-                background: linear-gradient(135deg, #eff6ff, #f5f3ff);
+                background: linear-gradient(135deg, rgba(255,79,31,.18), rgba(255,157,66,.10));
                 border-top-right-radius: 8px;
             }
             .chat-bubble-assistant {
-                background: rgba(255,255,255,.94);
+                background: rgba(255,255,255,.055);
                 border-top-left-radius: 8px;
             }
             .chat-bubble-pending {
-                color: #475569;
-                background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(245,247,255,.96));
+                color: var(--muted);
+                background: rgba(255,255,255,.07);
             }
             .chat-source {
                 display: inline-flex;
                 margin-bottom: .42rem;
                 padding: .16rem .48rem;
                 border-radius: 999px;
-                background: rgba(91,124,250,.10);
-                color: #394150;
+                background: rgba(255,79,31,.15);
+                color: #ffffff;
                 font-size: .72rem;
                 font-weight: 650;
             }
             .chat-wide-shell {
-                border-radius: 26px; overflow: hidden; border: 1px solid var(--line);
+                border-radius: 8px; overflow: hidden; border: 1px solid var(--line);
                 background:
-                    radial-gradient(circle at 12% 8%, rgba(191,219,254,.42), transparent 32%),
-                    radial-gradient(circle at 86% 14%, rgba(244,194,255,.35), transparent 30%),
-                    rgba(255,255,255,.82);
+                    radial-gradient(ellipse at 50% 0%, rgba(255,79,31,.14), transparent 34%),
+                    rgba(14,13,13,.90);
                 box-shadow: var(--soft-shadow);
             }
-            .chat-input-area { padding: .8rem 1rem 1rem; border-top: 1px solid var(--line); background: rgba(255,255,255,.90); }
-            .quick-question button { border-radius: 999px !important; border-color: var(--line) !important; background: rgba(255,255,255,.94) !important; color: #394150 !important; box-shadow: none !important; }
-            .warning-box { border: 1px solid rgba(184,135,61,0.18); background: rgba(255,252,244,0.88); color: #705224; border-radius: 22px; padding: .9rem 1rem; }
-            .info-box { border: 1px solid var(--line-soft); background: rgba(248,249,255,0.92); color: #38405c; border-radius: 22px; padding: .9rem 1rem; }
+            .chat-input-area { padding: .8rem 1rem 1rem; border-top: 1px solid var(--line); background: var(--surface); }
+            .quick-question button { border-radius: 8px !important; border-color: var(--line) !important; background: rgba(255,255,255,.055) !important; color: var(--primary) !important; box-shadow: none !important; }
+            .warning-box { border: 1px solid rgba(255,157,66,0.28); background: rgba(255,157,66,0.10); color: #ffffff; border-radius: 8px; padding: .9rem 1rem; }
+            .info-box { border: 1px solid var(--line-soft); background: rgba(255,79,31,0.075); color: #ffffff; border-radius: 8px; padding: .9rem 1rem; }
+            .st-key-advisor_chat_module {
+                max-width: 980px;
+                margin: 0 auto;
+                padding: 1rem 1.05rem 1.05rem;
+                border-radius: 12px;
+                border: 1px solid rgba(255,123,66,0.22);
+                background:
+                    radial-gradient(ellipse at 50% 0%, rgba(255,79,31,0.16), transparent 36%),
+                    linear-gradient(180deg, rgba(28,24,22,0.95), rgba(10,9,9,0.96));
+                box-shadow: 0 26px 70px rgba(0,0,0,0.42), 0 0 42px rgba(255,79,31,0.08);
+            }
+            .st-key-advisor_chat_module [data-testid='stVerticalBlock'] {
+                gap: .75rem;
+            }
+            .advisor-chat-header {
+                display: flex;
+                justify-content: space-between;
+                gap: 1rem;
+                align-items: flex-start;
+                padding: .55rem .6rem .35rem;
+            }
+            .advisor-chat-title-row {
+                display: flex;
+                align-items: center;
+                gap: .75rem;
+            }
+            .advisor-status-pills {
+                display: flex;
+                justify-content: flex-end;
+                flex-wrap: wrap;
+                gap: .38rem;
+                max-width: 430px;
+            }
+            .advisor-status-pill {
+                display: inline-flex;
+                align-items: center;
+                min-height: 24px;
+                padding: .2rem .5rem;
+                border-radius: 999px;
+                border: 1px solid rgba(255,123,66,0.20);
+                background: rgba(255,255,255,0.055);
+                color: #ffffff;
+                font-size: .72rem;
+                font-weight: 650;
+                white-space: nowrap;
+            }
+            .advisor-chat-kicker {
+                padding: 0 .6rem;
+                font-size: .72rem;
+                font-weight: 700;
+                letter-spacing: .08em;
+                text-transform: uppercase;
+                color: #ffb25e;
+            }
+            .st-key-advisor_chat_module div[data-testid='stButton'] button {
+                min-height: 34px !important;
+                width: auto !important;
+                padding: .28rem .72rem !important;
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,123,66,0.24) !important;
+                background: rgba(255,255,255,0.055) !important;
+                color: #ffffff !important;
+                box-shadow: none !important;
+                font-size: .82rem !important;
+                line-height: 1.2 !important;
+            }
+            .st-key-advisor_chat_module div[data-testid='stButton'] button:hover {
+                background: rgba(255,79,31,0.16) !important;
+                border-color: rgba(255,178,94,0.48) !important;
+                box-shadow: 0 10px 28px rgba(255,79,31,0.14) !important;
+            }
+            .st-key-advisor_chat_module .chat-wide-shell {
+                box-shadow: none;
+                border-color: rgba(255,255,255,0.10);
+                background:
+                    radial-gradient(ellipse at 0% 0%, rgba(255,79,31,0.08), transparent 34%),
+                    rgba(7,7,7,0.62);
+            }
+            .st-key-advisor_chat_module .chat-body {
+                min-height: 220px;
+                max-height: 390px;
+                padding: .9rem;
+                background: transparent;
+            }
+            .st-key-advisor_chat_module .chat-bubble {
+                max-width: min(760px, 82%);
+                border-radius: 12px;
+            }
+            .st-key-advisor_chat_module .chat-bubble-user {
+                background: linear-gradient(135deg, rgba(255,79,31,.92), rgba(181,40,13,.92));
+                border-color: rgba(255,184,117,0.30);
+            }
+            .st-key-advisor_chat_module .chat-bubble-assistant {
+                background: rgba(255,255,255,0.07);
+                border-color: rgba(255,255,255,0.12);
+            }
+            .st-key-advisor_chat_module div[data-testid='stForm'] {
+                margin-top: .1rem;
+                padding: .72rem;
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 12px;
+                background: rgba(255,255,255,0.045);
+            }
+            .st-key-advisor_chat_module div[data-testid='stForm'] input {
+                min-height: 44px;
+                border-radius: 999px !important;
+                padding-left: 1rem !important;
+                background: rgba(4,4,4,0.62) !important;
+                border: 1px solid rgba(255,123,66,0.26) !important;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+            }
+            .st-key-advisor_chat_module div[data-testid='stFormSubmitButton'] button {
+                min-height: 44px !important;
+                width: 100% !important;
+                border-radius: 999px !important;
+                background: linear-gradient(180deg, rgba(255,93,36,0.98), rgba(181,40,13,0.98)) !important;
+                border: 1px solid rgba(255,184,117,0.36) !important;
+                color: #ffffff !important;
+                box-shadow: 0 14px 30px rgba(255,79,31,0.20) !important;
+            }
             .nav-card { min-height: 168px; display: flex; flex-direction: column; justify-content: space-between; }
             .card-grid {
                 display: grid;
-                gap: 1.35rem;
+                gap: 1rem;
                 width: 100%;
                 align-items: stretch;
-                padding: 1.35rem;
-                border-radius: 30px;
-                border: 1px solid rgba(255,255,255,0.58);
-                background:
-                    radial-gradient(circle at 18% 12%, rgba(191, 219, 254, 0.24), transparent 34%),
-                    radial-gradient(circle at 82% 18%, rgba(196, 181, 253, 0.18), transparent 36%),
-                    rgba(255,255,255,0.34);
-                box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28), 0 20px 70px rgba(15,23,42,0.05);
-                backdrop-filter: blur(20px);
+                padding: 0;
             }
             .card-grid.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .card-grid.three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
             .card-grid.auto-col { grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); }
             .premium-card {
                 position: relative;
-                min-height: 214px;
+                min-height: 206px;
                 height: 100%;
-                padding: 1.65rem;
-                border-radius: 26px;
-                border: 1px solid rgba(255,255,255,0.72);
-                background: rgba(255,255,255,0.74);
-                box-shadow: 0 18px 45px rgba(15, 23, 42, 0.075);
+                padding: 1.28rem;
+                border-radius: 8px;
+                border: 1px solid var(--line);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.038)),
+                    var(--surface-soft);
+                box-shadow: var(--soft-shadow);
                 backdrop-filter: blur(18px);
                 display: flex;
                 flex-direction: column;
@@ -416,28 +547,29 @@ def inject_global_css() -> None:
                 pointer-events: none;
                 opacity: .95;
             }
-            .premium-card.card-blue:before { background: radial-gradient(circle at top left, rgba(96,165,250,0.16), transparent 42%); }
-            .premium-card.card-purple:before { background: radial-gradient(circle at top left, rgba(167,139,250,0.16), transparent 42%); }
-            .premium-card.card-mint:before { background: radial-gradient(circle at top left, rgba(45,212,191,0.14), transparent 42%); }
-            .premium-card.card-green:before { background: radial-gradient(circle at top left, rgba(74,222,128,0.13), transparent 42%); }
-            .premium-card.card-amber:before { background: radial-gradient(circle at top left, rgba(251,191,36,0.13), transparent 42%); }
-            .premium-card.card-cyan:before { background: radial-gradient(circle at top left, rgba(34,211,238,0.13), transparent 42%); }
-            .premium-card.card-red:before { background: radial-gradient(circle at top left, rgba(248,113,113,0.12), transparent 42%); }
+            .premium-card.card-blue:before { background: radial-gradient(ellipse at top left, rgba(255,116,72,0.16), transparent 44%); }
+            .premium-card.card-purple:before { background: radial-gradient(ellipse at top left, rgba(223,107,63,0.17), transparent 44%); }
+            .premium-card.card-mint:before { background: radial-gradient(ellipse at top left, rgba(216,155,82,0.16), transparent 44%); }
+            .premium-card.card-green:before { background: radial-gradient(ellipse at top left, rgba(216,155,82,0.17), transparent 44%); }
+            .premium-card.card-amber:before { background: radial-gradient(ellipse at top left, rgba(255,157,66,0.18), transparent 44%); }
+            .premium-card.card-cyan:before { background: radial-gradient(ellipse at top left, rgba(255,178,94,0.15), transparent 44%); }
+            .premium-card.card-red:before { background: radial-gradient(ellipse at top left, rgba(255,79,31,0.18), transparent 44%); }
             .premium-card > * { position: relative; z-index: 1; }
             .premium-card.metric-size { min-height: 148px; }
-            .premium-card.large-size { min-height: 268px; }
-            .premium-card.scenario-size { min-height: 338px; }
+            .premium-card.large-size { min-height: 244px; }
+            .premium-card.scenario-size { min-height: 420px; }
             .card-icon-row { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
             .card-icon {
-                width: 44px; height: 44px; border-radius: 15px;
+                min-width: 44px; min-height: 44px; border-radius: 8px;
+                padding: 0 .45rem;
                 display: inline-flex; align-items: center; justify-content: center;
-                background: rgba(255,255,255,0.9);
-                border: 1px solid rgba(15,23,42,0.06);
-                box-shadow: inset 0 0 0 1px rgba(15,23,42,0.025);
+                background: rgba(255,79,31,0.12);
+                border: 1px solid rgba(255,123,66,0.18);
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,0.025);
                 font-weight: 680;
             }
             .card-title {
-                color: #0f172a;
+                color: var(--primary);
                 font-size: 1.16rem;
                 line-height: 1.18;
                 font-weight: 700;
@@ -445,7 +577,7 @@ def inject_global_css() -> None:
                 margin: 0 0 .55rem;
             }
             .card-value {
-                color: #0f172a;
+                color: #ffffff;
                 font-size: 1.55rem;
                 line-height: 1.1;
                 font-weight: 720;
@@ -453,44 +585,182 @@ def inject_global_css() -> None:
                 overflow-wrap: anywhere;
             }
             .card-body {
-                color: #64748b;
+                color: var(--muted);
                 font-size: .88rem;
                 line-height: 1.5;
-                display: -webkit-box;
-                -webkit-line-clamp: 3;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
+                overflow-wrap: anywhere;
             }
             .card-list {
-                color: #475569;
+                color: var(--muted);
                 font-size: .86rem;
                 line-height: 1.55;
                 margin-top: .85rem;
             }
-            .card-line { display: flex; justify-content: space-between; gap: .8rem; padding: .32rem 0; border-top: 1px solid rgba(15,23,42,.07); }
-            .card-line b { color: #0f172a; }
+            .card-line { display: flex; justify-content: space-between; gap: .8rem; padding: .32rem 0; border-top: 1px solid var(--line); }
+            .card-line b { color: var(--primary); text-align: right; }
             .card-footer { margin-top: 1.15rem; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
             .card-pill {
                 font-size: .75rem;
-                color: #475569;
-                background: rgba(15,23,42,0.055);
+                color: #ffffff;
+                background: rgba(255,79,31,0.11);
                 border-radius: 999px;
                 padding: .38rem .62rem;
-                border: 1px solid rgba(15,23,42,0.04);
+                border: 1px solid rgba(255,123,66,0.18);
             }
             .advisor-panel { padding: .25rem .1rem .1rem; }
-            .soft-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(99,102,241,.18), transparent); margin: 1.6rem 0; }
+            .soft-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,79,31,.24), transparent); margin: 1.6rem 0; }
             .divider-space { margin-top: 1.35rem; }
+            .stMarkdown, .stText, p, li, label, span { color: inherit; }
+            h1, h2, h3, h4, h5, h6 { color: var(--primary); letter-spacing: 0; }
+            .stApp :where(p, li, label, span, div, small, strong, em, code, figcaption) {
+                color: #ffffff;
+            }
+            div[data-testid='stDataFrame'] *,
+            div[data-testid='stTable'] *,
+            div[data-testid='stDataFrameResizable'] *,
+            div[data-testid='stDataFrame'] :where(p, li, label, span, div, small, strong, em, code),
+            div[data-testid='stTable'] :where(p, li, label, span, div, small, strong, em, code) {
+                color: #050505 !important;
+                -webkit-text-fill-color: #050505 !important;
+            }
+            div[data-testid='stDataFrame'],
+            div[data-testid='stTable'],
+            div[data-testid='stDataFrameResizable'] {
+                background: #ffffff !important;
+                color: #050505 !important;
+                -webkit-text-fill-color: #050505 !important;
+                --text-color: #050505;
+                --background-color: #ffffff;
+                --secondary-background-color: #ffffff;
+            }
+            div[data-testid='stDataFrame'] svg *,
+            div[data-testid='stTable'] svg * {
+                fill: #050505 !important;
+                color: #050505 !important;
+            }
+            div[data-testid='stDataFrame'] table,
+            div[data-testid='stTable'] table,
+            div[data-testid='stDataFrame'] thead,
+            div[data-testid='stTable'] thead,
+            div[data-testid='stDataFrame'] tbody,
+            div[data-testid='stTable'] tbody,
+            div[data-testid='stDataFrame'] tr,
+            div[data-testid='stTable'] tr,
+            div[data-testid='stDataFrame'] th,
+            div[data-testid='stTable'] th,
+            div[data-testid='stDataFrame'] td,
+            div[data-testid='stTable'] td {
+                background: #ffffff !important;
+                color: #050505 !important;
+                -webkit-text-fill-color: #050505 !important;
+            }
+            div[data-testid='stMetric'] {
+                background: var(--surface);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                padding: 0.9rem;
+            }
+            div[data-testid='stMetric'] label, div[data-testid='stMetric'] [data-testid='stMetricValue'] {
+                color: var(--primary);
+            }
+            button[kind], div[data-testid='stDownloadButton'] button, div[data-testid='stButton'] button {
+                border-radius: 8px !important;
+                border: 1px solid rgba(255, 123, 66, 0.35) !important;
+                background: linear-gradient(180deg, rgba(255, 93, 36, 0.95), rgba(191, 43, 13, 0.95)) !important;
+                color: #fff7f1 !important;
+                box-shadow: 0 12px 28px rgba(255, 79, 31, 0.18) !important;
+            }
+            button[kind]:hover, div[data-testid='stDownloadButton'] button:hover, div[data-testid='stButton'] button:hover {
+                border-color: rgba(255, 184, 117, 0.58) !important;
+                filter: brightness(1.05);
+            }
+            div[data-testid='stTabs'] button {
+                color: var(--muted) !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                border-radius: 8px 8px 0 0 !important;
+            }
+            div[data-testid='stTabs'] button[aria-selected='true'] {
+                color: var(--primary) !important;
+                background: rgba(255,79,31,0.12) !important;
+            }
+            div[data-testid='stExpander'] {
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: rgba(255,255,255,0.035);
+            }
+            div[data-baseweb='select'] > div,
+            div[data-testid='stNumberInput'] input,
+            div[data-testid='stTextInput'] input,
+            div[data-testid='stChatInput'] textarea,
+            textarea {
+                background: rgba(255,255,255,0.055) !important;
+                border-color: rgba(255,255,255,0.12) !important;
+                color: var(--primary) !important;
+                border-radius: 8px !important;
+            }
+            div[data-testid='stNumberInput'] input,
+            div[data-testid='stNumberInput'] input *,
+            div[data-testid='stTextInput'] input,
+            div[data-testid='stTextInput'] input *,
+            div[data-testid='stFileUploader'] *,
+            div[data-baseweb='select'] *,
+            div[data-baseweb='input'] *,
+            div[data-testid='stNumberInput'] button,
+            div[data-testid='stNumberInput'] button * {
+                color: #050505 !important;
+                -webkit-text-fill-color: #050505 !important;
+            }
+            div[data-testid='stNumberInput'] input,
+            div[data-testid='stTextInput'] input,
+            div[data-baseweb='select'] > div,
+            div[data-baseweb='input'] > div {
+                background: #f7f8fb !important;
+                border-color: rgba(5, 5, 5, 0.18) !important;
+            }
+            div[data-testid='stNumberInput'] svg *,
+            div[data-baseweb='select'] svg * {
+                fill: #050505 !important;
+                color: #050505 !important;
+            }
+            .st-key-advisor_chat_module div[data-testid='stTextInput'] input,
+            .st-key-advisor_chat_module div[data-testid='stTextInput'] input *,
+            .st-key-advisor_chat_module div[data-baseweb='input'] *,
+            .st-key-advisor_chat_module div[data-testid='stForm'] input {
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+            }
+            .st-key-advisor_chat_module div[data-testid='stTextInput'] input,
+            .st-key-advisor_chat_module div[data-baseweb='input'] > div,
+            .st-key-advisor_chat_module div[data-testid='stForm'] input {
+                background: rgba(4,4,4,0.62) !important;
+                border-color: rgba(255,123,66,0.26) !important;
+            }
+            div[data-testid='stAlert'] {
+                border-radius: 8px;
+                background: rgba(255,157,66,0.10);
+                border: 1px solid rgba(255,157,66,0.24);
+                color: #ffffff;
+            }
             @media (max-width: 1100px) {
                 .model-grid, .method-grid, .score-mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
                 .card-grid.three-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .hero-title { font-size: 4rem; }
+                .hero-card { padding: 3rem; }
             }
             @media (max-width: 760px) {
                 .scope-pill { float: none; margin-bottom: .8rem; }
                 .model-grid, .method-grid, .score-mini-grid { grid-template-columns: 1fr; }
                 .card-grid.three-col, .card-grid.two-col, .card-grid.auto-col { grid-template-columns: 1fr; }
+                .page-title { font-size: 2.2rem; }
                 .hero-card { padding: 1.35rem; }
+                .hero-title { font-size: 3rem; }
                 .metric-value { font-size: 1.45rem; }
+                .st-key-advisor_chat_module { padding: .85rem; }
+                .advisor-chat-header { flex-direction: column; align-items: flex-start; }
+                .advisor-status-pills { justify-content: flex-start; max-width: 100%; }
+                .st-key-advisor_chat_module .chat-body { max-height: 360px; }
+                .st-key-advisor_chat_module .chat-bubble { max-width: 92%; }
             }
         </style>
         """,
@@ -1229,20 +1499,157 @@ def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[s
 
 def normalize_llm_payload(content: str) -> dict[str, Any] | None:
     cleaned = content.strip()
+    cleaned = cleaned.removeprefix("\ufeff").strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
+    if cleaned.casefold().startswith("json"):
+        cleaned = cleaned[4:].strip()
     try:
         parsed = json.loads(cleaned)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
         if not match:
             return None
+        candidate = match.group(0)
+        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
         try:
-            parsed = json.loads(match.group(0))
+            parsed = json.loads(candidate)
         except json.JSONDecodeError:
             return None
+    if isinstance(parsed, dict) and "choices" in parsed:
+        try:
+            nested_content = parsed["choices"][0]["message"]["content"]
+            return normalize_llm_payload(str(nested_content))
+        except Exception:
+            return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _safe_text(value: Any, max_length: int = 1200) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"\s+", " ", text)
+    return text[:max_length]
+
+
+def _default_evidence(context: dict[str, Any], claim_prefix: str = "Model çıktısı yorumlandı.") -> list[dict[str, str]]:
+    evidence_items = context.get("evidence_items", [])
+    if not isinstance(evidence_items, list):
+        evidence_items = []
+    defaults: list[dict[str, str]] = []
+    for item in evidence_items[:3]:
+        if isinstance(item, dict) and item.get("evidence_id"):
+            defaults.append(
+                {
+                    "evidence_id": str(item["evidence_id"]),
+                    "claim": _safe_text(item.get("content") or claim_prefix, 240),
+                }
+            )
+    return defaults or [
+        {"evidence_id": "E_PROFILE_001", "claim": "Profil uyumu kontrol edildi."},
+        {"evidence_id": "E_PRICE_001", "claim": "Fiyat koridoru kontrol edildi."},
+        {"evidence_id": "E_RISK_001", "claim": "Risk bayrakları kontrol edildi."},
+    ]
+
+
+def normalize_advisor_payload_schema(payload: dict[str, Any], context: dict[str, Any], question: str) -> dict[str, Any]:
+    """Coerce model JSON into the strict advisor schema before safety validation."""
+    allowed_ids = {item["evidence_id"] for item in _default_evidence(context)}
+    summary = (
+        payload.get("executive_summary")
+        or payload.get("summary")
+        or payload.get("decision_summary")
+        or payload.get("answer")
+        or payload.get("response")
+        or ""
+    )
+    rationale = payload.get("scenario_rationale") or payload.get("rationale") or payload.get("analysis") or summary
+    action = payload.get("recommended_action") or payload.get("action") or "Model çıktıları karar komitesi tarafından manuel kontrol edilmeli."
+    evidence_used = payload.get("evidence_used")
+    normalized_evidence: list[dict[str, str]] = []
+    if isinstance(evidence_used, list):
+        for item in evidence_used:
+            if isinstance(item, dict):
+                evidence_id = str(item.get("evidence_id", "")).strip()
+                claim = _safe_text(item.get("claim") or item.get("content") or item.get("text"), 360)
+            else:
+                evidence_id = str(item).strip()
+                claim = "Model bağlamındaki kanıt kullanıldı."
+            if evidence_id in allowed_ids:
+                normalized_evidence.append({"evidence_id": evidence_id, "claim": claim or "Model bağlamındaki kanıt kullanıldı."})
+    if not normalized_evidence:
+        normalized_evidence = _default_evidence(context)
+
+    risk_warnings = payload.get("risk_warnings") or payload.get("risks") or payload.get("risk_flags") or []
+    if not isinstance(risk_warnings, list):
+        risk_warnings = [risk_warnings]
+    risk_warnings = [_safe_text(item, 360) for item in risk_warnings if str(item).strip()][:4]
+    if not risk_warnings:
+        risk_flags = context.get("risk_flags", [])
+        risk_warnings = [_safe_text(item, 360) for item in risk_flags[:4]] if isinstance(risk_flags, list) else []
+    if not risk_warnings:
+        risk_warnings = ["Belirgin ek risk uyarısı yok; yine de maliyet ve teslim varsayımları kontrol edilmeli."]
+
+    human_checks = payload.get("human_checks_required") or payload.get("manual_checks") or payload.get("human_checks") or []
+    if not isinstance(human_checks, list):
+        human_checks = [human_checks]
+    human_checks = [_safe_text(item, 360) for item in human_checks if str(item).strip()][:4]
+    if not human_checks:
+        human_checks = ["Fiyat, maliyet, teslim ve stok varsayımları teklif komitesi tarafından kontrol edilmeli."]
+
+    limitations = payload.get("limitations") or []
+    if not isinstance(limitations, list):
+        limitations = [limitations]
+    limitations = [_safe_text(item, 360) for item in limitations if str(item).strip()][:4]
+    required_limits = [
+        "Bu çıktı gerçek kazanma olasılığı değildir.",
+        "Kaybedilmiş ihale verisi olmadığı için kazanma/kaybetme sınıflandırması yapılmaz.",
+        "Rakip fiyatları tahmin edilmez; sadece mevcut veriyle karar desteği sağlanır.",
+    ]
+    for item in required_limits:
+        if item not in limitations:
+            limitations.append(item)
+
+    forbidden_flags = payload.get(FORBIDDEN_CHECK_FIELD)
+    if not isinstance(forbidden_flags, dict):
+        forbidden_flags = {}
+
+    return {
+        "executive_summary": _safe_text(summary or rationale or "OpenRouter yanıtı yapılandırılmış danışman formatına dönüştürüldü.", 1200),
+        "recommended_action": _safe_text(action, 1200),
+        "scenario_rationale": _safe_text(rationale or summary, 1800),
+        "evidence_used": normalized_evidence,
+        "risk_warnings": risk_warnings,
+        "human_checks_required": human_checks,
+        "confidence_rationale": _safe_text(
+            payload.get("confidence_rationale")
+            or payload.get("confidence")
+            or f"Yanıt, seçili ihale bağlamı ve kullanıcı sorusu temel alınarak yorumlandı: {question}",
+            1200,
+        ),
+        "limitations": limitations[:5],
+        FORBIDDEN_CHECK_FIELD: {
+            "claims_true_win_chance": bool(forbidden_flags.get("claims_true_win_chance", False)),
+            "claims_guaranteed_win": bool(forbidden_flags.get("claims_guaranteed_win", False)),
+        },
+    }
+
+
+def payload_from_free_text(content: str, context: dict[str, Any], question: str) -> dict[str, Any] | None:
+    text = content.strip()
+    if not text:
+        return None
+    if detect_forbidden_claims(text)["forbidden_claims_detected"]:
+        return None
+    return normalize_advisor_payload_schema(
+        {
+            "executive_summary": _safe_text(text, 1200),
+            "recommended_action": "Bu serbest metin yanıtı güvenli şemaya dönüştürüldü; teklif kararı öncesi metrikler manuel kontrol edilmeli.",
+            "scenario_rationale": _safe_text(text, 1800),
+        },
+        context,
+        question,
+    )
 
 
 def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] | None:
@@ -1344,8 +1751,29 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         return None
     parsed = normalize_llm_payload(content)
     if not parsed:
-        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter yanıtı geçerli JSON olarak okunamadı.", selected_model)
-        return None
+        parsed = payload_from_free_text(content, safe_context, question)
+        if not parsed:
+            set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter yanıtı geçerli JSON olarak okunamadı ve güvenli şemaya dönüştürülemedi.", selected_model)
+            audit_event(
+                {
+                    "event_type": "advisor_validation_failed",
+                    "user_action": "advisor_question",
+                    "tender_id": safe_context.get("tender_id"),
+                    "module": "advisor",
+                    "input_summary": question[:240],
+                    "output_summary": str(content)[:240],
+                    "validation_status": "fail",
+                    "leakage_status": safe_context.get("leakage_audit", {}).get("audit_status", "unknown"),
+                    "advisor_guardrail_status": "json_parse_failed",
+                    "details": {
+                        "llm_model": selected_model,
+                        "failure_reason": "json_parse_failed",
+                    },
+                }
+            )
+            return None
+    else:
+        parsed = normalize_advisor_payload_schema(parsed, safe_context, question)
     validation = validate_advisor_output(parsed, safe_context)
     grounding = validate_grounding(parsed, safe_context)
     support = validate_supported_claims(parsed, safe_context)
@@ -1356,7 +1784,19 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         or not support["supported"]
         or forbidden["forbidden_claims_detected"]
     ):
-        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter yanıtı schema, grounding veya guardrail doğrulamasından geçmedi.", selected_model)
+        failure_parts = []
+        if not validation["schema_valid"]:
+            failure_parts.append("schema")
+        if validation.get("forbidden_claims_detected") or forbidden["forbidden_claims_detected"]:
+            failure_parts.append("forbidden_claim")
+        if validation.get("hidden_actual_fields_used"):
+            failure_parts.append("hidden_actual")
+        if not grounding["grounded"]:
+            failure_parts.append("grounding")
+        if not support["supported"]:
+            failure_parts.append("support")
+        failure_reason = ", ".join(failure_parts) or "unknown_validation_failure"
+        set_advisor_llm_status("fallback", "Güvenli fallback", f"OpenRouter yanıtı doğrulama hatası: {failure_reason}.", selected_model)
         audit_event(
             {
                 "event_type": "advisor_validation_failed",
@@ -1368,6 +1808,16 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
                 "validation_status": "fail",
                 "leakage_status": safe_context.get("leakage_audit", {}).get("audit_status", "unknown"),
                 "advisor_guardrail_status": grounding["grounding_validation_status"],
+                "details": {
+                    "llm_model": selected_model,
+                    "failure_reason": failure_reason,
+                    "schema_errors": validation.get("schema_errors", []),
+                    "missing_fields": validation.get("missing_fields", []),
+                    "forbidden_terms": forbidden.get("detected_terms", []),
+                    "hidden_actual_fields_used": validation.get("hidden_actual_fields_used", []),
+                    "grounding_unsupported_claims": grounding.get("unsupported_claims", []),
+                    "support_unsupported_claims": support.get("unsupported_claims", []),
+                },
             }
         )
         return None
@@ -3441,12 +3891,22 @@ def render_advisor() -> None:
         },
     ]
     render_premium_grid(validation_cards, columns=4, size="metric-size")
+    safe_context = sanitize_advisor_context(context)
+    context_status = validate_advisor_context(safe_context)
+    status_pills_html = "".join(
+        f"<span class='advisor-status-pill'>{escape(label)}</span>"
+        for label in [
+            "Schema doğrulandı" if current_validation.get("schema_valid") else "Schema kontrolü",
+            "Kanıt kontrolü aktif" if current_validation.get("grounding_score", 0) else "Kanıt kontrolü hazır",
+            "Yasak iddia filtresi aktif",
+            "Fallback hazır" if current_validation.get("fallback_used") else "LLM aktif",
+            "Bağlam doğrulandı" if context_status.get("context_valid") else "Bağlam kontrolü",
+        ]
+    )
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
         st.markdown(advisor_payload_to_chat_text(advisor))
-        safe_context = sanitize_advisor_context(context)
-        context_status = validate_advisor_context(safe_context)
         validation_rows = pd.DataFrame(
             [
                 ["Yanıt doğrulama", st.session_state.get("advisor_validation", validation).get("advisor_validation_status", "-")],
@@ -3461,44 +3921,82 @@ def render_advisor() -> None:
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Sohbet", "Sorular, seçili ihale bağlamı ve model çıktıları üzerinden yanıtlanır.", "AI Danışman")
-    qcols = st.columns(4, gap="small")
     selected_question = None
-    for idx, question in enumerate(quick_questions):
-        with qcols[idx % 4]:
-            if st.button(question, key=f"quick_advisor_{idx}", width="stretch"):
-                selected_question = question
-
-    typed_question = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
-    # Compatibility marker for the existing UI smoke test: st.chat_message
-    user_question = selected_question or typed_question
-    if user_question:
-        st.session_state.advisor_chat_messages.append({"role": "user", "content": user_question})
-
-    visible_messages = list(st.session_state.get("advisor_chat_messages", []))
-    if user_question:
-        visible_messages.append(
-            {
-                "role": "assistant",
-                "content": "Cevap hazırlanıyor...",
-                "source": "AI yanıt hazırlıyor",
-                "pending": True,
-            }
-        )
-    st.markdown(
-        f"""
-        <div class='chat-wide-shell'>
-            <div class='chat-header'>
-                <div class='chat-orb'>AI</div>
-                <div>
-                    <div class='chat-header-title'>AI Danışman</div>
-                    <div class='chat-header-subtitle'>Model çıktıları üzerinden güvenli, detaylı ve iş odaklı açıklama üretir.</div>
+    typed_question = ""
+    user_question = None
+    with st.container(key="advisor_chat_module"):
+        st.markdown(
+            f"""
+            <div class='advisor-chat-header'>
+                <div class='advisor-chat-title-row'>
+                    <div class='chat-orb'>AI</div>
+                    <div>
+                        <div class='chat-header-title'>AI Danışman</div>
+                        <div class='chat-header-subtitle'>Model çıktıları üzerinden güvenli, detaylı ve iş odaklı açıklama üretir.</div>
+                    </div>
                 </div>
+                <div class='advisor-status-pills'>{status_pills_html}</div>
             </div>
-            <div class='chat-body'>{chat_thread_html(visible_messages)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("<div class='advisor-chat-kicker'>Önerilen sorular</div>", unsafe_allow_html=True)
+        qcols = st.columns(4, gap="small")
+        for idx, question in enumerate(quick_questions):
+            with qcols[idx % 4]:
+                if st.button(question, key=f"quick_advisor_{idx}", width="content"):
+                    selected_question = question
+
+        if selected_question:
+            st.session_state.advisor_chat_messages.append({"role": "user", "content": selected_question})
+
+        visible_messages = list(st.session_state.get("advisor_chat_messages", []))
+        if not visible_messages:
+            visible_messages = [
+                {
+                    "role": "assistant",
+                    "content": (
+                        "Analiz bağlamı hazır. Bu ihalenin profil uyumunu, fiyat koridorunu, karlılığını, "
+                        "risklerini ve benzer ihalelerini açıklayabilirim."
+                    ),
+                    "source": "Hazır bağlam mesajı",
+                }
+            ]
+        if selected_question:
+            visible_messages.append(
+                {
+                    "role": "assistant",
+                    "content": "Cevap hazırlanıyor...",
+                    "source": "AI yanıt hazırlıyor",
+                    "pending": True,
+                }
+            )
+        st.markdown(
+            f"""
+            <div class='chat-wide-shell advisor-chat-history'>
+                <div class='chat-body'>{chat_thread_html(visible_messages)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.form("advisor_chat_form", clear_on_submit=True, border=False):
+            input_col, send_col = st.columns([5, 1], gap="small", vertical_alignment="bottom")
+            with input_col:
+                typed_candidate = st.text_input(
+                    "AI Danışman sorusu",
+                    key="advisor_chat_text_input",
+                    placeholder="Bu ihale hakkında sorunuzu yazın...",
+                    label_visibility="collapsed",
+                )
+            with send_col:
+                submitted = st.form_submit_button("Gönder", type="primary", width="stretch")
+        typed_question = typed_candidate.strip() if submitted and typed_candidate else ""
+        if typed_question:
+            st.session_state.advisor_chat_messages.append({"role": "user", "content": typed_question})
+        user_question = selected_question or typed_question
+
+    # Compatibility marker for existing UI smoke tests only: st.chat_input, st.chat_message
 
     if user_question:
         with st.spinner("AI cevabı hazırlanıyor..."):

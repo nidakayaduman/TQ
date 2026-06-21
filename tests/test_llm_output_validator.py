@@ -3,6 +3,7 @@ from src.advisor.context_validator import sanitize_advisor_context
 from src.advisor.grounding_validator import validate_grounding
 from src.advisor.output_validator import SAFE_FALLBACK_OUTPUT, validate_advisor_output
 from src.advisor.prompt_injection_filter import detect_prompt_injection
+from src.advisor.support_validator import validate_supported_claims
 
 
 def test_fallback_advisor_validates():
@@ -100,6 +101,43 @@ def test_validation_failure_can_use_safe_fallback_output():
     fallback_result = validate_advisor_output(SAFE_FALLBACK_OUTPUT)
     assert not invalid_result["valid"]
     assert fallback_result["valid"]
+
+
+def test_support_validator_allows_negative_limitations():
+    output = build_fallback_advisor(
+        {
+            "evidence_items": [
+                {"evidence_id": "E_PROFILE_001", "type": "profile_fit"},
+                {"evidence_id": "E_PRICE_001", "type": "price_band"},
+                {"evidence_id": "E_RISK_001", "type": "risk_flags"},
+            ]
+        }
+    )
+    output["limitations"].append("Rakip fiyatları tahmin edilmez; sadece mevcut veriyle karar desteği sağlanır.")
+    output["limitations"].append("Reveal edilmemiş gerçek sonuçlar kullanılmaz.")
+    result = validate_supported_claims(
+        output,
+        {
+            "revealed": False,
+            "evidence_items": [
+                {"evidence_id": "E_PROFILE_001", "type": "profile_fit"},
+                {"evidence_id": "E_PRICE_001", "type": "price_band"},
+                {"evidence_id": "E_RISK_001", "type": "risk_flags"},
+            ],
+        },
+    )
+    assert result["supported"]
+
+
+def test_support_validator_still_blocks_competitor_prediction():
+    output = build_fallback_advisor({"evidence_items": [{"evidence_id": "E_PRICE_001", "type": "price_band"}]})
+    output["scenario_rationale"] = "Rakiplerin bu ihalede daha düşük fiyat vereceğini tahmin ediyorum."
+    result = validate_supported_claims(
+        output,
+        {"revealed": False, "evidence_items": [{"evidence_id": "E_PRICE_001", "type": "price_band"}]},
+    )
+    assert not result["supported"]
+    assert "Veri dışı rakip tahmini." in result["unsupported_claims"]
 
 
 def test_context_sanitizer_removes_actual_fields_before_reveal():
