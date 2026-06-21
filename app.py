@@ -43,7 +43,7 @@ from src.optimizer.scenario_validator import validate_scenario
 from src.reporting.audit_log import write_audit_event
 from src.reporting.export_csv import dataframe_to_csv_bytes
 from src.reporting.model_artifacts import write_backtest_artifacts
-from src.reporting.structured_logging import configure_json_logging, log_event, log_exception, recent_log_events
+from src.reporting.structured_logging import configure_json_logging, log_event, log_exception
 from src.retrieval import RetrievalEngine, retrieval_quality
 from src.schema import normalize_schema, schema_quality_summary, validate_schema
 from src.split_strategy import temporal_split
@@ -869,19 +869,6 @@ def streamlit_secret_openrouter_key() -> tuple[str, str]:
     return "", "streamlit_secrets_empty"
 
 
-def openrouter_api_key_status() -> dict[str, str | bool]:
-    env_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if env_key:
-        return {"present": True, "source": "environment", "message": "OpenRouter API key environment üzerinden bulundu."}
-    secret_key, secret_source = streamlit_secret_openrouter_key()
-    if secret_key:
-        return {"present": True, "source": secret_source, "message": "OpenRouter API key st.secrets üzerinden bulundu."}
-    local_key, source = read_local_openrouter_secret()
-    if local_key:
-        return {"present": True, "source": source, "message": "OpenRouter API key .streamlit/secrets.toml içinden bulundu."}
-    return {"present": False, "source": source, "message": "OpenRouter API key bulunamadı veya secrets.toml içinde boş."}
-
-
 def set_advisor_llm_status(status: str, source: str, reason: str = "", model_id: str | None = None) -> None:
     st.session_state.advisor_llm_status = {
         "status": status,
@@ -944,6 +931,27 @@ def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
         "advisor_grounding_score": 1.0,
         "advisor_prompt_injection_detected": False,
         "advisor_fallback_used": True,
+        "is_inlier": True,
+        "anomaly_score": 0.0,
+        "isolation_threshold": 0.0,
+        "manual_review_flag": False,
+        "isolation_contamination": 0.05,
+        "training_inlier_rate": 0.95,
+        "training_anomaly_rate": 0.05,
+        "segment_anomaly_rate": 0.0,
+        "cluster_silhouette_score": 0.0,
+        "cluster_inertia": 0.0,
+        "cluster_min_size": 0,
+        "cluster_max_size": 0,
+        "small_cluster_count": 0,
+        "empty_cluster_count": 0,
+        "cluster_assignment_confidence": 0.0,
+        "cluster_distance": 0.0,
+        "cluster_second_distance": 0.0,
+        "cluster_distance_percentile": 0.0,
+        "cluster_count": 0,
+        "cluster_name": "Hesaplanamadı",
+        "cluster_id": "",
     }
     for column, default in defaults.items():
         if column not in fixed.columns:
@@ -2582,11 +2590,11 @@ def render_profile_fit_analysis() -> None:
     section_header("K-Means Cluster Kalitesi", "Bu metrikler cluster yapısının ayrışmasını, dengesini ve seçili ihalenin atamasının ne kadar net olduğunu gösterir.")
     k1, k2, k3, k4 = st.columns(4, gap="medium")
     with k1:
-        metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Cluster’ların birbirinden ne kadar ayrıştığını gösterir.", "purple")
+        metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "1'e yakınsa profil grupları daha net ayrılır; 0'a yakınsa gruplar birbirine karışır.", "purple")
     with k2:
-        metric_card("Inertia", format_decimal(best.get("cluster_inertia"), 1), "Kayıtların kendi cluster merkezlerine toplam yakınlığını gösterir.", "blue")
+        metric_card("Inertia", format_decimal(best.get("cluster_inertia"), 1), "Kayıtların kendi grup merkezine toplam uzaklığıdır. Daha düşük değer daha sıkı profil grubu anlamına gelir.", "blue")
     with k3:
-        metric_card("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "Cluster size distribution dengesini gösterir.", "green")
+        metric_card("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük profil grubunun kayıt sayısıdır. Çok dengesiz dağılım yorum güvenini düşürür.", "green")
     with k4:
         metric_card("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Çok küçük veya boş cluster sayısı.", "amber")
 
@@ -2616,19 +2624,19 @@ def render_profile_fit_analysis() -> None:
     with c1:
         metric_card("Durum", profile_label, isolation_business_comment(best), "amber" if profile_status == "warn" else "green")
     with c2:
-        metric_card("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "0 eşiğinin altı daha sıra dışı kabul edilir.")
+        metric_card("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Pozitif değer geçmiş kazanılmış profile daha yakın; eşik altı değer daha sıra dışı kabul edilir.")
     with c3:
-        metric_card("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Isolation Forest karar eşiği.")
+        metric_card("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Karar sınırıdır. Anomaly score bu sınırın altına inerse manuel inceleme sinyali doğar.")
     with c4:
-        metric_card("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Sıra dışı ise manuel inceleme sinyali üretir.", "amber" if bool(best.get("manual_review_flag", False)) else "green")
+        metric_card("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise profil geçmiş kazanılmış örneklere göre farklıdır; kayıp tahmini değildir.", "amber" if bool(best.get("manual_review_flag", False)) else "green")
 
     i5, i6, i7 = st.columns(3, gap="medium")
     with i5:
-        metric_card("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Eğitimde geçmiş başarı profiline uygun bulunan kazanılmış kayıt oranı")
+        metric_card("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Geçmiş kazanılmış kayıtların model tarafından tipik profil olarak görülen oranı")
     with i6:
-        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Eğitimde daha az tipik bulunan kazanılmış kayıt oranı")
+        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Geçmiş kazanılmış kayıtlar içinde daha az tipik görülen ve kontrol önerilen oran")
     with i7:
-        metric_card("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Yaklaşık her 100 kazanılmış kayıttan kaçının daha az tipik ayrılacağını belirleyen ayar")
+        metric_card("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Modelin beklenen sıra dışı oranıdır; yüzde 5 ise yaklaşık 100 kayıttan 5'i manuel incelemeye düşebilir")
 
     info_callout(
         "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle Isolation Forest’ın sıra dışı dediği bir kayıt, kaybedilecek ihale anlamına gelmez. Sadece geçmiş kazanılmış ihaleler arasında daha az tipik bir örnek olduğunu gösterir.",
@@ -2636,7 +2644,7 @@ def render_profile_fit_analysis() -> None:
     )
     if segment_rate is not None and not pd.isna(segment_rate):
         st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-        metric_card("Ürün grubunda manuel inceleme oranı", format_pct(float(segment_rate) * 100), "Seçili ürün grubunda geçmiş profile göre daha az tipik görülen kayıt oranı", "purple")
+        metric_card("Ürün grubunda manuel inceleme oranı", format_pct(float(segment_rate) * 100), "Aynı ürün grubundaki geçmiş kazanılmış kayıtlar içinde daha az tipik görülen oran", "purple")
     if anomaly_rate >= 0.25:
         st.warning("Eğer kazanılmış test ihalelerinin büyük kısmı manuel inceleme gerektiriyor görünüyorsa, model fazla hassas olabilir ve hassasiyet ayarı gözden geçirilmelidir.")
     elif float(best.get("isolation_contamination", 0)) >= 0.10:
@@ -3082,8 +3090,9 @@ def render_reveal_compare() -> None:
                 ("Profil grup ID", str(best.get("cluster_id", "Hesaplanamadı"))),
                 ("Geçmiş ihale sayısı", format_int(best.get("cluster_count"))),
                 ("Baskın ürün grubu", str(best.get("cluster_dominant_product_group", "Hesaplanamadı"))),
-                ("Medyan fiyat", format_try(best.get("cluster_median_price"))),
-                ("Medyan karlılık oranı", format_pct(best.get("cluster_median_margin"))),
+                ("Atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0))),
+                ("Cluster merkezine uzaklık", format_decimal(best.get("cluster_distance"))),
+                ("İkinci en yakın cluster uzaklığı", format_decimal(best.get("cluster_second_distance"))),
             ],
             "Bu grup, test ihalesinin geçmişte kazanılmış hangi başarı profiline yakın konumlandığını gösterir.",
         )
@@ -3097,6 +3106,29 @@ def render_reveal_compare() -> None:
             ],
             "Bu sonuç kazanma olasılığı değildir; geçmiş kazanılmış veri dağılımına uygunluk kontrolüdür.",
         )
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header(
+        "Profil Tanılama Metrikleri",
+        "Bu bölüm K-Means ve Isolation Forest çıktılarını ayrı okur. Bunlar fiyat doğruluğu metriği değildir; profil grubu ve sıra dışılık kontrolüdür.",
+        "K-Means / Isolation Forest",
+    )
+    d1, d2, d3, d4 = st.columns(4, gap="medium")
+    with d1:
+        metric_card("K-Means atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin atandığı profil grubuna ne kadar net yakın olduğunu gösterir.", "purple")
+    with d2:
+        metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Profil grupları ayrışıyor mu? 1'e yakın değer daha net ayrım demektir.", "blue")
+    with d3:
+        metric_card("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Pozitif değer daha tipik profil; eşik altı değer manuel inceleme sinyalidir.", "amber")
+    with d4:
+        metric_card("Manual review", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise geçmiş kazanılmış profile göre sıra dışılık kontrolü gerekir.", "green" if bool(best.get("is_inlier", True)) else "amber")
+    d5, d6, d7 = st.columns(3, gap="medium")
+    with d5:
+        metric_card("Isolation threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Anomaly score bu sınırın altındaysa sıra dışı kabul edilir.", "cyan")
+    with d6:
+        metric_card("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0) or 0) * 100), "Modelin beklediği yaklaşık manuel inceleme oranı.", "purple")
+    with d7:
+        metric_card("Ürün grubu anomaly oranı", format_pct(float(best.get("segment_anomaly_rate", 0) or 0) * 100), "Aynı ürün grubundaki daha az tipik geçmiş kayıt oranı.", "amber")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Emsal İhale Kalitesi", "Sistemin gerçek sonucu açmadan önce seçtiği emsal havuzunun ne kadar tutarlı olduğunu gösterir.")
@@ -3297,14 +3329,15 @@ def render_backtest() -> None:
     section_header("K-Means Metrikleri", "Test ihalelerinin hangi geçmiş başarı gruplarına dağıldığını gösterir.", "Profil grupları")
     km1, km2, km3, km4 = st.columns(4, gap="medium")
     with km1:
-        metric_card("Silhouette Score", format_decimal(results["cluster_silhouette_score"].mean()), "Cluster ayrışma kalitesi", "purple")
+        metric_card("Silhouette Score", format_decimal(pd.to_numeric(results["cluster_silhouette_score"], errors="coerce").mean()), "Profil grupları birbirinden ne kadar net ayrılıyor? 1'e yakın değer daha iyi ayrışma demektir.", "purple")
     with km2:
-        metric_card("Inertia", format_decimal(results["cluster_inertia"].mean(), 1), "Cluster içi merkeze yakınlık", "blue")
+        metric_card("Inertia", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Test kayıtlarının kendi profil grubu merkezlerine ortalama uzaklık göstergesi. Daha düşük değer daha sıkı grupları anlatır.", "blue")
     with km3:
-        metric_card("Min / max cluster boyutu", f"{format_int(results['cluster_min_size'].min())} - {format_int(results['cluster_max_size'].max())}", "Cluster size distribution", "green")
+        metric_card("Min / max cluster boyutu", f"{format_int(pd.to_numeric(results['cluster_min_size'], errors='coerce').min())} - {format_int(pd.to_numeric(results['cluster_max_size'], errors='coerce').max())}", "Profil grupları çok küçük veya aşırı büyük mü? Dengesizlik yorum güvenini düşürür.", "green")
     with km4:
-        low_conf_rate = float((results["cluster_assignment_confidence"].astype(float) < 25).mean()) if "cluster_assignment_confidence" in results else 0.0
-        metric_card("Düşük atama güveni", format_pct(low_conf_rate * 100), "Assignment confidence 25 altında olan test oranı", "amber")
+        assignment_confidence = pd.to_numeric(results["cluster_assignment_confidence"], errors="coerce").fillna(0)
+        low_conf_rate = float((assignment_confidence < 25).mean()) if not results.empty else 0.0
+        metric_card("Düşük atama güveni", format_pct(low_conf_rate * 100), "Atandığı profil grubuna net yakın olmayan test ihalelerinin oranı", "amber")
     cluster_summary = (
         results.groupby(["cluster_id", "cluster_name"], dropna=False)
         .agg(
@@ -3333,13 +3366,14 @@ def render_backtest() -> None:
     section_header("Sıra Dışılık Kontrolü", "Isolation Forest kazanılmış test ihalelerini geçmiş profile göre normal mi daha az tipik mi görüyor?", "Isolation Forest")
     i1, i2, i3, i4 = st.columns(4, gap="medium")
     with i1:
-        metric_card("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin normal görülen oranı", "green")
+        metric_card("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin geçmiş başarı profiline tipik görünme oranı", "green")
     with i2:
-        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Daha az tipik görülen kazanılmış test oranı", "amber")
+        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Geçmiş profile göre daha az tipik görülen ve kontrol önerilen test oranı", "amber")
     with i3:
-        metric_card("Hassasiyet ayarı", format_pct(float(results["isolation_contamination"].mean()) * 100), "Aktif contamination değeri", "purple")
+        metric_card("Hassasiyet ayarı", format_pct(float(pd.to_numeric(results["isolation_contamination"], errors="coerce").mean()) * 100), "Modelin beklediği yaklaşık sıra dışı kayıt oranı", "purple")
     with i4:
-        metric_card("En yüksek segment oranı", format_pct(float(results["segment_anomaly_rate"].max()) * 100), "Ürün grubu bazında maksimum manuel inceleme oranı", "red" if results["segment_anomaly_rate"].max() >= anomaly_warning_threshold else "blue")
+        max_segment_anomaly = float(pd.to_numeric(results["segment_anomaly_rate"], errors="coerce").max())
+        metric_card("En yüksek segment oranı", format_pct(max_segment_anomaly * 100), "Bir ürün grubunda görülen en yüksek manuel inceleme sinyali oranı", "red" if max_segment_anomaly >= anomaly_warning_threshold else "blue")
     info_callout(
         "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle sıra dışı sonucu kayıp tahmini değildir; geçmiş kazanılmış profilden farklılık ve manuel inceleme sinyalidir.",
         "Sıra dışılık nasıl okunmalı?",
@@ -3694,22 +3728,22 @@ def render_advisor() -> None:
         "Güvenli kullanım notu",
     )
     section_header("OpenRouter Model Seçimi", "AI Danışman yanıtı için kullanılacak LLM burada seçilir ve anında güncellenir.", "LLM")
-    model_labels = [openrouter_model_option_label(model) for model in OPENROUTER_MODELS]
-    selected_model_id = selected_openrouter_model_id()
+    model_options = [model["model_id"] for model in OPENROUTER_MODELS]
+    previous_model_id = selected_openrouter_model_id()
     selected_index = next(
-        (idx for idx, model in enumerate(OPENROUTER_MODELS) if model["model_id"] == selected_model_id),
+        (idx for idx, model_id in enumerate(model_options) if model_id == previous_model_id),
         0,
     )
-    selected_model_label = st.selectbox(
+    selected_model_id = st.selectbox(
         "Aktif LLM modeli",
-        model_labels,
+        model_options,
         index=selected_index,
-        key="advisor_openrouter_model_label",
+        key="selected_openrouter_model",
+        format_func=lambda model_id: openrouter_model_option_label(next(model for model in OPENROUTER_MODELS if model["model_id"] == model_id)),
     )
-    selected_model = OPENROUTER_MODELS[model_labels.index(selected_model_label)]
-    if st.session_state.get("selected_openrouter_model") != selected_model["model_id"]:
-        st.session_state.selected_openrouter_model = selected_model["model_id"]
-        st.session_state.llm_primary_label = selected_model["model_id"]
+    selected_model = next(model for model in OPENROUTER_MODELS if model["model_id"] == selected_model_id)
+    st.session_state.llm_primary_label = selected_model_id
+    if selected_model_id != previous_model_id:
         st.session_state.advisor_chat_messages = [
             {
                 "role": "assistant",
@@ -3727,43 +3761,15 @@ def render_advisor() -> None:
                 "tender_id": context.get("tender_id"),
                 "module": "advisor",
                 "input_summary": "openrouter_model_selectbox",
-                "output_summary": selected_model["model_id"],
+                "output_summary": selected_model_id,
                 "validation_status": "pass",
                 "details": {
                     "llm_provider": "openrouter",
-                    "llm_model": selected_model["model_id"],
+                    "llm_model": selected_model_id,
                     "llm_model_number": selected_model["number"],
                 },
             }
         )
-    model_cards = [
-        {
-            "icon": model["number"],
-            "title": f"{model['number']}. {model['label']}",
-            "value": model["model_id"],
-            "body": model["description"],
-            "pill": "Aktif" if model["model_id"] == selected_openrouter_model_id() else "Seçenek",
-            "color": "green" if model["model_id"] == selected_openrouter_model_id() else "blue",
-        }
-        for model in OPENROUTER_MODELS
-    ]
-    render_premium_grid(model_cards, columns=3, size="metric-size")
-    key_status = openrouter_api_key_status()
-    key_status_color = "green" if key_status["present"] else "amber"
-    render_premium_grid(
-        [
-            {
-                "icon": "KEY",
-                "title": "OpenRouter bağlantısı",
-                "value": "Key bulundu" if key_status["present"] else "Key yok",
-                "body": str(key_status["message"]),
-                "pill": str(key_status["source"]),
-                "color": key_status_color,
-            }
-        ],
-        columns=1,
-        size="metric-size",
-    )
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
@@ -4050,8 +4056,6 @@ def render_reports() -> None:
         "baseline_model_version",
         "training_data_range",
     ]
-    version_summary = results[[column for column in version_columns if column in results.columns]].head(1).T.reset_index()
-    version_summary.columns = ["Alan", "Değer"] if not version_summary.empty else ["Alan", "Değer"]
     audit_cards = [
         (
             "Gerçek Sonuç Sızıntısı Kontrolü",
@@ -4105,44 +4109,6 @@ def render_reports() -> None:
     )
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header(
-        "Sistem Kontrolleri",
-        "Bu bölüm, sistemin hangi config ve model versiyonuyla çalıştığını gösterir.",
-        "Kontrol",
-    )
-    system_rows = pd.DataFrame(
-        [
-            ["Config versiyonu", str(version_summary[version_summary["Alan"] == "config_version"]["Değer"].iloc[0]) if not version_summary.empty and (version_summary["Alan"] == "config_version").any() else "config-v1"],
-            ["Model versiyonu", str(version_summary[version_summary["Alan"] == "retrieval_model_version"]["Değer"].iloc[0]) if not version_summary.empty and (version_summary["Alan"] == "retrieval_model_version").any() else "retrieval-v1"],
-            ["Audit log", "Aktif"],
-            ["Offline mod", "Aktif; fallback advisor kullanılır" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
-            ["Son artifact", st.session_state.get("latest_artifact_dir", "Henüz yazılmadı")],
-        ],
-        columns=["Kontrol", "Durum"],
-    )
-    st.dataframe(system_rows, hide_index=True, width="stretch")
-    info_callout(
-        "Audit log, test sürecinde hangi işlemlerin yapıldığını kaydeder. Offline modda LLM kullanılmaz; AI Danışman güvenli fallback yorumları üretir.",
-        "Audit Durumu",
-    )
-    recent_events = recent_log_events(limit=5)
-    if recent_events:
-        logs_display = pd.DataFrame(
-            [
-                {
-                    "Zaman": event.get("timestamp", ""),
-                    "Olay": event.get("event_type", ""),
-                    "Modül": event.get("module", ""),
-                    "Durum": event.get("status", ""),
-                    "Mesaj": event.get("message", ""),
-                }
-                for event in recent_events
-            ]
-        )
-        section_header("Son Log Olayları", "Teknik JSON göstermeden son sistem olaylarının özeti.", "Log")
-        st.dataframe(logs_display, hide_index=True, width="stretch")
-
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Export Grupları", "Rapor ve denetim çıktıları.", "Dışa aktar")
     c1, c2, c3 = st.columns(3, gap="medium")
     with c1:
@@ -4162,10 +4128,9 @@ def render_reports() -> None:
         audited_download_button("Model Card", model_card, "model_karti.md")
         audited_download_button("Expert Review Template", dataframe_to_csv_bytes(expert_review_template(results)), "uzman_inceleme_sablonu.csv")
         audited_download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
-    with st.expander("Segment metrikleri ve audit tablo detayı", expanded=False):
+    with st.expander("Segment metrikleri ve sentetik test detayı", expanded=False):
         st.dataframe(segment, hide_index=True, width="stretch")
         st.dataframe(stress_results, hide_index=True, width="stretch")
-        st.dataframe(version_summary, hide_index=True, width="stretch")
 
 
 def render_page(page_name: str) -> None:

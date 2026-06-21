@@ -77,15 +77,15 @@ def test_openrouter_models_are_explicit_and_selectable():
         "OpenRouter Model Seçimi",
         "st.selectbox(",
         "read_local_openrouter_secret",
-        "openrouter_api_key_status",
-        ".streamlit/secrets.toml",
-        "OpenRouter bağlantısı",
+        "secrets.toml",
+        "key=\"selected_openrouter_model\"",
+        "format_func=lambda model_id",
         '"number": "1"',
-        "NVIDIA Nemotron 3 Super 120B A12B",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        '"number": "2"',
         "Google Gemma 4 31B IT",
         "google/gemma-4-31b-it:free",
+        '"number": "2"',
+        "NVIDIA Nemotron 3 Super 120B A12B",
+        "nvidia/nemotron-3-super-120b-a12b:free",
         '"number": "3"',
         "OpenRouter Owl Alpha",
         "openrouter/owl-alpha",
@@ -179,3 +179,28 @@ def test_scenario_page_labels_price_strategy_scope():
     assert "Öne Çıkan Fiyat Senaryoları" in APP_TEXT
     assert "K-Means ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir." in APP_TEXT
     assert "K-Means ve Isolation Forest burada fiyat tahmini olarak kullanılmaz" in APP_TEXT
+
+
+def test_removed_reports_and_openrouter_noise_are_absent():
+    for text in [
+        "Sistem Kontrolleri",
+        "Audit Durumu",
+        "Son Log Olayları",
+        "OpenRouter bağlantısı",
+        "OpenRouter API key environment üzerinden bulundu.",
+        "advisor_openrouter_model_label",
+    ]:
+        assert text not in APP_TEXT
+
+
+def test_reveal_and_backtest_include_profile_diagnostics():
+    for text in [
+        "Profil Tanılama Metrikleri",
+        "K-Means / Isolation Forest",
+        "K-Means atama güveni",
+        "Manual review",
+        "Ürün grubu anomaly oranı",
+        "K-Means Metrikleri",
+        "Sıra Dışılık Kontrolü",
+    ]:
+        assert text in APP_TEXT
