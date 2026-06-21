@@ -76,6 +76,10 @@ def test_openrouter_models_are_explicit_and_selectable():
     for text in [
         "OpenRouter Model Seçimi",
         "st.selectbox(",
+        "read_local_openrouter_secret",
+        "openrouter_api_key_status",
+        ".streamlit/secrets.toml",
+        "OpenRouter bağlantısı",
         '"number": "1"',
         "OpenRouter Auto",
         "openrouter/auto",

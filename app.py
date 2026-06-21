@@ -545,6 +545,53 @@ def openrouter_model_option_label(model: dict[str, str]) -> str:
     return f"{model['number']}. {model['label']} - {model['model_id']}"
 
 
+def read_local_openrouter_secret() -> tuple[str, str]:
+    path = ROOT / ".streamlit" / "secrets.toml"
+    if not path.exists():
+        return "", "missing_file"
+    current_section = ""
+    aliases = {"OPENROUTER_API_KEY", "openrouter_api_key", "api_key"}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return "", "read_error"
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current_section = line.strip("[]").strip().casefold()
+            continue
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if key not in aliases:
+            continue
+        if key == "api_key" and current_section not in {"openrouter", "llm", "advisor"}:
+            continue
+        secret = value.split("#", 1)[0].strip().strip('"').strip("'")
+        if secret:
+            return secret, f"{path.name}:{key}"
+    return "", "empty"
+
+
+def openrouter_api_key_status() -> dict[str, str | bool]:
+    env_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if env_key:
+        return {"present": True, "source": "environment", "message": "OpenRouter API key environment üzerinden bulundu."}
+    try:
+        secret_key = str(st.secrets.get("OPENROUTER_API_KEY", "")).strip()
+        if secret_key:
+            return {"present": True, "source": "streamlit_secrets", "message": "OpenRouter API key st.secrets üzerinden bulundu."}
+    except Exception:
+        pass
+    local_key, source = read_local_openrouter_secret()
+    if local_key:
+        return {"present": True, "source": source, "message": "OpenRouter API key .streamlit/secrets.toml içinden bulundu."}
+    return {"present": False, "source": source, "message": "OpenRouter API key bulunamadı veya secrets.toml içinde boş."}
+
+
 def set_advisor_llm_status(status: str, source: str, reason: str = "", model_id: str | None = None) -> None:
     st.session_state.advisor_llm_status = {
         "status": status,
@@ -977,8 +1024,9 @@ def get_openrouter_api_key() -> str:
         if secret_key:
             return secret_key
     except Exception:
-        return ""
-    return ""
+        pass
+    local_key, _ = read_local_openrouter_secret()
+    return local_key
 
 
 def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, Any]:
@@ -1245,7 +1293,12 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
     try:
         response = requests.post(
             OPENROUTER_API_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:8501",
+                "X-Title": "Tender IQ Agentic Bid Advisor",
+            },
             json=body,
             timeout=45,
         )
@@ -3294,9 +3347,23 @@ def render_advisor() -> None:
         for model in OPENROUTER_MODELS
     ]
     render_premium_grid(model_cards, columns=3, size="metric-size")
-    st.caption(
-        "OpenRouter API anahtarı yerel secrets.toml içinden okunur. Anahtar yoksa veya OpenRouter çağrısı doğrulamadan geçmezse güvenli fallback advisor devreye girer."
+    key_status = openrouter_api_key_status()
+    key_status_color = "green" if key_status["present"] else "amber"
+    render_premium_grid(
+        [
+            {
+                "icon": "KEY",
+                "title": "OpenRouter bağlantısı",
+                "value": "Key bulundu" if key_status["present"] else "Key yok",
+                "body": str(key_status["message"]),
+                "pill": str(key_status["source"]),
+                "color": key_status_color,
+            }
+        ],
+        columns=1,
+        size="metric-size",
     )
+    st.caption("API key ekranda gösterilmez. Key yoksa veya LLM doğrulaması geçmezse güvenli fallback advisor devreye girer.")
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
