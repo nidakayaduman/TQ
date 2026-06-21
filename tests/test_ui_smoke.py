@@ -90,6 +90,19 @@ def test_openrouter_models_are_explicit_and_selectable():
         assert text in APP_TEXT
 
 
+def test_advisor_answer_source_is_visible():
+    for text in [
+        "chat-source",
+        "Hazır bağlam mesajı",
+        "OpenRouter LLM -",
+        "Güvenli fallback -",
+        "answer_source",
+        "advisor_llm_status",
+        "set_advisor_llm_status",
+    ]:
+        assert text in APP_TEXT
+
+
 def test_methodology_terms_are_present():
     for term in [
         "TF-IDF",

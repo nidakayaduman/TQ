@@ -348,6 +348,16 @@ def inject_global_css() -> None:
                 background: rgba(255,255,255,.94);
                 border-top-left-radius: 8px;
             }
+            .chat-source {
+                display: inline-flex;
+                margin-bottom: .42rem;
+                padding: .16rem .48rem;
+                border-radius: 999px;
+                background: rgba(91,124,250,.10);
+                color: #394150;
+                font-size: .72rem;
+                font-weight: 650;
+            }
             .chat-wide-shell {
                 border-radius: 26px; overflow: hidden; border: 1px solid var(--line);
                 background:
@@ -533,6 +543,15 @@ def selected_openrouter_model_id() -> str:
 
 def openrouter_model_option_label(model: dict[str, str]) -> str:
     return f"{model['number']}. {model['label']} - {model['model_id']}"
+
+
+def set_advisor_llm_status(status: str, source: str, reason: str = "", model_id: str | None = None) -> None:
+    st.session_state.advisor_llm_status = {
+        "status": status,
+        "source": source,
+        "reason": reason,
+        "model": model_id or selected_openrouter_model_id(),
+    }
 
 
 def user_friendly_error_message(exc: Exception) -> str:
@@ -830,12 +849,14 @@ def badge(text: str, status: str = "good") -> str:
     return f'<span class="status-badge {css}">{escape(text)}</span>'
 
 
-def chat_thread_html(messages: list[dict[str, str]]) -> str:
+def chat_thread_html(messages: list[dict[str, Any]]) -> str:
     rows = []
     for message in messages:
         role = "user" if message.get("role") == "user" else "assistant"
         content = escape(str(message.get("content", "")))
-        bubble = f"<div class='chat-bubble chat-bubble-{role}'>{content}</div>"
+        source = str(message.get("source", "")).strip()
+        source_html = f"<div class='chat-source'>{escape(source)}</div>" if role == "assistant" and source else ""
+        bubble = f"<div class='chat-bubble chat-bubble-{role}'>{source_html}{content}</div>"
         if role == "assistant":
             rows.append(
                 "<div class='chat-row chat-row-assistant'>"
@@ -1152,6 +1173,7 @@ def normalize_llm_payload(content: str) -> dict[str, Any] | None:
 def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] | None:
     injection = detect_prompt_injection(question)
     if injection["prompt_injection_detected"]:
+        set_advisor_llm_status("blocked", "Guardrail", "Prompt injection tespit edildi.")
         audit_event(
             {
                 "event_type": "prompt_injection_detected",
@@ -1167,6 +1189,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         )
         return None
     if llm_provider() in {"none", "offline", "disabled", "fallback"}:
+        set_advisor_llm_status("fallback", "Güvenli fallback", "LLM_PROVIDER offline/fallback modunda.")
         log_event(
             "fallback_advisor_used",
             module="advisor",
@@ -1177,10 +1200,12 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         return None
     api_key = get_openrouter_api_key()
     if not api_key:
+        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter API anahtarı bulunamadı.")
         return None
     safe_context = sanitize_advisor_context(context)
     context_validation = validate_advisor_context(safe_context)
     if not context_validation["context_valid"]:
+        set_advisor_llm_status("fallback", "Güvenli fallback", "Advisor bağlam doğrulaması başarısız.")
         log_event(
             "advisor_validation_failed",
             module="advisor",
@@ -1193,6 +1218,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
     prompt_context = {**safe_context, "user_question": question}
     prompt = build_advisor_prompt(prompt_context)
     selected_model = selected_openrouter_model_id()
+    set_advisor_llm_status("calling", "OpenRouter LLM", "OpenRouter çağrısı yapılıyor.", selected_model)
     body = {
         "model": selected_model,
         "messages": [
@@ -1233,9 +1259,11 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
             message="LLM çağrısı başarısız; fallback advisor kullanılacak.",
             tender_id=str(safe_context.get("tender_id") or "") or None,
         )
+        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter çağrısı başarısız oldu.", selected_model)
         return None
     parsed = normalize_llm_payload(content)
     if not parsed:
+        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter yanıtı geçerli JSON olarak okunamadı.", selected_model)
         return None
     validation = validate_advisor_output(parsed, safe_context)
     grounding = validate_grounding(parsed, safe_context)
@@ -1247,6 +1275,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         or not support["supported"]
         or forbidden["forbidden_claims_detected"]
     ):
+        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter yanıtı schema, grounding veya guardrail doğrulamasından geçmedi.", selected_model)
         audit_event(
             {
                 "event_type": "advisor_validation_failed",
@@ -1273,6 +1302,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         "prompt_injection_detected": False,
         "fallback_used": False,
     }
+    set_advisor_llm_status("pass", "OpenRouter LLM", "OpenRouter yanıtı doğrulandı.", selected_model)
     audit_event(
         {
             "event_type": "advisor_response_validated",
@@ -3190,6 +3220,7 @@ def render_advisor() -> None:
                     "Analiz bağlamı hazır. Bu ihalenin profil uyumunu, fiyat koridorunu, karlılığını, risklerini "
                     "ve benzer ihalelerini açıklayabilirim."
                 ),
+                "source": "Hazır bağlam mesajı",
             }
         ]
 
@@ -3232,6 +3263,7 @@ def render_advisor() -> None:
                     f"Model {selected_model['number']} seçildi: {selected_model['label']}. "
                     "Yeni sorular bu OpenRouter modeliyle yanıtlanacak."
                 ),
+                "source": "Sistem",
             }
         ]
         audit_event(
@@ -3366,6 +3398,7 @@ def render_advisor() -> None:
             injection = detect_prompt_injection(user_question)
             if injection["prompt_injection_detected"]:
                 assistant_text = safe_prompt_response()
+                assistant_source = "Guardrail bloklandı"
                 st.session_state.advisor_validation = {
                     "valid": False,
                     "advisor_validation_status": "blocked",
@@ -3394,10 +3427,14 @@ def render_advisor() -> None:
                 llm_payload = call_guarded_llm(context, user_question)
                 if llm_payload:
                     assistant_text = advisor_payload_to_chat_text(llm_payload)
+                    assistant_source = f"OpenRouter LLM - {llm_payload.get('validation_result', {}).get('llm_model', selected_openrouter_model_id())}"
                     st.session_state.advisor_output = llm_payload
                     st.session_state.advisor_validation = llm_payload.get("validation_result", {})
                 else:
                     assistant_text = fallback_chat_answer(user_question, context, advisor)
+                    llm_status = st.session_state.get("advisor_llm_status", {})
+                    fallback_reason = str(llm_status.get("reason") or "OpenRouter yanıtı kullanılamadı.")
+                    assistant_source = f"Güvenli fallback - {fallback_reason}"
                     fallback_validation = dict(validation)
                     fallback_validation.update(
                         {
@@ -3423,9 +3460,13 @@ def render_advisor() -> None:
                     "validation_status": st.session_state.get("advisor_validation", {}).get("advisor_validation_status", "unknown"),
                     "leakage_status": context.get("leakage_audit", {}).get("audit_status", "unknown"),
                     "advisor_guardrail_status": st.session_state.get("advisor_validation", {}).get("llm_validation_status", "fallback"),
+                    "details": {
+                        "answer_source": assistant_source,
+                        "llm_status": st.session_state.get("advisor_llm_status", {}),
+                    },
                 }
             )
-        st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text})
+        st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text, "source": assistant_source})
         st.rerun()
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
