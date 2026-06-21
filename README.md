@@ -72,9 +72,9 @@ Skor ağırlıkları `config/app_config.yaml`, hard constraints `config/hard_con
 
 AI Danışman sayfasında OpenRouter modeli UI üzerinden seçilir ve sonraki sohbet yanıtlarında request body içindeki `model` alanı bu seçimle güncellenir:
 
-1. `openrouter/auto` - OpenRouter Auto
-2. `google/gemini-2.5-flash` - Google Gemini 2.5 Flash
-3. `openai/gpt-4o-mini` - OpenAI GPT-4o Mini
+1. `nvidia/nemotron-3-super-120b-a12b:free` - NVIDIA Nemotron 3 Super 120B A12B
+2. `google/gemma-4-31b-it:free` - Google Gemma 4 31B IT
+3. `openrouter/owl-alpha` - OpenRouter Owl Alpha
 
 ## Gizli Anahtarlar
 

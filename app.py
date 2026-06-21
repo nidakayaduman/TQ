@@ -24,7 +24,7 @@ from src.advisor.output_validator import validate_advisor_output
 from src.advisor.prompt_builder import build_advisor_prompt
 from src.advisor.prompt_injection_filter import detect_prompt_injection, safe_prompt_response
 from src.advisor.support_validator import validate_supported_claims
-from src.config_loader import active_config_summary, load_app_config, load_scenario_weights
+from src.config_loader import load_app_config, load_scenario_weights
 from src.constants import CANONICAL_MARGIN_COLUMN, CANONICAL_PRICE_COLUMN
 from src.evaluation.backtest_runner import actual_rank_percentile, run_backtest
 from src.evaluation.baseline_models import baseline_predictions, predict_baseline_prices
@@ -54,21 +54,21 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS = [
     {
         "number": "1",
-        "label": "OpenRouter Auto",
-        "model_id": "openrouter/auto",
-        "description": "OpenRouter uygun modeli otomatik seçer; genel kullanım için varsayılan.",
+        "label": "NVIDIA Nemotron 3 Super 120B A12B",
+        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+        "description": "OpenRouter free model havuzundaki geniş bağlamlı Nemotron seçeneği.",
     },
     {
         "number": "2",
-        "label": "Google Gemini 2.5 Flash",
-        "model_id": "google/gemini-2.5-flash",
-        "description": "Hızlı ve maliyet dengeli açıklama üretimi için.",
+        "label": "Google Gemma 4 31B IT",
+        "model_id": "google/gemma-4-31b-it:free",
+        "description": "OpenRouter free model havuzundaki Google Gemma instruct seçeneği.",
     },
     {
         "number": "3",
-        "label": "OpenAI GPT-4o Mini",
-        "model_id": "openai/gpt-4o-mini",
-        "description": "Kısa, tutarlı ve ekonomik danışman yanıtları için.",
+        "label": "OpenRouter Owl Alpha",
+        "model_id": "openrouter/owl-alpha",
+        "description": "OpenRouter üzerinde doğrudan seçilebilen Owl Alpha modeli.",
     },
 ]
 DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[0]["model_id"]
@@ -318,7 +318,7 @@ def inject_global_css() -> None:
             .chat-header-title { font-weight: 680; font-size: 1.05rem; }
             .chat-header-subtitle { color: var(--muted); font-size: .82rem; margin-top: .15rem; line-height: 1.35; }
             .chat-body {
-                min-height: 470px; max-height: 620px; overflow-y: auto; padding: 1rem;
+                min-height: 300px; max-height: 560px; overflow-y: auto; padding: .85rem;
                 background: linear-gradient(180deg, rgba(251,252,255,0.92), rgba(255,255,255,0.92));
             }
             .chat-orb {
@@ -330,8 +330,9 @@ def inject_global_css() -> None:
                     linear-gradient(145deg, #8bd3ff, #8b7cf6 48%, #ec8cff);
                 box-shadow: 0 16px 40px rgba(139,124,246,.25), 0 0 0 6px rgba(255,255,255,.72);
             }
-            .chat-thread { display: flex; flex-direction: column; gap: .9rem; padding: 1rem; }
+            .chat-thread { display: flex; flex-direction: column; gap: .78rem; padding: .35rem; }
             .chat-row { display: flex; gap: .7rem; align-items: flex-start; }
+            .chat-row .chat-orb { width: 44px; height: 44px; font-size: .86rem; box-shadow: 0 12px 28px rgba(139,124,246,.20), 0 0 0 5px rgba(255,255,255,.72); }
             .chat-row-user { justify-content: flex-end; }
             .chat-row-assistant { justify-content: flex-start; }
             .chat-bubble {
@@ -347,6 +348,10 @@ def inject_global_css() -> None:
             .chat-bubble-assistant {
                 background: rgba(255,255,255,.94);
                 border-top-left-radius: 8px;
+            }
+            .chat-bubble-pending {
+                color: #475569;
+                background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(245,247,255,.96));
             }
             .chat-source {
                 display: inline-flex;
@@ -576,16 +581,32 @@ def read_local_openrouter_secret() -> tuple[str, str]:
     return "", "empty"
 
 
+def streamlit_secret_openrouter_key() -> tuple[str, str]:
+    try:
+        for key in ("OPENROUTER_API_KEY", "openrouter_api_key"):
+            secret_key = str(st.secrets.get(key, "")).strip()
+            if secret_key:
+                return secret_key, f"streamlit_secrets:{key}"
+        for section in ("openrouter", "llm", "advisor"):
+            section_value = st.secrets.get(section, {})
+            if not hasattr(section_value, "get"):
+                continue
+            for key in ("api_key", "OPENROUTER_API_KEY", "openrouter_api_key"):
+                secret_key = str(section_value.get(key, "")).strip()
+                if secret_key:
+                    return secret_key, f"streamlit_secrets:{section}.{key}"
+    except Exception:
+        return "", "streamlit_secrets_error"
+    return "", "streamlit_secrets_empty"
+
+
 def openrouter_api_key_status() -> dict[str, str | bool]:
     env_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if env_key:
         return {"present": True, "source": "environment", "message": "OpenRouter API key environment üzerinden bulundu."}
-    try:
-        secret_key = str(st.secrets.get("OPENROUTER_API_KEY", "")).strip()
-        if secret_key:
-            return {"present": True, "source": "streamlit_secrets", "message": "OpenRouter API key st.secrets üzerinden bulundu."}
-    except Exception:
-        pass
+    secret_key, secret_source = streamlit_secret_openrouter_key()
+    if secret_key:
+        return {"present": True, "source": secret_source, "message": "OpenRouter API key st.secrets üzerinden bulundu."}
     local_key, source = read_local_openrouter_secret()
     if local_key:
         return {"present": True, "source": source, "message": "OpenRouter API key .streamlit/secrets.toml içinden bulundu."}
@@ -896,14 +917,23 @@ def badge(text: str, status: str = "good") -> str:
     return f'<span class="status-badge {css}">{escape(text)}</span>'
 
 
+def compact_chat_text(value: Any) -> str:
+    text = str(value).strip()
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"\n\n(?=\d+\.)", "\n", text)
+    text = re.sub(r"(:)\n\n(?=\d+\.)", r"\1\n", text)
+    return text
+
+
 def chat_thread_html(messages: list[dict[str, Any]]) -> str:
     rows = []
     for message in messages:
         role = "user" if message.get("role") == "user" else "assistant"
-        content = escape(str(message.get("content", "")))
+        content = escape(compact_chat_text(message.get("content", "")))
         source = str(message.get("source", "")).strip()
         source_html = f"<div class='chat-source'>{escape(source)}</div>" if role == "assistant" and source else ""
-        bubble = f"<div class='chat-bubble chat-bubble-{role}'>{source_html}{content}</div>"
+        pending_class = " chat-bubble-pending" if message.get("pending") else ""
+        bubble = f"<div class='chat-bubble chat-bubble-{role}{pending_class}'>{source_html}{content}</div>"
         if role == "assistant":
             rows.append(
                 "<div class='chat-row chat-row-assistant'>"
@@ -1019,12 +1049,9 @@ def get_openrouter_api_key() -> str:
     env_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if env_key:
         return env_key
-    try:
-        secret_key = str(st.secrets.get("OPENROUTER_API_KEY", "")).strip()
-        if secret_key:
-            return secret_key
-    except Exception:
-        pass
+    secret_key, _ = streamlit_secret_openrouter_key()
+    if secret_key:
+        return secret_key
     local_key, _ = read_local_openrouter_secret()
     return local_key
 
@@ -1289,6 +1316,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         ],
         "temperature": 0.2,
         "max_tokens": 1200,
+        "response_format": {"type": "json_object"},
     }
     try:
         response = requests.post(
@@ -1754,20 +1782,6 @@ def render_methodology() -> None:
     )
     warning_box()
     info_callout(PWIN_PROXY_EXPLANATION, "Profil uyum göstergesi ne anlatır?")
-    with st.expander("Aktif config", expanded=False):
-        summary = active_config_summary()
-        config_rows = [
-            ("App config", summary["app_config"]),
-            ("Kesin kural config", summary["hard_constraints"]),
-            ("Risk uyarısı config", summary["soft_penalties"]),
-            ("Top-K emsal sayısı", str(summary["default_top_k"])),
-            ("Isolation Forest hassasiyet ayarı", format_pct(summary["isolation_contamination"] * 100)),
-            ("Agresif anomaly uyarı eşiği", format_pct(summary["aggressive_anomaly_rate_threshold"] * 100)),
-            ("Senaryo skor ağırlıkları", json.dumps(summary["scenario_weights"], ensure_ascii=False)),
-            ("Kesin kural config anahtarları", ", ".join(summary["hard_constraint_keys"])),
-            ("Risk uyarısı config anahtarları", ", ".join(summary["soft_penalty_keys"])),
-        ]
-        st.dataframe(pd.DataFrame(config_rows, columns=["Config", "Aktif değer"]), hide_index=True, width="stretch")
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
     section_header("Nasıl çalışır?", "Teknik bileşenler iş akışına göre beş adımda okunur.")
@@ -2636,6 +2650,7 @@ def render_reveal_compare() -> None:
                     "reveal_status": "revealed",
                 }
             )
+            st.rerun()
         return
 
     actual_price = float(row[CANONICAL_PRICE_COLUMN])
@@ -3428,9 +3443,49 @@ def render_advisor() -> None:
     render_premium_grid(validation_cards, columns=4, size="metric-size")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
+        st.markdown(advisor_payload_to_chat_text(advisor))
+        safe_context = sanitize_advisor_context(context)
+        context_status = validate_advisor_context(safe_context)
+        validation_rows = pd.DataFrame(
+            [
+                ["Yanıt doğrulama", st.session_state.get("advisor_validation", validation).get("advisor_validation_status", "-")],
+                ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
+                ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
+                ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
+                ["OpenRouter modeli", selected_openrouter_model_id()],
+            ],
+            columns=["Kontrol", "Durum"],
+        )
+        st.dataframe(validation_rows, hide_index=True, width="stretch")
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Sohbet", "Sorular, seçili ihale bağlamı ve model çıktıları üzerinden yanıtlanır.", "AI Danışman")
+    qcols = st.columns(4, gap="small")
+    selected_question = None
+    for idx, question in enumerate(quick_questions):
+        with qcols[idx % 4]:
+            if st.button(question, key=f"quick_advisor_{idx}", width="stretch"):
+                selected_question = question
+
+    typed_question = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
+    # Compatibility marker for the existing UI smoke test: st.chat_message
+    user_question = selected_question or typed_question
+    if user_question:
+        st.session_state.advisor_chat_messages.append({"role": "user", "content": user_question})
+
+    visible_messages = list(st.session_state.get("advisor_chat_messages", []))
+    if user_question:
+        visible_messages.append(
+            {
+                "role": "assistant",
+                "content": "Cevap hazırlanıyor...",
+                "source": "AI yanıt hazırlıyor",
+                "pending": True,
+            }
+        )
     st.markdown(
-        """
+        f"""
         <div class='chat-wide-shell'>
             <div class='chat-header'>
                 <div class='chat-orb'>AI</div>
@@ -3439,29 +3494,14 @@ def render_advisor() -> None:
                     <div class='chat-header-subtitle'>Model çıktıları üzerinden güvenli, detaylı ve iş odaklı açıklama üretir.</div>
                 </div>
             </div>
+            <div class='chat-body'>{chat_thread_html(visible_messages)}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
-    qcols = st.columns(4, gap="small")
-    selected_question = None
-    for idx, question in enumerate(quick_questions):
-        with qcols[idx % 4]:
-            if st.button(question, key=f"quick_advisor_{idx}", width="stretch"):
-                selected_question = question
 
-    st.markdown(
-        f"<div class='chat-wide-shell'><div class='chat-body'>{chat_thread_html(st.session_state.get('advisor_chat_messages', []))}</div></div>",
-        unsafe_allow_html=True,
-    )
-
-    typed_question = st.chat_input("Bu ihale hakkında sorunuzu yazın...")
-    # Compatibility marker for the existing UI smoke test: st.chat_message
-    user_question = selected_question or typed_question
     if user_question:
-        st.session_state.advisor_chat_messages.append({"role": "user", "content": user_question})
-        with st.spinner("Yanıt hazırlanıyor..."):
+        with st.spinner("AI cevabı hazırlanıyor..."):
             injection = detect_prompt_injection(user_question)
             if injection["prompt_injection_detected"]:
                 assistant_text = safe_prompt_response()
@@ -3500,7 +3540,12 @@ def render_advisor() -> None:
                 else:
                     assistant_text = fallback_chat_answer(user_question, context, advisor)
                     llm_status = st.session_state.get("advisor_llm_status", {})
-                    fallback_reason = str(llm_status.get("reason") or "OpenRouter yanıtı kullanılamadı.")
+                    raw_fallback_reason = str(llm_status.get("reason") or "OpenRouter yanıtı kullanılamadı.")
+                    fallback_reason = "OpenRouter yanıtı doğrulanamadı; güvenli sistem yanıtı kullanıldı."
+                    if "anahtarı bulunamadı" in raw_fallback_reason.casefold():
+                        fallback_reason = "OpenRouter API key bulunamadı; güvenli sistem yanıtı kullanıldı."
+                    elif "offline" in raw_fallback_reason.casefold():
+                        fallback_reason = "LLM offline modda; güvenli sistem yanıtı kullanıldı."
                     assistant_source = f"Güvenli fallback - {fallback_reason}"
                     fallback_validation = dict(validation)
                     fallback_validation.update(
@@ -3535,23 +3580,6 @@ def render_advisor() -> None:
             )
         st.session_state.advisor_chat_messages.append({"role": "assistant", "content": assistant_text, "source": assistant_source})
         st.rerun()
-
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
-        st.markdown(advisor_payload_to_chat_text(advisor))
-        safe_context = sanitize_advisor_context(context)
-        context_status = validate_advisor_context(safe_context)
-        validation_rows = pd.DataFrame(
-            [
-                ["Yanıt doğrulama", st.session_state.get("advisor_validation", validation).get("advisor_validation_status", "-")],
-                ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
-                ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
-                ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
-                ["OpenRouter modeli", selected_openrouter_model_id()],
-            ],
-            columns=["Kontrol", "Durum"],
-        )
-        st.dataframe(validation_rows, hide_index=True, width="stretch")
 
 
 def render_reports() -> None:
