@@ -61,6 +61,8 @@ def test_low_similarity_soft_penalty_does_not_block_scenario():
 
     assert result["hard_constraints_valid"]
     assert any(item["rule"] == "low_similarity" for item in result["soft_penalties"])
+    assert "low_similarity" not in result["risk_flags"]
+    assert "low_similarity" in result["risk_codes"]
     assert result["scenario_score"] > 0
 
 

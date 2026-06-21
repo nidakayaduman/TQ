@@ -118,3 +118,64 @@ def test_methodology_terms_are_present():
         "Sızıntı Kontrolü",
     ]:
         assert term in APP_TEXT
+
+
+def test_profile_page_contains_kmeans_and_isolation_diagnostics():
+    for text in [
+        "K-Means ve Isolation Forest fiyat önermez",
+        "K-Means Analizi",
+        "K-Means Cluster Kalitesi",
+        "Silhouette Score",
+        "Inertia",
+        "Cluster boyut aralığı",
+        "Sıra Dışılık Kontrolü (Isolation Forest)",
+        "Anomaly score",
+        "Threshold",
+        "Manual review flag",
+    ]:
+        assert text in APP_TEXT
+
+
+def test_profile_models_are_not_described_as_price_predictors():
+    for text in [
+        "K-Means fiyat tahmini",
+        "Isolation Forest fiyat tahmini",
+        "K-Means fiyatı doğru tahmin",
+        "Isolation Forest fiyatı doğru tahmin",
+    ]:
+        assert text not in APP_TEXT
+
+
+def test_removed_visual_noise_and_score_section_are_absent():
+    assert "Skorlar nasıl okunur?" not in APP_TEXT
+    for icon in ["📊", "🔎", "🧭", "📍", "📦", "💬", "🧱", "🔒", "🧰", "🎯", "💹", "🛡️", "⚠️", "✅"]:
+        assert icon not in APP_TEXT
+    assert 'icon="•"' not in APP_TEXT
+
+
+def test_methodology_key_explanations_are_visible_cards_not_expanders():
+    for label in [
+        "Neden accuracy, precision, recall veya ROC-AUC ana başarı metriği değil?",
+        "Top-K retrieval ve eşleşme metrikleri",
+        "Sıra dışı durum örnekleri",
+        "Fiyat koridoru nasıl oluşuyor?",
+        "Başarıyı hangi metriklerle ölçüyoruz?",
+    ]:
+        assert label in APP_TEXT
+        assert f'with st.expander("{label}' not in APP_TEXT
+    for metric in [
+        "K-Means Silhouette Score",
+        "K-Means Inertia",
+        "Cluster Size Distribution",
+        "Assignment Confidence",
+        "Isolation Forest Inlier Rate",
+        "Isolation Forest Anomaly Rate",
+        "Synthetic Outlier Manual Review Rate",
+    ]:
+        assert metric in APP_TEXT
+
+
+def test_scenario_page_labels_price_strategy_scope():
+    assert "Öne Çıkan Fiyat Senaryoları" in APP_TEXT
+    assert "K-Means ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir." in APP_TEXT
+    assert "K-Means ve Isolation Forest burada fiyat tahmini olarak kullanılmaz" in APP_TEXT

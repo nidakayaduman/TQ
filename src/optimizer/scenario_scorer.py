@@ -236,8 +236,10 @@ def score_scenario(
     unit_cost = float(scenario.get("estimated_unit_cost", tender.get("estimated_unit_cost", 0)))
     computed_margin = validation.get("computed_margin_pct", margin_pct(proposed_price, unit_cost))
     risk_flags = list(validation.get("violations", []))
+    risk_codes: list[str] = []
     if proposed_price < corridor["predicted_low_price"] or proposed_price > corridor["predicted_high_price"]:
         risk_flags.append("Fiyat tarihsel fiyat bandının dışında.")
+        risk_codes.append("outside_price_band")
     detailed_soft_penalties = soft_penalty_items(
         scenario,
         tender,
@@ -252,8 +254,8 @@ def score_scenario(
         if message not in risk_flags:
             risk_flags.append(message)
         risk_flag = str(item.get("risk_flag", ""))
-        if risk_flag and risk_flag not in risk_flags:
-            risk_flags.append(risk_flag)
+        if risk_flag and risk_flag not in risk_codes:
+            risk_codes.append(risk_flag)
     unusual_profile = not bool(profile_output.get("is_inlier", True)) or float(profile_output.get("won_profile_fit_score", 0)) < 45
     high_delivery = int(scenario.get("delivery_months", tender.get("delivery_months", 0)) or 0) > int(tender.get("delivery_months", 0) or 0)
 
@@ -263,7 +265,7 @@ def score_scenario(
         "margin_score": margin_score_from_pct(float(computed_margin)),
         "model_confidence_score": float(np.clip(model_confidence_score, 0, 100)),
         "risk_penalty_score": risk_penalty_score(
-            risk_flags,
+            risk_flags + risk_codes,
             bool(validation.get("valid", False)),
             model_confidence_score < 45,
             unusual_profile,
@@ -309,18 +311,36 @@ def score_scenario(
             in {
                 "is_inlier",
                 "inlier_score",
+                "anomaly_score",
+                "isolation_threshold",
+                "manual_review_flag",
                 "cluster_id",
                 "cluster_name",
                 "cluster_score",
+                "cluster_assignment_confidence",
+                "cluster_distance",
+                "cluster_second_distance",
+                "cluster_distance_percentile",
                 "cluster_count",
                 "cluster_dominant_product_group",
+                "cluster_dominant_product_group_ratio",
                 "cluster_dominant_institution_type",
+                "cluster_dominant_institution_type_ratio",
                 "cluster_dominant_region",
+                "cluster_dominant_region_ratio",
                 "cluster_average_quantity",
+                "cluster_median_delivery_months",
                 "cluster_average_price",
                 "cluster_average_margin",
                 "cluster_median_price",
                 "cluster_median_margin",
+                "nearest_cluster_examples",
+                "cluster_silhouette_score",
+                "cluster_inertia",
+                "cluster_min_size",
+                "cluster_max_size",
+                "small_cluster_count",
+                "empty_cluster_count",
                 "isolation_contamination",
                 "training_inlier_rate",
                 "training_anomaly_rate",
@@ -331,6 +351,7 @@ def score_scenario(
         "scenario_score": float(np.clip(scenario_score, 0, 100)),
         "computed_margin_pct": float(computed_margin),
         "risk_flags": risk_flags,
+        "risk_codes": risk_codes,
         "invalid_reason": "; ".join(validation.get("violations", [])) if not validation.get("valid", False) else "",
         "hard_constraint_violations": list(validation.get("violations", [])),
         "soft_penalties": detailed_soft_penalties,
@@ -343,6 +364,7 @@ def score_scenario(
             "hard_constraint_violations": list(validation.get("violations", [])),
             "soft_penalties": detailed_soft_penalties,
             "risk_flags": risk_flags,
+            "risk_codes": risk_codes,
             "explainability": explainability,
         },
         **recommendation,

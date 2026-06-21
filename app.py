@@ -988,6 +988,12 @@ def format_score(value: float | int | None) -> str:
     return f"{float(value):.1f}/100"
 
 
+def format_decimal(value: float | int | None, digits: int = 2) -> str:
+    if value is None or pd.isna(value):
+        return "-"
+    return f"{float(value):.{digits}f}"
+
+
 def format_optional_try(value: float | int | None, empty: str = "-") -> str:
     if value is None or pd.isna(value):
         return empty
@@ -1055,14 +1061,14 @@ def scenario_rank_comment(rank_pct: float | int | None) -> str:
 
 def render_small_card(title: str, body: str, badge_html: str = "") -> None:
     st.markdown(
-        premium_card_html(title, body, icon="•", footer_html=badge_html, size="large-size", color="blue"),
+        premium_card_html(title, body, footer_html=badge_html, size="large-size", color="blue"),
         unsafe_allow_html=True,
     )
 
 
 def render_kv_card(title: str, rows: list[tuple[str, str]], note: str = "") -> None:
     st.markdown(
-        premium_card_html(title, note, icon="•", lines=rows, size="large-size", color="purple"),
+        premium_card_html(title, note, lines=rows, size="large-size", color="purple"),
         unsafe_allow_html=True,
     )
 
@@ -1106,21 +1112,21 @@ def warning_box() -> None:
     )
 
 
-def render_metric_card(title: str, value: str, subtitle: str = "", color: str = "blue", icon: str = "📊") -> None:
+def render_metric_card(title: str, value: str, subtitle: str = "", color: str = "blue", icon: str = "") -> None:
     st.markdown(
         premium_card_html(title, subtitle, icon=icon, value=value, color=color, size="metric-size"),
         unsafe_allow_html=True,
     )
 
 
-def metric_card(label: str, value: str, note: str = "", color: str = "blue", icon: str = "📊") -> None:
+def metric_card(label: str, value: str, note: str = "", color: str = "blue", icon: str = "") -> None:
     render_metric_card(label, value, note, color, icon)
 
 
 def premium_card_html(
     title: str,
     body: str,
-    icon: str = "•",
+    icon: str = "",
     value: str = "",
     pill: str = "",
     color: str = "blue",
@@ -1135,6 +1141,7 @@ def premium_card_html(
             for line_label, line_value in lines
         ) + "</div>"
     value_html = f"<div class='card-value'>{escape(value)}</div>" if value else ""
+    icon_html = f"<div class='card-icon-row'><span class='card-icon'>{escape(icon)}</span></div>" if icon else ""
     footer = (
         f"<div class='card-footer'>{footer_html}</div>"
         if footer_html
@@ -1145,7 +1152,7 @@ def premium_card_html(
     return (
         f"<div class='premium-card card-{escape(color)} {escape(size)}'>"
         "<div>"
-        f"<div class='card-icon-row'><span class='card-icon'>{escape(icon)}</span></div>"
+        f"{icon_html}"
         f"<div class='card-title'>{escape(title)}</div>"
         f"{value_html}"
         f"<div class='card-body'>{escape(body)}</div>"
@@ -1162,7 +1169,7 @@ def render_premium_grid(items: list[dict[str, Any]], columns: int = 3, size: str
         premium_card_html(
             title=str(item.get("title", "")),
             body=str(item.get("body", "")),
-            icon=str(item.get("icon", "•")),
+            icon=str(item.get("icon", "")),
             value=str(item.get("value", "")),
             pill=str(item.get("pill", "")),
             color=str(item.get("color", "blue")),
@@ -1192,6 +1199,31 @@ def compact_chat_text(value: Any) -> str:
     text = re.sub(r"\n[ \t]+", "\n", text)
     text = re.sub(r"\n{2,}", "\n", text)
     text = re.sub(r"\n(?=- )", "\n", text)
+    return text
+
+
+def clean_user_facing_note(value: Any, max_chars: int | None = None) -> str:
+    text = str(value or "").strip()
+    for code in [
+        "low_similarity",
+        "wide_price_band",
+        "medium_model_disagreement",
+        "low_margin_buffer",
+        "outside_price_band",
+        "low_model_confidence",
+        "high_cluster_distance",
+        "delivery_pressure",
+        "high_competition",
+        "missing_optional_data",
+        "cost_uncertainty",
+    ]:
+        text = re.sub(rf"(?:^|[;,\s])+{re.escape(code)}(?:$|[;,\s]+)", " ", text)
+    text = re.sub(r"\s*;\s*", "; ", text)
+    text = re.sub(r"(;\s*){2,}", "; ", text)
+    text = re.sub(r"\s{2,}", " ", text).strip(" ;,")
+    if max_chars and len(text) > max_chars:
+        cut = text[:max_chars].rsplit(" ", 1)[0].rstrip(" ;,.")
+        return f"{cut}..."
     return text
 
 
@@ -1232,7 +1264,7 @@ def section_header(title: str, subtitle: str = "", kicker: str = "") -> None:
 
 def glass_card(title: str, body: str, kicker: str = "", status_html: str = "") -> None:
     st.markdown(
-        premium_card_html(title, body, icon="•", pill=kicker, footer_html=status_html, color="blue", size="large-size"),
+        premium_card_html(title, body, pill=kicker, footer_html=status_html, color="blue", size="large-size"),
         unsafe_allow_html=True,
     )
 
@@ -1852,7 +1884,6 @@ def audited_download_button(label: str, data: Any, file_name: str, mime: str | N
 
 
 def render_home() -> None:
-    weights = load_scenario_weights()
     st.markdown(
         """
         <div class='hero-card'>
@@ -1889,17 +1920,6 @@ def render_home() -> None:
         ],
         columns=3,
         size="large-size",
-    )
-
-    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
-    section_header("Skorlar nasıl okunur?", "Ana skorlar gerçek kazanma olasılığı değildir; geçmiş kazanılmış veriye göre uyum ve tutarlılık göstergesidir.")
-    render_premium_grid(
-        [
-            {"icon": f"%{weights.get('won_profile_fit_score', 0) * 100:.0f}", "title": "Profil Uyumu", "body": "İhalenin geçmişte kazanılmış işlere benzerliğini temsil eder.", "pill": "Senaryo skor etkisi", "color": "purple"},
-            {"icon": f"%{weights.get('price_band_fit_score', 0) * 100:.0f}", "title": "Fiyat Bandı Uyumu", "body": "Önerilen fiyatın emsal fiyat koridoruna ne kadar oturduğunu gösterir.", "pill": "Senaryo skor etkisi", "color": "mint"},
-            {"icon": f"%{weights.get('margin_score', 0) * 100:.0f}", "title": "Karlılık Skoru", "body": "Önerilen fiyat ile tahmini maliyet arasındaki beklenen karlılığı ölçer.", "pill": "Senaryo skor etkisi", "color": "amber"},
-        ],
-        columns=3,
     )
 
 
@@ -2005,7 +2025,7 @@ def render_data_quality() -> None:
         ).sort_values("Boş oran", ascending=False)
         st.dataframe(null_df, hide_index=True, width="stretch", column_config={"Boş oran": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=1)})
         if quality["issues"]:
-            st.warning("\n".join(f"- {issue}" for issue in quality["issues"]))
+            st.warning("; ".join(str(issue) for issue in quality["issues"]))
         if schema_result.warnings:
             st.warning("\n".join(schema_result.warnings))
     with tabs[1]:
@@ -2123,10 +2143,10 @@ def render_methodology() -> None:
                 "Ürün, kurum, bölge, miktar, teslim süresi, fiyat bandı, beklenen karlılık, risk ve model güveni birlikte okunur. Düşük skor çoğu zaman manuel inceleme sinyalidir.",
                 "03",
             )
-        with st.expander("Neden accuracy, precision, recall veya ROC-AUC ana başarı metriği değil?", expanded=False):
-            st.markdown(
-                "Negatif sınıf güvenilir olmadığı için kazan/kaybet sınıflandırması ölçülmez. Backtest, fiyat koridoru hizası, profil uyumu, segment performansı, sızıntı kontrolü ve danışman güvenliği üzerinden yapılır."
-            )
+        info_callout(
+            "Negatif sınıf güvenilir olmadığı için kazan/kaybet sınıflandırması ölçülmez. Backtest, fiyat koridoru hizası, profil uyumu, segment performansı, sızıntı kontrolü ve danışman güvenliği üzerinden yapılır.",
+            "Neden accuracy, precision, recall veya ROC-AUC ana başarı metriği değil?",
+        )
 
     with tabs[1]:
         section_header("Benzerlik nasıl hesaplanıyor?", "TF-IDF ve cosine similarity yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır.", "Retrieval")
@@ -2154,23 +2174,20 @@ def render_methodology() -> None:
                 "İki ihalenin sayısal vektörlerinin birbirine ne kadar yakın olduğunu ölçer. Skor 1'e yaklaştıkça benzerlik artar; 0'a yaklaştıkça azalır.",
                 "Yakınlık hesabı",
             )
-        with st.expander("Top-K retrieval ve eşleşme metrikleri", expanded=False):
-            st.markdown(
-                """
-                Örnek profil: “serum ürün grubu + kamu hastanesi + Marmara bölgesi + açık ihale + 50.000 adet”.
-                Aynı ürün grubu, benzer kurum tipi, aynı bölge ve yakın miktar varsa benzerlik güçlenir.
-                """
-            )
-            metrics = pd.DataFrame(
-                [
-                    ["Ürün Grubu Eşleşme Oranı", "İlk K benzer ihale içinde aynı ürün grubuna düşen kayıt oranı."],
-                    ["Bölge Eşleşme Oranı", "Benzer ihalelerin seçili ihale ile aynı bölgede olma oranı."],
-                    ["Miktar Bandı Eşleşme Oranı", "Benzer ihalelerin yakın miktar ölçeğinde olma oranı."],
-                    ["İlk K Ortalama Benzerlik", "Getirilen benzer ihalelerin ortalama cosine/özellik benzerliği."],
-                ],
-                columns=["Metrik", "Ne anlatır?"],
-            )
-            st.dataframe(metrics, hide_index=True, width="stretch")
+        info_callout(
+            "Örnek profil: serum ürün grubu, kamu hastanesi, Marmara bölgesi, açık ihale ve 50.000 adet. Aynı ürün grubu, benzer kurum tipi, aynı bölge ve yakın miktar varsa benzerlik güçlenir.",
+            "Top-K retrieval ve eşleşme metrikleri",
+        )
+        metrics = pd.DataFrame(
+            [
+                ["Ürün Grubu Eşleşme Oranı", "İlk K benzer ihale içinde aynı ürün grubuna düşen kayıt oranı."],
+                ["Bölge Eşleşme Oranı", "Benzer ihalelerin seçili ihale ile aynı bölgede olma oranı."],
+                ["Miktar Bandı Eşleşme Oranı", "Benzer ihalelerin yakın miktar ölçeğinde olma oranı."],
+                ["İlk K Ortalama Benzerlik", "Getirilen benzer ihalelerin ortalama cosine/özellik benzerliği."],
+            ],
+            columns=["Metrik", "Ne anlatır?"],
+        )
+        st.dataframe(metrics, hide_index=True, width="stretch")
 
     with tabs[2]:
         section_header("Model Bileşenleri", "Her bileşen karar destek çıktısının farklı bir parçasını açıklar.", "Model")
@@ -2187,21 +2204,22 @@ def render_methodology() -> None:
             ]
         )
         st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-        with st.expander("Sıra dışı durum örnekleri", expanded=False):
-            st.markdown("- çok yüksek veya çok düşük miktar\n- alışılmadık ürün-kurum kombinasyonu\n- çok kısa teslim süresi\n- çok yüksek veya çok düşük fiyat\n- düşük benzer ihale sayısı")
-        with st.expander("Fiyat koridoru nasıl oluşuyor?", expanded=True):
-            info_callout(
-                "Sistem seçili ihaleye en çok benzeyen kazanılmış ihaleleri bulur. Ana fiyat koridoru bu emsal ihalelerdeki normalize fiyatların alt, orta ve üst yüzdeliklerinden üretilir. Lineer regresyon ve Random Forest/ağaç tabanlı baseline ise bu koridorun basit ve daha esnek fiyat tahminleriyle kıyaslanması için metodolojik kontrol katmanı olarak anlatılır; gerçek kazanma olasılığı üretmez. Koridor çok genişse tek başına güçlü kanıt sayılmaz, bu yüzden backtestte band genişliği de ölçülür.",
-                "Fiyat Koridoru",
-            )
-            render_method_grid(
-                [
-                    ("Alt Bant", "Daha agresif fiyat seviyesi."),
-                    ("Orta Bant", "Dengeli fiyat seviyesi."),
-                    ("Üst Bant", "Daha muhafazakar fiyat seviyesi."),
-                ],
-                ["blue", "green", "amber"],
-            )
+        info_callout(
+            "Çok yüksek veya çok düşük miktar, alışılmadık ürün-kurum kombinasyonu, çok kısa teslim süresi, olağan dışı fiyat seviyesi veya düşük benzer ihale sayısı manuel inceleme sinyali üretebilir.",
+            "Sıra dışı durum örnekleri",
+        )
+        info_callout(
+            "Sistem seçili ihaleye en çok benzeyen kazanılmış ihaleleri bulur. Ana fiyat koridoru bu emsal ihalelerdeki normalize fiyatların alt, orta ve üst yüzdeliklerinden üretilir. Lineer regresyon ve Random Forest/ağaç tabanlı baseline bu koridoru açıklanabilir fiyat referanslarıyla kıyaslar; gerçek kazanma olasılığı üretmez. Koridor çok genişse karar desteği zayıflar, bu yüzden backtestte band genişliği de ölçülür.",
+            "Fiyat koridoru nasıl oluşuyor?",
+        )
+        render_method_grid(
+            [
+                ("Alt Bant", "Daha agresif fiyat seviyesi."),
+                ("Orta Bant", "Dengeli fiyat seviyesi."),
+                ("Üst Bant", "Daha muhafazakar fiyat seviyesi."),
+            ],
+            ["blue", "green", "amber"],
+        )
 
     with tabs[3]:
         section_header("Senaryo Skoru", "Tek bir model çıktısı değildir; beş bileşen birlikte değerlendirilir.", "Skor")
@@ -2209,11 +2227,11 @@ def render_methodology() -> None:
         st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
         render_model_grid(
             [
-                ("🧭", "Profil Uyumu", "Yeni ihalenin geçmiş kazanılmış ihalelere benzerliği.", "blue"),
-                ("🎯", "Fiyat Bandı Uyumu", "Önerilen fiyatın geçmiş fiyat koridoruna yakınlığı.", "green"),
-                ("💹", "Karlılık Skoru", "Beklenen karlılık ve katkı karı sağlığı.", "purple"),
-                ("🛡️", "Model Güveni", "Yeterli benzer ihale ve veri kalitesi olup olmadığı.", "cyan"),
-                ("⚠️", "Risk Cezası", "Sıra dışı durumlar, düşük benzerlik, düşük güven ve kısıt ihlalleri.", "amber"),
+                ("01", "Profil Uyumu", "Yeni ihalenin geçmiş kazanılmış ihalelere benzerliği.", "blue"),
+                ("02", "Fiyat Bandı Uyumu", "Önerilen fiyatın geçmiş fiyat koridoruna yakınlığı.", "green"),
+                ("03", "Karlılık Skoru", "Beklenen karlılık ve katkı karı sağlığı.", "purple"),
+                ("04", "Model Güveni", "Yeterli benzer ihale ve veri kalitesi olup olmadığı.", "cyan"),
+                ("05", "Risk Cezası", "Sıra dışı durumlar, düşük benzerlik, düşük güven ve kısıt ihlalleri.", "amber"),
             ]
         )
         info_callout("Not: Skor gerçek kazanma olasılığı değil, geçmiş kazanılmış ihale profiline uyum göstergesidir.")
@@ -2237,22 +2255,31 @@ def render_methodology() -> None:
             ["blue", "amber", "green"],
         )
         st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-        with st.expander("Başarıyı hangi metriklerle ölçüyoruz?", expanded=True):
-            metrics_table = pd.DataFrame(
-                [
-                    ["Fiyat Koridoru Kapsama Oranı", "Gerçek kazanılmış fiyat sistemin önerdiği fiyat bandının içinde mi?"],
-                    ["MAE", "Tahmin edilen orta fiyat ile gerçek fiyat arasındaki ortalama mutlak fark."],
-                    ["Ortalama yüzde fiyat hatası", "Önerilen orta fiyatın gerçek kazanılmış fiyattan ortalama yüzde sapması."],
-                    ["Ortalama fiyat aralığı genişliği", "Düşük ve yüksek fiyat önerisi arasındaki ortalama fark."],
-                    ["Band kalite skoru", "Fiyat bandının hem gerçek fiyatı kapsamasını hem de çok geniş olmamasını birlikte değerlendirir."],
-                    ["Gerçek Kazanılmış Senaryo Sıralaması", "Tarihsel gerçek konfigürasyon aday senaryolar arasında ne kadar üstte kaldı?"],
-                    ["Geçmiş profile uygun görülen test ihalesi oranı", "Kazanılmış test kayıtlarının ne kadarının geçmiş başarı profiline normal uyduğu."],
-                    ["Synthetic outlier detection rate", "Sentetik sıra dışı örneklerin model tarafından riskli veya aykırı görülme oranı."],
-                    ["Yasak iddia üretme oranı", "AI Danışman kesin sonuç veya veri dışı başarı iddiası üretiyor mu? Hedef sıfırdır."],
-                ],
-                columns=["Metrik", "Ne anlatır?"],
-            )
-            st.dataframe(metrics_table, hide_index=True, width="stretch")
+        info_callout(
+            "Başarı, kazan/kaybet sınıflandırmasıyla değil; fiyat bandı kapsama, profil uyumu, cluster kalitesi, sıra dışılık kontrolü, sızıntı disiplini ve AI güvenliğiyle ölçülür.",
+            "Başarıyı hangi metriklerle ölçüyoruz?",
+        )
+        metrics_table = pd.DataFrame(
+            [
+                ["Fiyat Koridoru Kapsama Oranı", "Gerçek kazanılmış fiyat sistemin önerdiği fiyat bandının içinde mi?"],
+                ["MAE", "Tahmin edilen orta fiyat ile gerçek fiyat arasındaki ortalama mutlak fark."],
+                ["Ortalama yüzde fiyat hatası", "Önerilen orta fiyatın gerçek kazanılmış fiyattan ortalama yüzde sapması."],
+                ["Ortalama fiyat aralığı genişliği", "Düşük ve yüksek fiyat önerisi arasındaki ortalama fark."],
+                ["Band kalite skoru", "Fiyat bandının hem gerçek fiyatı kapsamasını hem de çok geniş olmamasını birlikte değerlendirir."],
+                ["Gerçek Kazanılmış Senaryo Sıralaması", "Tarihsel gerçek konfigürasyon aday senaryolar arasında ne kadar üstte kaldı?"],
+                ["K-Means Silhouette Score", "Profil clusterlarının birbirinden ne kadar ayrıştığını gösterir."],
+                ["K-Means Inertia", "Cluster içindeki kayıtların merkeze ne kadar yakın olduğunu gösterir."],
+                ["Cluster Size Distribution", "Clusterların dengeli mi, aşırı küçük veya boş mu olduğunu gösterir."],
+                ["Assignment Confidence", "Seçili ihalenin atandığı cluster’a ne kadar net yakın olduğunu gösterir."],
+                ["Isolation Forest Inlier Rate", "Geçmiş kazanılmış test kayıtlarının ne kadarının normal göründüğünü ölçer."],
+                ["Isolation Forest Anomaly Rate", "Geçmiş kazanılmış test kayıtlarında manuel inceleme sinyali oranını gösterir."],
+                ["Contamination Uyumu", "Beklenen sıra dışılık ayarı ile gerçekleşen anomaly oranının tutarlılığını kontrol eder."],
+                ["Synthetic Outlier Manual Review Rate", "Bilerek uçlaştırılmış örneklerde manual review sinyali çıkıp çıkmadığını test eder."],
+                ["Yasak iddia üretme oranı", "AI Danışman kesin sonuç veya veri dışı başarı iddiası üretiyor mu? Hedef sıfırdır."],
+            ],
+            columns=["Metrik", "Ne anlatır?"],
+        )
+        st.dataframe(metrics_table, hide_index=True, width="stretch")
         with st.expander("Sızıntı kontrolü nedir?", expanded=False):
             st.markdown(
                 """
@@ -2278,10 +2305,10 @@ def render_methodology() -> None:
         section_header("AI Danışman", "Skor hesaplamaz; mevcut model çıktılarını güvenli Türkçe açıklamaya dönüştürür.", "LLM Guardrails")
         render_model_grid(
             [
-                ("💬", "Açıklama Üretir", "Profil uyumu, fiyat koridoru, karlılık, risk ve benzer ihaleleri anlaşılır hale getirir.", "blue"),
-                ("🧱", "Guardrail Uygular", "Garanti, kesin sonuç veya gerçek kazanma olasılığı iddiası üretirse çıktı reddedilir.", "amber"),
-                ("🔒", "Reveal Kuralına Uyar", "Gerçek sonuç açılmadıysa kazanılmış fiyat veya gerçek karlılık oranını kullanamaz.", "purple"),
-                ("🧰", "Fallback Çalışır", "LLM sağlayıcısı yoksa deterministik danışman aynı sohbet akışında yanıt verir.", "green"),
+                ("01", "Açıklama Üretir", "Profil uyumu, fiyat koridoru, karlılık, risk ve benzer ihaleleri anlaşılır hale getirir.", "blue"),
+                ("02", "Guardrail Uygular", "Garanti, kesin sonuç veya gerçek kazanma olasılığı iddiası üretirse çıktı reddedilir.", "amber"),
+                ("03", "Reveal Kuralına Uyar", "Gerçek sonuç açılmadıysa kazanılmış fiyat veya gerçek karlılık oranını kullanamaz.", "purple"),
+                ("04", "Fallback Çalışır", "LLM sağlayıcısı yoksa deterministik danışman aynı sohbet akışında yanıt verir.", "green"),
             ]
         )
 def render_test_simulator() -> None:
@@ -2468,6 +2495,12 @@ def render_profile_fit_analysis() -> None:
         },
     )
 
+    info_callout(
+        "K-Means ve Isolation Forest fiyat önermez. Bu modeller, seçili ihalenin geçmiş kazanılmış ihale profillerine benzerliğini ve sıra dışı olup olmadığını analiz eder. Fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.",
+        "Profil modelleri ne yapar?",
+    )
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+
     section_header("Genel Uyum Özeti", "Üç temel soruyu yanıtlar: hangi geçmiş profile benziyor, normal mi görünüyor, genel skor ne söylüyor?")
     render_premium_grid(
         [
@@ -2514,11 +2547,11 @@ def render_profile_fit_analysis() -> None:
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header(
-        "Geçmiş Başarı Grubu",
-        "K-Means, geçmişte kazanılmış ihaleleri benzer özelliklerine göre gruplar. Bu sonuç, seçili ihalenin geçmişte hangi tip kazanılmış ihalelere benzediğini gösterir.",
+        "K-Means Analizi",
+        "K-Means, geçmişte kazanılmış ihaleleri benzer gruplara ayırır. Seçili ihalenin hangi geçmiş kazanılmış ihale grubuna benzediğini gösterir; bu bir fiyat tahmini değildir.",
     )
     info_callout(
-        "Cluster açıklamasında tarihsel gerçekleşmiş fiyat ve karlılık özetleri gösterilir. Ancak seçili/test ihalesini cluster’a yerleştirirken gerçek kazanılmış fiyat, gerçek karlılık veya önerilen senaryo fiyatı kullanılmaz; atama yalnızca ihale anında bilinen profil alanlarıyla yapılır.",
+        "K-Means canlı/test atamasında ürün grubu, bölge, ihale tipi, kurum tipi, miktar, teslim süresi, tahmini rakip sayısı ve tahmini maliyet gibi ihale anında bilinebilen profil alanlarını kullanır. Gerçek kazanılmış fiyat, gerçek marj veya önerilen senaryo fiyatı kullanılmaz.",
         "K-Means hangi bilgileri kullanır?",
     )
     left, right = st.columns([1.15, 0.85], gap="medium")
@@ -2529,16 +2562,50 @@ def render_profile_fit_analysis() -> None:
                 ("Başarı grubu adı", str(best.get("cluster_name", "Hesaplanamadı"))),
                 ("Bu gruptaki ihale sayısı", format_int(best.get("cluster_count"))),
                 ("Baskın ürün grubu", str(best.get("cluster_dominant_product_group", "Hesaplanamadı"))),
+                ("Baskın ürün grubu oranı", format_pct(float(best.get("cluster_dominant_product_group_ratio", 0) or 0) * 100)),
                 ("Baskın kurum tipi", str(best.get("cluster_dominant_institution_type", "Hesaplanamadı"))),
+                ("Baskın kurum tipi oranı", format_pct(float(best.get("cluster_dominant_institution_type_ratio", 0) or 0) * 100)),
                 ("Baskın bölge", str(best.get("cluster_dominant_region", "Hesaplanamadı"))),
+                ("Baskın bölge oranı", format_pct(float(best.get("cluster_dominant_region_ratio", 0) or 0) * 100)),
                 ("Ortalama miktar", format_int(best.get("cluster_average_quantity"))),
-                ("Ortalama fiyat", format_try(best.get("cluster_average_price"))),
-                ("Ortalama karlılık oranı", format_pct(best.get("cluster_average_margin"))),
+                ("Medyan teslim süresi", f"{format_decimal(best.get('cluster_median_delivery_months'), 1)} ay"),
+                ("Cluster merkezine uzaklık", format_decimal(best.get("cluster_distance"))),
+                ("İkinci en yakın cluster uzaklığı", format_decimal(best.get("cluster_second_distance"))),
+                ("Atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0))),
             ],
             profile_business_comment(best),
         )
     with right:
         st.plotly_chart(build_gauge(float(best.get("won_profile_fit_score", 0)), "Profil uyum skoru"), use_container_width=True)
+
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    section_header("K-Means Cluster Kalitesi", "Bu metrikler cluster yapısının ayrışmasını, dengesini ve seçili ihalenin atamasının ne kadar net olduğunu gösterir.")
+    k1, k2, k3, k4 = st.columns(4, gap="medium")
+    with k1:
+        metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Cluster’ların birbirinden ne kadar ayrıştığını gösterir.", "purple")
+    with k2:
+        metric_card("Inertia", format_decimal(best.get("cluster_inertia"), 1), "Kayıtların kendi cluster merkezlerine toplam yakınlığını gösterir.", "blue")
+    with k3:
+        metric_card("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "Cluster size distribution dengesini gösterir.", "green")
+    with k4:
+        metric_card("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Çok küçük veya boş cluster sayısı.", "amber")
+
+    nearest_examples = best.get("nearest_cluster_examples", [])
+    if isinstance(nearest_examples, list) and nearest_examples:
+        examples_df = pd.DataFrame(nearest_examples)
+        rename_map = {
+            "tender_id": "İhale ID",
+            "product_group": "Ürün grubu",
+            "product_name": "Ürün",
+            "buyer_institution_type": "Kurum tipi",
+            "region": "Bölge",
+            "procedure_type": "İhale tipi",
+            "quantity": "Miktar",
+            "delivery_months": "Teslim süresi",
+            "query_distance": "Seçili ihaleye uzaklık",
+        }
+        examples_df = examples_df.rename(columns=rename_map)
+        st.dataframe(examples_df[[column for column in rename_map.values() if column in examples_df.columns]], hide_index=True, width="stretch")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header(
@@ -2549,11 +2616,19 @@ def render_profile_fit_analysis() -> None:
     with c1:
         metric_card("Durum", profile_label, isolation_business_comment(best), "amber" if profile_status == "warn" else "green")
     with c2:
-        metric_card("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Modelin eğitimde geçmiş başarı profiline uygun bulduğu kazanılmış kayıt oranı")
+        metric_card("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "0 eşiğinin altı daha sıra dışı kabul edilir.")
     with c3:
-        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Modelin eğitimde daha az tipik bulduğu kazanılmış kayıt oranı")
+        metric_card("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Isolation Forest karar eşiği.")
     with c4:
-        metric_card("Hassasiyet ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Yaklaşık her 100 kazanılmış kayıttan kaçının daha az tipik ayrılacağını belirleyen ayar")
+        metric_card("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Sıra dışı ise manuel inceleme sinyali üretir.", "amber" if bool(best.get("manual_review_flag", False)) else "green")
+
+    i5, i6, i7 = st.columns(3, gap="medium")
+    with i5:
+        metric_card("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Eğitimde geçmiş başarı profiline uygun bulunan kazanılmış kayıt oranı")
+    with i6:
+        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Eğitimde daha az tipik bulunan kazanılmış kayıt oranı")
+    with i7:
+        metric_card("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Yaklaşık her 100 kazanılmış kayıttan kaçının daha az tipik ayrılacağını belirleyen ayar")
 
     info_callout(
         "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle Isolation Forest’ın sıra dışı dediği bir kayıt, kaybedilecek ihale anlamına gelmez. Sadece geçmiş kazanılmış ihaleler arasında daha az tipik bir örnek olduğunu gösterir.",
@@ -2739,11 +2814,11 @@ def render_scenario_analysis() -> None:
 
     c1, c2, c3 = st.columns(3, gap="medium")
     with c1:
-        metric_card("Model Güven Skoru", f"{result['model_confidence_score']:.1f}/100", "Benzer ihale sayısı ve uyumu", "blue", "🛡️")
+        metric_card("Model Güven Skoru", f"{result['model_confidence_score']:.1f}/100", "Benzer ihale sayısı ve uyumu", "blue")
     with c2:
-        metric_card("Orta Fiyat", format_try(result["corridor"]["predicted_mid_price"]), "Fiyat koridoru merkezi", "green", "🎯")
+        metric_card("Orta Fiyat", format_try(result["corridor"]["predicted_mid_price"]), "Fiyat koridoru merkezi", "green")
     with c3:
-        metric_card("Temel kurala uygun senaryo", format_int(scenarios["hard_constraints_valid"].sum()), "Minimum karlılık eşiğini ve temel fiyat kurallarını geçen seçenek sayısı", "amber", "✅")
+        metric_card("Temel kurala uygun senaryo", format_int(scenarios["hard_constraints_valid"].sum()), "Minimum karlılık eşiğini ve temel fiyat kurallarını geçen seçenek sayısı", "amber")
 
     info_callout(
         (
@@ -2775,7 +2850,11 @@ def render_scenario_analysis() -> None:
             colors=["blue", "purple", "green", "amber", "cyan", "blue"],
         )
 
-    section_header("Öne Çıkan Senaryolar", "Her kart teklif fiyatı, karlılık, katkı kârı, risk, kural durumu ve senaryo skorunu birlikte gösterir.", "Senaryo kartları")
+    section_header(
+        "Öne Çıkan Fiyat Senaryoları",
+        "Bu kartlar fiyat ve karlılık stratejilerini gösterir. K-Means ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir.",
+        "Senaryo kartları",
+    )
     if valid_scenarios.empty:
         st.warning(result.get("failure_reason") or "Geçerli öneri üretilemedi. Manuel teklif komitesi incelemesi önerilir.")
     strategy_targets = [
@@ -2798,13 +2877,13 @@ def render_scenario_analysis() -> None:
     card_colors = ["blue", "green", "amber"]
     for idx, (label, description, scenario) in enumerate(selected_cards):
         status = "good" if bool(scenario["hard_constraints_valid"]) else "bad"
-        invalid_reason = str(scenario.get("invalid_reason", "") or "; ".join(scenario.get("risk_flags", [])))
+        invalid_reason = clean_user_facing_note(scenario.get("invalid_reason", ""))
         status_label = "Temel kurallar uygun" if bool(scenario["hard_constraints_valid"]) else f"Geçersiz: {invalid_reason}"
         total_offer = float(scenario["proposed_unit_price"]) * float(tender.get("quantity", 0))
         contribution = total_offer * float(scenario["computed_margin_pct"]) / 100
         risk_value = max(0.0, 100 - float(scenario["risk_penalty_score"]))
         risk_label = "Düşük" if risk_value >= 75 else "Orta" if risk_value >= 55 else "Yüksek"
-        soft_text = str(scenario.get("soft_penalty_explanations", "")) or "Belirgin risk uyarısı yok"
+        soft_text = clean_user_facing_note(scenario.get("soft_penalty_explanations", ""), 180) or "Belirgin risk uyarısı yok"
         scenario_cards_html += premium_card_html(
             title=label,
             value=format_try(scenario["proposed_unit_price"]),
@@ -2822,8 +2901,8 @@ def render_scenario_analysis() -> None:
                 ("Model güveni", format_score(scenario.get("model_confidence_score"))),
                 ("Risk seviyesi", risk_label),
                 ("Senaryo skoru", f"{scenario['scenario_score']:.0f}/100"),
-                ("Kural kontrolü", invalid_reason if invalid_reason else "Uygun"),
-                ("Skor düşüş nedeni", soft_text[:160]),
+                ("Kural kontrolü", "Temel kurallar uygun" if bool(scenario["hard_constraints_valid"]) else invalid_reason),
+                ("Skor düşüş nedeni", soft_text),
             ],
         )
     if scenario_cards_html:
@@ -2869,6 +2948,9 @@ def render_scenario_analysis() -> None:
         "Nasıl Yorumlanmalı?",
         "Kural / Risk Notları",
     ]
+    for column in ["Geçersiz Senaryo Açıklaması", "Risk Uyarıları / Skor Cezaları", "Kural / Risk Notları"]:
+        if column in table:
+            table[column] = table[column].apply(clean_user_facing_note)
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     st.dataframe(
         table,
@@ -2916,7 +2998,7 @@ def render_scenario_analysis() -> None:
 def render_reveal_compare() -> None:
     page_header(
         "Gerçek Sonuçla Karşılaştır",
-        "Bu sayfa tek seçili test ihalesi içindir. Önce sistemin sonuç gizliyken ürettiği fiyat ve profil çıktıları gösterilir; sonra gerçek kazanılmış fiyat açılarak bu çıktılarla yan yana karşılaştırılır.",
+        "Bu sayfa tek seçili test ihalesinde sonuç açıldıktan sonra fiyat koridoru ve profil tanılama çıktılarının gerçek kazanılmış sonuçla nasıl hizalandığını gösterir. K-Means ve Isolation Forest burada fiyat tahmini olarak kullanılmaz; profil ve sıra dışılık sinyali olarak okunur.",
         "Sonuç Açma",
     )
     row = selected_test_tender()
@@ -2927,7 +3009,7 @@ def render_reveal_compare() -> None:
 
     if not st.session_state.get("revealed", False):
         info_callout(
-            "Gerçek sonuç açıldığında fiyat bandı, profil uyumu, sıra dışılık yorumu ve senaryo sıralaması karşılaştırılır.",
+            "Gerçek sonuç açıldığında fiyat bandı gerçek fiyatla; profil uyumu ve sıra dışılık sinyali ise profil tanılamasıyla karşılaştırılır. Bu ekran K-Means veya Isolation Forest için fiyat doğruluğu ölçmez.",
             "Gerçek sonuç açılınca ne değişir?",
         )
         st.info("Gerçek kazanılmış fiyat ve karlılık oranı henüz gizli. Bu bilgi model, senaryo skoru ve AI danışmana verilmedi.")
@@ -3213,6 +3295,16 @@ def render_backtest() -> None:
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("K-Means Metrikleri", "Test ihalelerinin hangi geçmiş başarı gruplarına dağıldığını gösterir.", "Profil grupları")
+    km1, km2, km3, km4 = st.columns(4, gap="medium")
+    with km1:
+        metric_card("Silhouette Score", format_decimal(results["cluster_silhouette_score"].mean()), "Cluster ayrışma kalitesi", "purple")
+    with km2:
+        metric_card("Inertia", format_decimal(results["cluster_inertia"].mean(), 1), "Cluster içi merkeze yakınlık", "blue")
+    with km3:
+        metric_card("Min / max cluster boyutu", f"{format_int(results['cluster_min_size'].min())} - {format_int(results['cluster_max_size'].max())}", "Cluster size distribution", "green")
+    with km4:
+        low_conf_rate = float((results["cluster_assignment_confidence"].astype(float) < 25).mean()) if "cluster_assignment_confidence" in results else 0.0
+        metric_card("Düşük atama güveni", format_pct(low_conf_rate * 100), "Assignment confidence 25 altında olan test oranı", "amber")
     cluster_summary = (
         results.groupby(["cluster_id", "cluster_name"], dropna=False)
         .agg(
@@ -3315,7 +3407,7 @@ def render_backtest() -> None:
             "Gerçek Kazanılmış Senaryonun Sıralamadaki Yeri",
         )
         st.dataframe(rank_summary, hide_index=True, width="stretch")
-    metric_card("Yasak İddia Üretme Oranı", format_pct(forbidden_rate * 100), "AI Danışman güvenlik kontrolü. Hedef sıfırdır.", "red", "🛡️")
+    metric_card("Yasak İddia Üretme Oranı", format_pct(forbidden_rate * 100), "AI Danışman güvenlik kontrolü. Hedef sıfırdır.", "red")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Basit Yöntemlerle Karşılaştırma", "Tender IQ fiyat aralığı yaklaşımı; ürün grubu medyanı, Top-K medyanı, maliyet üstü fiyat ve regresyon gibi basit referanslarla kıyaslanır.", "Kıyas")
@@ -3479,13 +3571,13 @@ def render_similar_tenders() -> None:
 
     c1, c2, c3, c4 = st.columns(4, gap="medium")
     with c1:
-        metric_card("Ortalama Benzerlik", f"{quality['topk_avg_similarity']:.2f}", "İlk 50 benzer ihale", "blue", "🔎")
+        metric_card("Ortalama Benzerlik", f"{quality['topk_avg_similarity']:.2f}", "İlk 50 benzer ihale", "blue")
     with c2:
-        metric_card("Ürün Grubu Eşleşme Oranı", format_pct(quality["product_group_match_rate"] * 100), "Top-K içinde aynı ürün grubu", "green", "🧭")
+        metric_card("Ürün Grubu Eşleşme Oranı", format_pct(quality["product_group_match_rate"] * 100), "Top-K içinde aynı ürün grubu", "green")
     with c3:
-        metric_card("Bölge Eşleşme Oranı", format_pct(quality["region_match_rate"] * 100), "Top-K içinde aynı bölge", "purple", "📍")
+        metric_card("Bölge Eşleşme Oranı", format_pct(quality["region_match_rate"] * 100), "Top-K içinde aynı bölge", "purple")
     with c4:
-        metric_card("Miktar Bandı Eşleşme Oranı", format_pct(quality["quantity_band_match_rate"] * 100), "Yakın ölçek oranı", "amber", "📦")
+        metric_card("Miktar Bandı Eşleşme Oranı", format_pct(quality["quantity_band_match_rate"] * 100), "Yakın ölçek oranı", "amber")
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     metric_card("Top-10 Emsal İhale Sayısı", format_int(min(10, len(similar))), "Karar ekranlarında ilk 10 güçlü emsal ayrıca izlenir.", "cyan")
 
