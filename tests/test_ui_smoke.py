@@ -72,6 +72,24 @@ def test_advisor_ui_does_not_render_raw_json_schema():
     assert '"forbidden_claims_check"' not in APP_TEXT
 
 
+def test_openrouter_models_are_explicit_and_selectable():
+    for text in [
+        "OpenRouter Model Seçimi",
+        "st.selectbox(",
+        '"number": "1"',
+        "OpenRouter Auto",
+        "openrouter/auto",
+        '"number": "2"',
+        "Google Gemini 2.5 Flash",
+        "google/gemini-2.5-flash",
+        '"number": "3"',
+        "OpenAI GPT-4o Mini",
+        "openai/gpt-4o-mini",
+        "selected_openrouter_model_id()",
+    ]:
+        assert text in APP_TEXT
+
+
 def test_methodology_terms_are_present():
     for term in [
         "TF-IDF",

@@ -20,6 +20,16 @@ def test_observability_config_file_exists_and_loads():
     assert config["artifacts"]["directory"] == "model_artifacts"
 
 
+def test_empty_key_example_files_are_not_kept():
+    assert not Path(".env.example").exists()
+    assert not Path(".streamlit/secrets.example.toml").exists()
+
+
+def test_docker_excludes_local_streamlit_secret():
+    dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
+    assert ".streamlit/secrets.toml" in dockerignore
+
+
 def test_audit_event_contains_required_fields(tmp_path):
     path = write_audit_event(
         {

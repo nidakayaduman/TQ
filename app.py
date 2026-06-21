@@ -51,7 +51,27 @@ from src.validation import validate_data_quality
 ROOT = Path(__file__).resolve().parent
 SAMPLE_DATA = ROOT / "data" / "x_ilac_synthetic_tenders_2021_2025.csv"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free"
+OPENROUTER_MODELS = [
+    {
+        "number": "1",
+        "label": "OpenRouter Auto",
+        "model_id": "openrouter/auto",
+        "description": "OpenRouter uygun modeli otomatik seçer; genel kullanım için varsayılan.",
+    },
+    {
+        "number": "2",
+        "label": "Google Gemini 2.5 Flash",
+        "model_id": "google/gemini-2.5-flash",
+        "description": "Hızlı ve maliyet dengeli açıklama üretimi için.",
+    },
+    {
+        "number": "3",
+        "label": "OpenAI GPT-4o Mini",
+        "model_id": "openai/gpt-4o-mini",
+        "description": "Kısa, tutarlı ve ekonomik danışman yanıtları için.",
+    },
+]
+DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[0]["model_id"]
 
 
 def load_local_env_file() -> None:
@@ -469,7 +489,12 @@ inject_global_css()
 def init_session_state_defaults() -> None:
     st.session_state.setdefault("session_id", f"st-{uuid.uuid4().hex[:12]}")
     st.session_state.setdefault("user_id", os.getenv("USER_ID", "anonymous"))
-    st.session_state.setdefault("llm_primary_label", DEFAULT_OPENROUTER_MODEL)
+    configured_model = os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL).strip() or DEFAULT_OPENROUTER_MODEL
+    available_model_ids = {item["model_id"] for item in OPENROUTER_MODELS}
+    if configured_model not in available_model_ids:
+        configured_model = DEFAULT_OPENROUTER_MODEL
+    st.session_state.setdefault("selected_openrouter_model", configured_model)
+    st.session_state.setdefault("llm_primary_label", configured_model)
     st.session_state.setdefault("llm_fallback_labels", [])
 
 
@@ -494,7 +519,20 @@ def audit_event_once(key: str, event: dict[str, Any]) -> None:
 
 
 def llm_provider() -> str:
-    return os.getenv("LLM_PROVIDER", "").strip().lower()
+    return os.getenv("LLM_PROVIDER", "openrouter").strip().lower() or "openrouter"
+
+
+def selected_openrouter_model_id() -> str:
+    model_id = str(st.session_state.get("selected_openrouter_model") or "").strip()
+    available_model_ids = {item["model_id"] for item in OPENROUTER_MODELS}
+    if model_id in available_model_ids:
+        return model_id
+    env_model = os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL).strip()
+    return env_model if env_model in available_model_ids else DEFAULT_OPENROUTER_MODEL
+
+
+def openrouter_model_option_label(model: dict[str, str]) -> str:
+    return f"{model['number']}. {model['label']} - {model['model_id']}"
 
 
 def user_friendly_error_message(exc: Exception) -> str:
@@ -1154,8 +1192,9 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         return None
     prompt_context = {**safe_context, "user_question": question}
     prompt = build_advisor_prompt(prompt_context)
+    selected_model = selected_openrouter_model_id()
     body = {
-        "model": os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
+        "model": selected_model,
         "messages": [
             {
                 "role": "system",
@@ -1226,6 +1265,8 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         "valid": True,
         "advisor_validation_status": "pass",
         "llm_validation_status": "pass",
+        "llm_provider": "openrouter",
+        "llm_model": selected_model,
         "schema_valid": validation["schema_valid"],
         "forbidden_claims_detected": False,
         "grounding_score": grounding["grounding_score"],
@@ -1243,6 +1284,10 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
             "validation_status": validation["advisor_validation_status"],
             "leakage_status": safe_context.get("leakage_audit", {}).get("audit_status", "unknown"),
             "advisor_guardrail_status": grounding["grounding_validation_status"],
+            "details": {
+                "llm_provider": "openrouter",
+                "llm_model": selected_model,
+            },
         }
     )
     return parsed
@@ -3132,6 +3177,7 @@ def render_advisor() -> None:
             "tender_id": context.get("tender_id"),
             "scenario_score": round(float(context.get("scenario_score", 0)), 3),
             "revealed": context.get("revealed", False),
+            "llm_model": selected_openrouter_model_id(),
         },
         sort_keys=True,
     )
@@ -3162,6 +3208,64 @@ def render_advisor() -> None:
         "AI Danışman karar vermez. Sadece model çıktılarını açıklar. Bu skor gerçek kazanma olasılığı değildir.",
         "Güvenli kullanım notu",
     )
+    section_header("OpenRouter Model Seçimi", "AI Danışman yanıtı için kullanılacak LLM burada seçilir ve anında güncellenir.", "LLM")
+    model_labels = [openrouter_model_option_label(model) for model in OPENROUTER_MODELS]
+    selected_model_id = selected_openrouter_model_id()
+    selected_index = next(
+        (idx for idx, model in enumerate(OPENROUTER_MODELS) if model["model_id"] == selected_model_id),
+        0,
+    )
+    selected_model_label = st.selectbox(
+        "Aktif LLM modeli",
+        model_labels,
+        index=selected_index,
+        key="advisor_openrouter_model_label",
+    )
+    selected_model = OPENROUTER_MODELS[model_labels.index(selected_model_label)]
+    if st.session_state.get("selected_openrouter_model") != selected_model["model_id"]:
+        st.session_state.selected_openrouter_model = selected_model["model_id"]
+        st.session_state.llm_primary_label = selected_model["model_id"]
+        st.session_state.advisor_chat_messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    f"Model {selected_model['number']} seçildi: {selected_model['label']}. "
+                    "Yeni sorular bu OpenRouter modeliyle yanıtlanacak."
+                ),
+            }
+        ]
+        audit_event(
+            {
+                "event_type": "advisor_model_selected",
+                "user_action": "select_llm_model",
+                "tender_id": context.get("tender_id"),
+                "module": "advisor",
+                "input_summary": "openrouter_model_selectbox",
+                "output_summary": selected_model["model_id"],
+                "validation_status": "pass",
+                "details": {
+                    "llm_provider": "openrouter",
+                    "llm_model": selected_model["model_id"],
+                    "llm_model_number": selected_model["number"],
+                },
+            }
+        )
+    model_cards = [
+        {
+            "icon": model["number"],
+            "title": f"{model['number']}. {model['label']}",
+            "value": model["model_id"],
+            "body": model["description"],
+            "pill": "Aktif" if model["model_id"] == selected_openrouter_model_id() else "Seçenek",
+            "color": "green" if model["model_id"] == selected_openrouter_model_id() else "blue",
+        }
+        for model in OPENROUTER_MODELS
+    ]
+    render_premium_grid(model_cards, columns=3, size="metric-size")
+    st.caption(
+        "OpenRouter API anahtarı yerel secrets.toml içinden okunur. Anahtar yoksa veya OpenRouter çağrısı doğrulamadan geçmezse güvenli fallback advisor devreye girer."
+    )
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
     risk_status = "Uyarı var" if risk_flags else "Düşük"
@@ -3213,8 +3317,16 @@ def render_advisor() -> None:
             "pill": "Fallback",
             "color": "purple" if current_validation.get("fallback_used") else "blue",
         },
+        {
+            "icon": "LLM",
+            "title": "Aktif model",
+            "value": selected_openrouter_model_id(),
+            "body": "Sohbet yanıtı için OpenRouter request body içinde bu model ID'si kullanılır.",
+            "pill": "OpenRouter",
+            "color": "cyan",
+        },
     ]
-    render_premium_grid(validation_cards, columns=3, size="metric-size")
+    render_premium_grid(validation_cards, columns=4, size="metric-size")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header("Sohbet", "Sorular, seçili ihale bağlamı ve model çıktıları üzerinden yanıtlanır.", "AI Danışman")
@@ -3290,6 +3402,8 @@ def render_advisor() -> None:
                     fallback_validation.update(
                         {
                             "llm_validation_status": "fallback",
+                            "llm_provider": "openrouter",
+                            "llm_model": selected_openrouter_model_id(),
                             "schema_valid": validation.get("schema_valid", False),
                             "forbidden_claims_detected": validation.get("forbidden_claims_detected", False),
                             "grounding_score": 1.0,
@@ -3325,6 +3439,7 @@ def render_advisor() -> None:
                 ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
                 ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
                 ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
+                ["OpenRouter modeli", selected_openrouter_model_id()],
             ],
             columns=["Kontrol", "Durum"],
         )
