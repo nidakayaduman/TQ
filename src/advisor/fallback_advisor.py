@@ -64,7 +64,7 @@ def build_fallback_advisor(context: dict[str, Any]) -> dict[str, Any]:
             "Rakip fiyatları tahmin edilmez; sadece mevcut veriyle karar desteği sağlanır.",
         ],
         "forbidden_claims_check": {
-            "claims_true_win_probability": False,
+            "claims_true_win_chance": False,
             "claims_guaranteed_win": False,
         },
     }

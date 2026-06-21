@@ -39,7 +39,7 @@ Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
     "Rakip fiyatları tahmin edilmez; sadece mevcut veriyle karar desteği sağlanır."
   ],
   "forbidden_claims_check": {{
-    "claims_true_win_probability": false,
+    "claims_true_win_chance": false,
     "claims_guaranteed_win": false
   }}
 }}

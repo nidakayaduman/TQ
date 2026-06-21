@@ -70,11 +70,11 @@
     "forbidden_claims_check": {
       "type": "object",
       "required": [
-        "claims_true_win_probability",
+        "claims_true_win_chance",
         "claims_guaranteed_win"
       ],
       "properties": {
-        "claims_true_win_probability": {
+        "claims_true_win_chance": {
           "type": "boolean"
         },
         "claims_guaranteed_win": {

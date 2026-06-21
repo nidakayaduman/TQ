@@ -22,7 +22,7 @@ def test_fallback_advisor_validates():
     assert result["advisor_validation_status"] == "pass"
     assert result["schema_valid"]
     assert output["forbidden_claims_check"] == {
-        "claims_true_win_probability": False,
+        "claims_true_win_chance": False,
         "claims_guaranteed_win": False,
     }
     assert isinstance(output["evidence_used"][0], dict)
@@ -81,7 +81,7 @@ def test_advisor_output_forbidden_claim_flags_fail():
 
 def test_validation_failure_can_use_safe_fallback_output():
     invalid = build_fallback_advisor({"won_profile_fit_score": 70})
-    invalid["forbidden_claims_check"]["claims_true_win_probability"] = True
+    invalid["forbidden_claims_check"]["claims_true_win_chance"] = True
     invalid_result = validate_advisor_output(invalid)
     fallback_result = validate_advisor_output(SAFE_FALLBACK_OUTPUT)
     assert not invalid_result["valid"]

@@ -41,7 +41,7 @@ SAFE_FALLBACK_OUTPUT = {
         "Reveal edilmemiş gerçek sonuçlar kullanılmaz.",
     ],
     "forbidden_claims_check": {
-        "claims_true_win_probability": False,
+        "claims_true_win_chance": False,
         "claims_guaranteed_win": False,
     },
 }
@@ -58,9 +58,9 @@ def _flatten_text(value: Any) -> str:
 def _forbidden_claim_flags(output: dict[str, Any]) -> dict[str, bool]:
     value = output.get("forbidden_claims_check")
     if not isinstance(value, dict):
-        return {"claims_true_win_probability": True, "claims_guaranteed_win": True}
+        return {"claims_true_win_chance": True, "claims_guaranteed_win": True}
     return {
-        "claims_true_win_probability": bool(value.get("claims_true_win_probability")),
+        "claims_true_win_chance": bool(value.get("claims_true_win_chance")),
         "claims_guaranteed_win": bool(value.get("claims_guaranteed_win")),
     }
 

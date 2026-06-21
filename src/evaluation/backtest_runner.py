@@ -61,13 +61,9 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
             **profile,
             "topk_avg_similarity": avg_similarity,
         }
-        scenarios = generate_candidate_scenarios(
-            masked,
-            corridor,
-            include_actual={"actual_won_unit_price": actual_price},
-        )
+        recommendation_scenarios = generate_candidate_scenarios(masked, corridor)
         scored = []
-        for scenario in scenarios:
+        for scenario in recommendation_scenarios:
             validation = validate_scenario(scenario, masked, corridor)
             scored.append(
                 score_scenario(
@@ -81,8 +77,32 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
                     soft_penalties=soft_penalties,
                 )
             )
-        scored_df = pd.DataFrame(scored).sort_values("scenario_score", ascending=False).reset_index(drop=True)
+        scored_df = pd.DataFrame(scored).sort_values(
+            ["hard_constraints_valid", "scenario_score"],
+            ascending=[False, False],
+        ).reset_index(drop=True)
         best = scored_df.iloc[0].to_dict()
+
+        rank_scenarios = [
+            *recommendation_scenarios,
+            *generate_candidate_scenarios(masked, corridor, include_actual={"actual_won_unit_price": actual_price})[-1:],
+        ]
+        rank_scored = []
+        for scenario in rank_scenarios:
+            validation = validate_scenario(scenario, masked, corridor)
+            rank_scored.append(
+                score_scenario(
+                    scenario,
+                    masked,
+                    corridor,
+                    profile_for_score,
+                    confidence_score,
+                    validation,
+                    weights=weights,
+                    soft_penalties=soft_penalties,
+                )
+            )
+        rank_scored_df = pd.DataFrame(rank_scored)
         retrieval = retrieval_quality(similar, masked, top_k=top_k)
         similar_summary = "; ".join(
             f"{row['tender_id']} ({float(row['overall_similarity_score']):.2f})"
@@ -119,7 +139,9 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
                 "percentage_error_mid": abs(actual_price - corridor["predicted_mid_price"]) / max(abs(actual_price), 1.0) * 100,
                 "band_width": corridor["band_width"],
                 "coverage_adjusted_band_score": 0.0,
-                "actual_won_scenario_rank_percentile": actual_rank_percentile(scored_df),
+                "actual_won_scenario_rank_percentile": actual_rank_percentile(rank_scored_df),
+                "selected_scenario_id": best.get("scenario_id", ""),
+                "selected_is_actual_configuration_candidate": bool(best.get("is_actual_configuration_candidate", False)),
                 "top10_avg_similarity": float(similar.head(10)["overall_similarity_score"].mean()),
                 "top50_avg_similarity": avg_similarity,
                 "won_profile_fit_score": profile["won_profile_fit_score"],

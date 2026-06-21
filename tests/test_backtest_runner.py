@@ -16,7 +16,10 @@ def test_backtest_runner_outputs_required_columns(tiny_df):
         "scenario_score",
         "leakage_audit_status",
         "advisor_validation_status",
+        "selected_scenario_id",
+        "selected_is_actual_configuration_candidate",
     }
     assert required.issubset(results.columns)
     assert set(results["leakage_audit_status"]) == {"pass"}
-
+    assert not results["selected_is_actual_configuration_candidate"].any()
+    assert "S_ACTUAL_HISTORICAL_CONFIG" not in set(results["selected_scenario_id"])
