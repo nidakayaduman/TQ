@@ -1,7 +1,10 @@
+import json
+
 from src.advisor.fallback_advisor import build_fallback_advisor
 from src.advisor.context_validator import sanitize_advisor_context
 from src.advisor.grounding_validator import validate_grounding
-from src.advisor.output_validator import SAFE_FALLBACK_OUTPUT, validate_advisor_output
+from src.advisor.llm_response import normalize_advisor_payload_schema, normalize_llm_payload, payload_from_free_text
+from src.advisor.output_validator import SAFE_FALLBACK_OUTPUT, advisor_semantic_text, validate_advisor_output
 from src.advisor.prompt_injection_filter import detect_prompt_injection
 from src.advisor.support_validator import validate_supported_claims
 
@@ -27,6 +30,94 @@ def test_fallback_advisor_validates():
         "claims_guaranteed_win": False,
     }
     assert isinstance(output["evidence_used"][0], dict)
+
+
+def test_forbidden_claim_check_keys_are_not_scanned_as_user_claims():
+    output = build_fallback_advisor({"won_profile_fit_score": 70})
+    semantic_text = advisor_semantic_text(output)
+    assert "claims_guaranteed_win" not in semantic_text
+    assert "guaranteed_win" not in semantic_text
+    result = validate_advisor_output(output)
+    assert result["valid"]
+    assert not result["forbidden_claims_detected"]
+
+
+def test_llm_payload_parser_accepts_fenced_json_and_trailing_commas():
+    content = """```json
+    {
+      "summary": "Benzer ihaleler fiyat koridorunu destekliyor.",
+      "evidence_used": [{"evidence_id": "E_PRICE_001", "claim": "Fiyat koridoru kullanıldı",}],
+    }
+    ```"""
+    parsed = normalize_llm_payload(content)
+    assert parsed is not None
+    assert parsed["summary"] == "Benzer ihaleler fiyat koridorunu destekliyor."
+
+
+def test_llm_payload_parser_unwraps_openrouter_choices_payload():
+    content = {
+        "choices": [
+            {
+                "message": {
+                    "content": '{"executive_summary": "Yanıt hazır.", "evidence_used": ["E_PROFILE_001"]}'
+                }
+            }
+        ]
+    }
+    parsed = normalize_llm_payload(json.dumps(content, ensure_ascii=False))
+    assert parsed == {"executive_summary": "Yanıt hazır.", "evidence_used": ["E_PROFILE_001"]}
+
+
+def test_normalized_llm_payload_validates_without_false_forbidden_claim():
+    context = {
+        "revealed": False,
+        "risk_flags": ["low_similarity"],
+        "evidence_items": [
+            {"evidence_id": "E_PRICE_001", "content": "Fiyat koridoru kontrol edildi."},
+            {"evidence_id": "E_PROFILE_001", "content": "Profil uyumu kontrol edildi."},
+            {"evidence_id": "E_RISK_001", "content": "Risk bayrakları kontrol edildi."},
+        ],
+    }
+    payload = normalize_advisor_payload_schema(
+        {
+            "summary": "Benzer ihaleler karar desteği sağlar; bu bir garanti değildir.",
+            "rationale": "Profil ve fiyat koridoru birlikte okunmalıdır.",
+            "evidence_used": ["E_PRICE_001", "E_PROFILE_001"],
+            "forbidden_claims_check": {
+                "claims_true_win_chance": False,
+                "claims_guaranteed_win": False,
+            },
+        },
+        context,
+        "Benzer ihaleler ne söylüyor?",
+    )
+    result = validate_advisor_output(payload, context)
+    assert result["valid"]
+    assert not result["forbidden_claims_detected"]
+
+
+def test_free_text_payload_is_wrapped_then_validates():
+    context = {
+        "revealed": False,
+        "evidence_items": [
+            {"evidence_id": "E_PRICE_001", "content": "Fiyat koridoru kontrol edildi."},
+            {"evidence_id": "E_PROFILE_001", "content": "Profil uyumu kontrol edildi."},
+            {"evidence_id": "E_RISK_001", "content": "Risk bayrakları kontrol edildi."},
+        ],
+    }
+    payload = payload_from_free_text(
+        "Benzer ihaleler profil ve fiyat koridoru açısından orta düzey destek veriyor.",
+        context,
+        "Benzer ihaleler ne söylüyor?",
+    )
+    assert payload is not None
+    assert validate_advisor_output(payload, context)["valid"]
+
+
+def test_free_text_payload_still_blocks_unsafe_claims():
+    context = {"evidence_items": [{"evidence_id": "E_PRICE_001", "content": "Fiyat koridoru kontrol edildi."}]}
+    payload = payload_from_free_text("Bu teklif kazanır ve ihale kesin kazanılır.", context, "Kazanır mıyız?")
+    assert payload is None
 
 
 def test_prompt_injection_filter_blocks_instruction_bypass():

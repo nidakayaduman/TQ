@@ -55,6 +55,11 @@ def _flatten_text(value: Any) -> str:
     return str(value)
 
 
+def advisor_semantic_text(output: dict[str, Any]) -> str:
+    """Return only user-facing advisor content for claim detection."""
+    return _flatten_text({key: value for key, value in output.items() if key != "forbidden_claims_check"})
+
+
 def _forbidden_claim_flags(output: dict[str, Any]) -> dict[str, bool]:
     value = output.get("forbidden_claims_check")
     if not isinstance(value, dict):
@@ -75,8 +80,7 @@ def _hidden_actual_mentions(output: dict[str, Any], context: dict[str, Any] | No
 def validate_advisor_output(output: dict[str, Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
     missing = [field for field in REQUIRED_ADVISOR_FIELDS if field not in output]
     schema_errors = validate_json_schema(output, ADVISOR_OUTPUT_JSON_SCHEMA)
-    combined_text = _flatten_text({key: value for key, value in output.items() if key != "forbidden_claims_check"})
-    forbidden = detect_forbidden_claims(combined_text)
+    forbidden = detect_forbidden_claims(advisor_semantic_text(output))
     flags = _forbidden_claim_flags(output)
     forbidden_by_flag = any(flags.values())
     grounding = validate_grounding(output, context or {})
