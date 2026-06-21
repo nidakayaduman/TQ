@@ -101,6 +101,17 @@ PWIN_PROXY_EXPLANATION = (
     "olarak Kazanılmış Profil Uyum Skoru kullanılır. Bu skor; emsal benzerlik, K-Means başarı profili, "
     "Isolation Forest uygunluğu, fiyat bandı uyumu, karlılık/risk dengesi ve model güveninden beslenir."
 )
+BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v2"
+PROFILE_DIAGNOSTIC_COLUMNS = [
+    "cluster_silhouette_score",
+    "cluster_inertia",
+    "cluster_min_size",
+    "cluster_max_size",
+    "cluster_assignment_confidence",
+    "isolation_contamination",
+    "segment_anomaly_rate",
+    "is_inlier",
+]
 PAGE_NAMES = [
     "Ana Sayfa",
     "Veri Seti ve Kalite Kontrol",
@@ -901,9 +912,28 @@ def load_default_data() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def cached_backtest(data: pd.DataFrame) -> pd.DataFrame:
+def cached_backtest(data: pd.DataFrame, diagnostics_cache_version: str = BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION) -> pd.DataFrame:
+    _ = diagnostics_cache_version
     split = temporal_split(data)
     return run_backtest(pd.concat([split["train"], split["validation"]]), split["test"])
+
+
+def backtest_has_profile_diagnostics(results: pd.DataFrame) -> bool:
+    if results.empty:
+        return False
+    missing = [column for column in PROFILE_DIAGNOSTIC_COLUMNS if column not in results.columns]
+    if missing:
+        return False
+    numeric = pd.to_numeric(results["cluster_inertia"], errors="coerce")
+    return bool(numeric.notna().any() and float(numeric.fillna(0).abs().sum()) > 0)
+
+
+def load_backtest_results(data: pd.DataFrame) -> pd.DataFrame:
+    results = cached_backtest(data, BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION)
+    if not backtest_has_profile_diagnostics(results):
+        cached_backtest.clear()
+        results = cached_backtest(data, BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION)
+    return ensure_backtest_columns(results)
 
 
 def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
@@ -3251,7 +3281,7 @@ def render_backtest() -> None:
             validation_rows=len(split["validation"]),
             test_rows=len(split["test"]),
         )
-        results = ensure_backtest_columns(cached_backtest(data))
+        results = load_backtest_results(data)
     st.session_state.backtest_results = results
     if not st.session_state.get("latest_artifact_dir"):
         artifact_dir = write_backtest_artifacts(
@@ -4030,7 +4060,7 @@ def render_reports() -> None:
     results = st.session_state.get("backtest_results")
     if results is None:
         with st.spinner("Raporlar için backtest hazırlanıyor..."):
-            results = ensure_backtest_columns(cached_backtest(load_active_data()))
+            results = load_backtest_results(load_active_data())
             st.session_state.backtest_results = results
     else:
         results = ensure_backtest_columns(results)

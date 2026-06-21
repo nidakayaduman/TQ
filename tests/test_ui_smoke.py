@@ -204,3 +204,14 @@ def test_reveal_and_backtest_include_profile_diagnostics():
         "Sıra Dışılık Kontrolü",
     ]:
         assert text in APP_TEXT
+
+
+def test_backtest_profile_diagnostics_cache_is_versioned():
+    for text in [
+        "BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION",
+        "PROFILE_DIAGNOSTIC_COLUMNS",
+        "backtest_has_profile_diagnostics",
+        "load_backtest_results",
+        "cached_backtest.clear()",
+    ]:
+        assert text in APP_TEXT
