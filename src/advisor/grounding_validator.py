@@ -17,7 +17,13 @@ def validate_grounding(output: dict[str, Any], context: dict[str, Any]) -> dict[
     unsupported: list[str] = []
     available_ids = _evidence_ids(context)
     used = output.get("evidence_used", [])
-    used_ids = {str(item) for item in used} if isinstance(used, list) else set()
+    used_ids = set()
+    if isinstance(used, list):
+        for item in used:
+            if isinstance(item, dict) and item.get("evidence_id"):
+                used_ids.add(str(item["evidence_id"]))
+            elif isinstance(item, str):
+                used_ids.add(item)
     if available_ids:
         if not used_ids:
             unsupported.append("Evidence ID bulunmuyor.")

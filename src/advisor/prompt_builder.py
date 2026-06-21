@@ -25,30 +25,23 @@ Kritik bağlam:
 Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
 {{
   "executive_summary": "2-3 cümlelik yönetici özeti",
-  "decision_summary": "2-3 cümlelik yönetici özeti",
-  "data_situation": "Veri kapsamını, kayıp veri olmadığını ve bunun modelleme sınırını açıkla",
   "recommended_action": "Teklif / manuel inceleme / fiyat revizyonu gibi net öneri",
   "scenario_rationale": "senaryo skorunu ve ana bileşenleri açıkla",
-  "evidence_used": ["MODEL_CONTEXT_JSON içindeki evidence_items listesinden evidence_id değerleri"],
+  "evidence_used": [
+    {{"evidence_id": "MODEL_CONTEXT_JSON içindeki evidence_items listesinden evidence_id", "claim": "bu kanıta dayanan kısa iddia"}}
+  ],
   "risk_warnings": ["en fazla 4 risk uyarısı"],
   "human_checks_required": ["en fazla 4 insan kontrol maddesi"],
-  "forbidden_claims_check": false,
   "confidence_rationale": "model güveninin neden yüksek/orta/düşük olduğunu açıkla",
-  "limitations": "gerçek kazanma olasılığı, rakip davranışı ve reveal edilmemiş gerçek sonuç verilmediğini kısa açıkla",
-  "pwin_interpretation": "profil uyum göstergesini ve ana sürükleyicileri açıkla; pwin veya gerçek olasılık gibi anlatma",
-  "pricing_interpretation": "düşük/orta/yüksek fiyat ve model uyumunu yorumla",
-  "margin_risk": "maliyet ve karlılık açısından risk yorumu",
-  "learner_signals": {{
-    "isolation_forest": "one-class skorunun anlamı",
-    "kmeans": "başarı profili yorumun",
-    "regression_models": "Linear ve Random Forest baseline sinyalleri"
-  }},
-  "supporting_evidence": ["en fazla 4 kısa kanıt maddesi"],
-  "risks": ["en fazla 4 risk maddesi"],
-  "next_actions": ["en fazla 4 uygulanabilir sonraki adım"],
-  "manual_review_required": true,
-  "forbidden_claims_detected": false,
-  "disclaimer": "{DISCLAIMER}"
+  "limitations": [
+    "Bu çıktı gerçek kazanma olasılığı değildir.",
+    "Kaybedilmiş ihale verisi olmadığı için kazanma/kaybetme sınıflandırması yapılmaz.",
+    "Rakip fiyatları tahmin edilmez; sadece mevcut veriyle karar desteği sağlanır."
+  ],
+  "forbidden_claims_check": {{
+    "claims_true_win_probability": false,
+    "claims_guaranteed_win": false
+  }}
 }}
 
 Kullanıcı sorusu varsa özellikle onu cevapla: {question}

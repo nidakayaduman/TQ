@@ -486,6 +486,13 @@ def audit_event(event: dict[str, Any]) -> None:
     write_audit_event(enriched)
 
 
+def audit_event_once(key: str, event: dict[str, Any]) -> None:
+    if st.session_state.get(key):
+        return
+    audit_event(event)
+    st.session_state[key] = True
+
+
 def llm_provider() -> str:
     return os.getenv("LLM_PROVIDER", "").strip().lower()
 
@@ -1047,12 +1054,13 @@ def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[s
             "Eğer koridor ve baz modeller aynı yöne işaret ediyorsa fiyat kararı daha rahat okunur; ayrışma varsa manuel fiyat incelemesi gerekir."
         )
     elif "risk" in q or "manuel" in q:
+        manual_review_required = confidence_score < 50 or profile_score < 45 or bool(risk_flags)
         answer = (
             "Manuel inceleme kararı tek bir metrikten gelmiyor; üç sinyal birlikte okunuyor:\n\n"
             f"1. Model güveni {confidence_score:.1f}/100. Benzer ihale sayısı ve benzerlik gücü yeterliyse karar desteği daha sağlamdır.\n"
             f"2. Profil uyumu {profile_score:.1f}/100. Düşükse ihale geçmiş kazanılmış örneklere daha az benziyor demektir.\n"
             f"3. Risk ve kural notları: {risk_text}.\n\n"
-            f"Sonuç: {'Manuel inceleme önerilir; fiyat, marj ve teslim varsayımları iş birimiyle kontrol edilmeli.' if advisor['manual_review_required'] else 'Manuel inceleme kritik görünmüyor; yine de teklif onayı öncesi maliyet ve teslim varsayımları kontrol edilmeli.'}"
+            f"Sonuç: {'Manuel inceleme önerilir; fiyat, marj ve teslim varsayımları iş birimiyle kontrol edilmeli.' if manual_review_required else 'Manuel inceleme kritik görünmüyor; yine de teklif onayı öncesi maliyet ve teslim varsayımları kontrol edilmeli.'}"
         )
     elif "benzer" in q or "profile" in q or "profil" in q or "küme" in q:
         answer = (
@@ -1076,10 +1084,10 @@ def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[s
         )
     else:
         answer = (
-            f"{advisor.get('decision_summary', '')}\n\n"
+            f"{advisor.get('executive_summary', '')}\n\n"
             f"Önerilen aksiyon: {advisor.get('recommended_action', '')}\n\n"
-            f"Fiyat yorumu: {advisor.get('pricing_interpretation', '')}\n\n"
-            f"Karlılık ve risk: {advisor.get('margin_risk', '')}\n\n"
+            f"Senaryo gerekçesi: {advisor.get('scenario_rationale', '')}\n\n"
+            f"Güven gerekçesi: {advisor.get('confidence_rationale', '')}\n\n"
             "Detaylı okumada profil uyumu, fiyat bandı uyumu, beklenen karlılık, model güveni ve risk bayrakları birlikte değerlendirilmelidir."
         )
     return answer
@@ -1190,7 +1198,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
     parsed = normalize_llm_payload(content)
     if not parsed:
         return None
-    validation = validate_advisor_output(parsed)
+    validation = validate_advisor_output(parsed, safe_context)
     grounding = validate_grounding(parsed, safe_context)
     support = validate_supported_claims(parsed, safe_context)
     forbidden = detect_forbidden_claims(" ".join(str(value) for value in parsed.values()))
@@ -1215,6 +1223,8 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         )
         return None
     parsed["validation_result"] = {
+        "valid": True,
+        "advisor_validation_status": "pass",
         "llm_validation_status": "pass",
         "schema_valid": validation["schema_valid"],
         "forbidden_claims_detected": False,
@@ -1229,7 +1239,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
             "tender_id": safe_context.get("tender_id"),
             "module": "advisor",
             "input_summary": question[:240],
-            "output_summary": str(parsed.get("decision_summary", ""))[:240],
+            "output_summary": str(parsed.get("executive_summary", ""))[:240],
             "validation_status": validation["advisor_validation_status"],
             "leakage_status": safe_context.get("leakage_audit", {}).get("audit_status", "unknown"),
             "advisor_guardrail_status": grounding["grounding_validation_status"],
@@ -1239,31 +1249,30 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
 
 
 def advisor_payload_to_chat_text(payload: dict[str, Any]) -> str:
-    learner = payload.get("learner_signals", {}) if isinstance(payload.get("learner_signals"), dict) else {}
     parts = [
-        ("Yönetici özeti", payload.get("executive_summary") or payload.get("decision_summary")),
-        ("Veri durumu", payload.get("data_situation")),
-        ("Önerilen aksiyon", payload.get("recommended_action")),
-        ("Senaryo gerekçesi", payload.get("scenario_rationale")),
-        ("Güven gerekçesi", payload.get("confidence_rationale")),
-        ("Profil uyum yorumu", payload.get("pwin_interpretation")),
-        ("Fiyat yorumu", payload.get("pricing_interpretation")),
-        ("Karlılık ve risk", payload.get("margin_risk")),
-        ("Isolation Forest", learner.get("isolation_forest")),
-        ("K-Means", learner.get("kmeans")),
-        ("Regresyon modelleri", learner.get("regression_models")),
+        ("Kısa Özet", payload.get("executive_summary")),
+        ("Önerilen Aksiyon", payload.get("recommended_action")),
+        ("Senaryo Gerekçesi", payload.get("scenario_rationale")),
+        ("Güven Gerekçesi", payload.get("confidence_rationale")),
     ]
     text = "\n\n".join(f"**{title}:** {value}" for title, value in parts if value)
     for title, key in [
-        ("Kanıtlar", "supporting_evidence"),
-        ("Riskler", "risk_warnings"),
-        ("İnsan kontrol listesi", "human_checks_required"),
-        ("Sonraki adımlar", "next_actions"),
+        ("Kullanılan Kanıtlar", "evidence_used"),
+        ("Risk Uyarıları", "risk_warnings"),
+        ("Manuel Kontrol Gerekenler", "human_checks_required"),
         ("Sınırlar", "limitations"),
     ]:
         values = payload.get(key)
         if isinstance(values, list) and values:
-            text += "\n\n" + f"**{title}:**\n" + "\n".join(f"- {item}" for item in values[:4])
+            items = []
+            for item in values[:4]:
+                if isinstance(item, dict):
+                    evidence_id = item.get("evidence_id", "-")
+                    claim = item.get("claim", "")
+                    items.append(f"- {evidence_id}: {claim}")
+                else:
+                    items.append(f"- {item}")
+            text += "\n\n" + f"**{title}:**\n" + "\n".join(items)
         elif isinstance(values, str) and values:
             text += "\n\n" + f"**{title}:** {values}"
     return text
@@ -1305,6 +1314,24 @@ def ensure_scenario_result() -> dict[str, Any] | None:
             "validation_status": "pass" if best.get("hard_constraints_valid") else "fail",
             "leakage_status": st.session_state.get("leakage_audit", {}).get("audit_status", "unknown"),
             "advisor_guardrail_status": "not_applicable",
+        }
+    )
+    audit_event(
+        {
+            "event_type": "soft_penalty_generated",
+            "user_action": "scenario_generation",
+            "tender_id": tender.get("tender_id"),
+            "scenario_id": best.get("scenario_id", best.get("scenario_name", "")),
+            "module": "optimizer",
+            "input_summary": "scenario scoring inputs",
+            "output_summary": f"soft_penalty_score={best.get('soft_penalty_score', 0)}",
+            "validation_status": "pass",
+            "leakage_status": st.session_state.get("leakage_audit", {}).get("audit_status", "unknown"),
+            "advisor_guardrail_status": "not_applicable",
+            "details": {
+                "soft_penalty_score": best.get("soft_penalty_score", 0),
+                "soft_penalty_explanations": best.get("soft_penalty_explanations", ""),
+            },
         }
     )
     rejected = result["scenarios"][~result["scenarios"]["hard_constraints_valid"].astype(bool)]
@@ -1437,6 +1464,23 @@ def render_data_quality() -> None:
     summary = schema_quality_summary(data)
     start = pd.to_datetime(data["tender_date"]).min().date()
     end = pd.to_datetime(data["tender_date"]).max().date()
+    audit_event_once(
+        f"data_quality_checked_{len(data)}_{start}_{end}",
+        {
+            "event_type": "data_quality_checked",
+            "user_action": "open_data_quality_page",
+            "module": "data",
+            "input_summary": f"rows={len(data)}",
+            "output_summary": f"schema_valid={schema_result.valid}; quality_passed={quality['passed']}",
+            "validation_status": "pass" if schema_result.valid and quality["passed"] else "fail",
+            "reveal_status": "not_applicable",
+            "details": {
+                "missing_columns": schema_result.missing_columns,
+                "duplicate_tender_ids": summary["duplicate_tender_ids"],
+                "quality_issues": quality["issues"],
+            },
+        },
+    )
 
     info_callout(
         "Bu adım, sistemin fiyat koridoru, benzer ihale eşleştirmesi, profil uyumu ve senaryo skorlaması için kullandığı tarihsel kazanılmış ihale veri setini yükler ve doğrular. Kalite kontrolleri, verinin analiz için uygun ve güvenli olup olmadığını gösterir.",
@@ -1837,6 +1881,42 @@ def render_test_simulator() -> None:
     audit = audit_pre_reveal_input(selected, masked)
     st.session_state.masked_tender = masked
     st.session_state.leakage_audit = audit
+    audit_event_once(
+        f"actual_result_masked_{selected}",
+        {
+            "event_type": "actual_result_masked",
+            "user_action": "test_tender_selection",
+            "tender_id": selected,
+            "module": "feature_masking",
+            "input_summary": "test tender row",
+            "output_summary": "actual result fields masked",
+            "validation_status": "pass",
+            "leakage_status": audit["audit_status"],
+            "reveal_status": "hidden",
+            "details": {
+                "masked_fields_count": audit.get("masked_fields_count", 0),
+                "blocked_fields_present": audit.get("blocked_fields_present", []),
+            },
+        },
+    )
+    audit_event_once(
+        f"leakage_audit_completed_{selected}",
+        {
+            "event_type": "leakage_audit_completed",
+            "user_action": "test_tender_selection",
+            "tender_id": selected,
+            "module": "leakage_audit",
+            "input_summary": "masked test tender",
+            "output_summary": audit["audit_status"],
+            "validation_status": audit["audit_status"],
+            "leakage_status": audit["audit_status"],
+            "reveal_status": "hidden",
+            "details": {
+                "masked_fields_count": audit.get("masked_fields_count", 0),
+                "blocked_fields_present": audit.get("blocked_fields_present", []),
+            },
+        },
+    )
     if audit["audit_status"] != "pass":
         audit_event(
             {
@@ -1931,6 +2011,25 @@ def render_profile_fit_analysis() -> None:
     anomaly_rate = float(best.get("training_anomaly_rate", 0.0) or 0.0)
     inlier_rate = float(best.get("training_inlier_rate", 0.0) or 0.0)
     segment_rate = best.get("segment_anomaly_rate")
+    audit_event_once(
+        f"profile_fit_analysis_run_{best.get('tender_id', current_tender().get('tender_id') if current_tender() else '')}",
+        {
+            "event_type": "profile_fit_analysis_run",
+            "user_action": "open_profile_fit_page",
+            "tender_id": (current_tender() or {}).get("tender_id"),
+            "module": "profile_fit",
+            "input_summary": "masked tender profile",
+            "output_summary": f"profile_score={best.get('won_profile_fit_score')}; inlier={best.get('is_inlier')}",
+            "validation_status": "pass",
+            "leakage_status": st.session_state.get("leakage_audit", {}).get("audit_status", "unknown"),
+            "details": {
+                "won_profile_fit_score": best.get("won_profile_fit_score"),
+                "cluster_id": best.get("cluster_id"),
+                "is_inlier": best.get("is_inlier"),
+                "training_anomaly_rate": anomaly_rate,
+            },
+        },
+    )
 
     section_header("Genel Uyum Özeti", "Üç temel soruyu yanıtlar: hangi geçmiş profile benziyor, normal mi görünüyor, genel skor ne söylüyor?")
     render_premium_grid(
@@ -2054,6 +2153,25 @@ def render_price_corridor_models() -> None:
         require_test_tender_message()
         return
     corridor = result["corridor"]
+    audit_event_once(
+        f"price_corridor_generated_{tender.get('tender_id')}",
+        {
+            "event_type": "price_corridor_generated",
+            "user_action": "open_price_corridor_page",
+            "tender_id": tender.get("tender_id"),
+            "module": "price_corridor",
+            "input_summary": "masked tender and top-k similar tenders",
+            "output_summary": f"low={corridor.get('predicted_low_price')}; mid={corridor.get('predicted_mid_price')}; high={corridor.get('predicted_high_price')}",
+            "validation_status": "pass",
+            "leakage_status": st.session_state.get("leakage_audit", {}).get("audit_status", "unknown"),
+            "details": {
+                "predicted_low_price": corridor.get("predicted_low_price"),
+                "predicted_mid_price": corridor.get("predicted_mid_price"),
+                "predicted_high_price": corridor.get("predicted_high_price"),
+                "model_confidence_score": result.get("model_confidence_score"),
+            },
+        },
+    )
     mid_ref = max(float(corridor["predicted_mid_price"]), 0.01)
     low_ratio = float(corridor["predicted_low_price"]) / mid_ref
     high_ratio = float(corridor["predicted_high_price"]) / mid_ref
@@ -2800,6 +2918,23 @@ def render_backtest() -> None:
     base_stress_tender = mask_actual_result_fields(split["test"].iloc[0].to_dict())
     stress_results = evaluate_synthetic_outliers(pd.concat([split["train"], split["validation"]]), base_stress_tender)
     stress_pass_rate = float((stress_results["Beklenen davranış"] == "Geçti").mean()) if not stress_results.empty else 0.0
+    audit_event_once(
+        f"synthetic_outlier_test_run_{len(stress_results)}_{len(results)}",
+        {
+            "event_type": "synthetic_outlier_test_run",
+            "user_action": "open_backtest_page",
+            "module": "stress_tests",
+            "input_summary": "masked base tender and synthetic stress cases",
+            "output_summary": f"cases={len(stress_results)}; pass_rate={stress_pass_rate:.3f}",
+            "validation_status": "pass" if stress_pass_rate > 0 else "fail",
+            "leakage_status": "pass",
+            "reveal_status": "not_applicable",
+            "details": {
+                "case_count": len(stress_results),
+                "pass_rate": stress_pass_rate,
+            },
+        },
+    )
     c_stress_1, c_stress_2 = st.columns(2, gap="medium")
     with c_stress_1:
         metric_card("Aykırı test geçme oranı", format_pct(stress_pass_rate * 100), "Riskli yapay örneklerde güven düşüşü, risk bayrağı veya manuel inceleme beklenir.", "purple")
@@ -2884,6 +3019,25 @@ def render_similar_tenders() -> None:
     retriever = RetrievalEngine.fit(get_history_frame())
     similar = retriever.retrieve(tender, top_k=50)
     quality = retrieval_quality(similar, tender)
+    audit_event_once(
+        f"similar_tender_analysis_run_{tender.get('tender_id')}",
+        {
+            "event_type": "similar_tender_analysis_run",
+            "user_action": "open_similar_tenders_page",
+            "tender_id": tender.get("tender_id"),
+            "module": "retrieval",
+            "input_summary": "masked tender profile",
+            "output_summary": f"top_k={len(similar)}; avg_similarity={quality['topk_avg_similarity']:.3f}",
+            "validation_status": "pass",
+            "leakage_status": st.session_state.get("leakage_audit", {}).get("audit_status", "unknown"),
+            "details": {
+                "top_k": len(similar),
+                "topk_avg_similarity": quality["topk_avg_similarity"],
+                "product_group_match_rate": quality["product_group_match_rate"],
+                "region_match_rate": quality["region_match_rate"],
+            },
+        },
+    )
 
     c1, c2, c3, c4 = st.columns(4, gap="medium")
     with c1:
@@ -2948,10 +3102,30 @@ def render_advisor() -> None:
     best = result["scenarios"].iloc[0].to_dict()
     context = advisor_context(result, best)
     advisor = build_fallback_advisor(context)
-    validation = validate_advisor_output(advisor)
+    validation = validate_advisor_output(advisor, context)
     validation["fallback_used"] = True
     st.session_state.advisor_output = advisor
     st.session_state.advisor_validation = validation
+    audit_event_once(
+        f"advisor_validation_result_{context.get('tender_id')}_{context.get('scenario_score')}",
+        {
+            "event_type": "advisor_validation_result",
+            "user_action": "open_advisor_page",
+            "tender_id": context.get("tender_id"),
+            "module": "advisor",
+            "input_summary": "advisor fallback output",
+            "output_summary": validation["advisor_validation_status"],
+            "validation_status": validation["advisor_validation_status"],
+            "leakage_status": context.get("leakage_audit", {}).get("audit_status", "unknown"),
+            "advisor_guardrail_status": validation["llm_validation_status"],
+            "details": {
+                "schema_valid": validation.get("schema_valid"),
+                "grounding_score": validation.get("grounding_score"),
+                "forbidden_claims_detected": validation.get("forbidden_claims_detected"),
+                "fallback_used": True,
+            },
+        },
+    )
 
     context_signature = json.dumps(
         {
@@ -3109,9 +3283,7 @@ def render_advisor() -> None:
                 if llm_payload:
                     assistant_text = advisor_payload_to_chat_text(llm_payload)
                     st.session_state.advisor_output = llm_payload
-                    llm_validation = validate_advisor_output(llm_payload)
-                    llm_validation.update(llm_payload.get("validation_result", {}))
-                    st.session_state.advisor_validation = llm_validation
+                    st.session_state.advisor_validation = llm_payload.get("validation_result", {})
                 else:
                     assistant_text = fallback_chat_answer(user_question, context, advisor)
                     fallback_validation = dict(validation)

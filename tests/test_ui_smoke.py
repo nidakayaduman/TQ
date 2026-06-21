@@ -53,6 +53,23 @@ def test_turkish_pages_and_chatbot_exist():
         assert removed_label not in APP_TEXT
     assert "st.chat_input" in APP_TEXT
     assert "st.chat_message" in APP_TEXT
+    for advisor_section in [
+        "Kısa Özet",
+        "Önerilen Aksiyon",
+        "Senaryo Gerekçesi",
+        "Kullanılan Kanıtlar",
+        "Risk Uyarıları",
+        "Manuel Kontrol Gerekenler",
+        "Güven Gerekçesi",
+        "Sınırlar",
+    ]:
+        assert advisor_section in APP_TEXT
+
+
+def test_advisor_ui_does_not_render_raw_json_schema():
+    assert "advisor_output.schema.json" not in APP_TEXT
+    assert "TenderIQAdvisorOutput" not in APP_TEXT
+    assert '"forbidden_claims_check"' not in APP_TEXT
 
 
 def test_methodology_terms_are_present():

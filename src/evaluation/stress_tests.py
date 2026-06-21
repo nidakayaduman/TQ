@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-
-from ..advisor.fallback_advisor import build_fallback_advisor
 from ..config_loader import load_scenario_weights, load_soft_penalties
 from ..optimizer.recommendation_engine import rank_scenarios
 from ..optimizer.scenario_scorer import score_scenario
@@ -95,15 +93,15 @@ def evaluate_synthetic_outliers(train_df: pd.DataFrame, base_tender: dict[str, A
                 soft_penalties=soft_penalties,
             )
 
-        advisor = build_fallback_advisor({**best, "similar_tender_count": len(result["similar"])})
         profile_score = float(best.get("won_profile_fit_score", 0))
         confidence_score = float(result.get("model_confidence_score", 0))
         risk_flags = list(best.get("risk_flags", []))
+        manual_review_required = confidence_score < 50 or profile_score < 45 or bool(risk_flags)
         triggered = (
             profile_score < base_profile
             or confidence_score < base_confidence
             or bool(risk_flags)
-            or bool(advisor.get("manual_review_required"))
+            or manual_review_required
         )
         rows.append(
             {
@@ -112,7 +110,7 @@ def evaluate_synthetic_outliers(train_df: pd.DataFrame, base_tender: dict[str, A
                 "Profil uyumu": profile_score,
                 "Model güveni": confidence_score,
                 "Risk bayrağı sayısı": len(risk_flags),
-                "Manuel inceleme önerisi": "Evet" if advisor.get("manual_review_required") else "Hayır",
+                "Manuel inceleme önerisi": "Evet" if manual_review_required else "Hayır",
                 "Beklenen davranış": "Geçti" if triggered else "İncelenmeli",
                 "Risk notları": "; ".join(risk_flags) if risk_flags else "Belirgin risk bayrağı yok",
             }

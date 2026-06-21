@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..constants import DISCLAIMER
+from ..constants import ACTUAL_RESULT_FIELDS
+from ..schema_contracts import load_json_schema, validate_json_schema
 from .forbidden_claim_detector import detect_forbidden_claims
+from .grounding_validator import validate_grounding
 
 REQUIRED_ADVISOR_FIELDS = [
     "executive_summary",
@@ -14,65 +16,92 @@ REQUIRED_ADVISOR_FIELDS = [
     "evidence_used",
     "risk_warnings",
     "human_checks_required",
-    "forbidden_claims_check",
     "confidence_rationale",
     "limitations",
-    "decision_summary",
-    "data_situation",
-    "pwin_interpretation",
-    "pricing_interpretation",
-    "margin_risk",
-    "learner_signals",
-    "supporting_evidence",
-    "risks",
-    "next_actions",
-    "manual_review_required",
-    "forbidden_claims_detected",
-    "disclaimer",
+    "forbidden_claims_check",
 ]
 
+ADVISOR_OUTPUT_JSON_SCHEMA = load_json_schema("advisor_output.schema.json")
+
 SAFE_FALLBACK_OUTPUT = {
-    "decision_summary": "Danışman yanıtı güvenlik kontrolünden geçmediği için deterministik güvenli yanıt kullanılmalı.",
     "executive_summary": "Danışman yanıtı güvenlik kontrolünden geçmediği için deterministik güvenli yanıt kullanılmalı.",
-    "data_situation": "Yorum yalnızca mevcut model çıktılarıyla sınırlıdır.",
     "recommended_action": "Emsal, fiyat koridoru, profil uyumu ve risk bayraklarını manuel kontrol edin.",
     "scenario_rationale": "Yalnızca mevcut senaryo skorları ve risk bayrakları yorumlanır.",
-    "evidence_used": ["E_PROFILE_001", "E_PRICE_001", "E_RISK_001"],
+    "evidence_used": [
+        {"evidence_id": "E_PROFILE_001", "claim": "Profil uyumu kontrol edildi."},
+        {"evidence_id": "E_PRICE_001", "claim": "Fiyat koridoru kontrol edildi."},
+        {"evidence_id": "E_RISK_001", "claim": "Risk bayrakları kontrol edildi."},
+    ],
     "risk_warnings": ["Güvenlik kontrolü nedeniyle serbest metin yanıtı engellendi."],
     "human_checks_required": ["Yapılandırılmış rapor ekranındaki metrikleri inceleyin."],
-    "forbidden_claims_check": False,
     "confidence_rationale": "Yanıt güvenli fallback ile üretildi.",
-    "limitations": "Gerçek kazanma olasılığı, rakip davranışı veya reveal edilmemiş gerçek sonuç verilmez.",
-    "pwin_interpretation": "Bu skor olasılık değil, geçmiş kazanılmış profile uyum göstergesidir.",
-    "pricing_interpretation": "Veri dışı fiyat üretilmez.",
-    "margin_risk": "Kural ihlali varsa manuel inceleme gerekir.",
-    "learner_signals": {},
-    "supporting_evidence": [],
-    "risks": ["Güvenlik kontrolü nedeniyle serbest metin yanıtı engellendi."],
-    "next_actions": ["Yapılandırılmış rapor ekranındaki metrikleri inceleyin."],
-    "manual_review_required": True,
-    "forbidden_claims_detected": True,
-    "disclaimer": DISCLAIMER,
+    "limitations": [
+        "Bu çıktı gerçek kazanma olasılığı değildir.",
+        "Rakip fiyatları tahmin edilmez.",
+        "Reveal edilmemiş gerçek sonuçlar kullanılmaz.",
+    ],
+    "forbidden_claims_check": {
+        "claims_true_win_probability": False,
+        "claims_guaranteed_win": False,
+    },
 }
 
 
-def validate_advisor_output(output: dict[str, Any]) -> dict[str, Any]:
+def _flatten_text(value: Any) -> str:
+    if isinstance(value, dict):
+        return " ".join(_flatten_text(item) for item in value.values())
+    if isinstance(value, list):
+        return " ".join(_flatten_text(item) for item in value)
+    return str(value)
+
+
+def _forbidden_claim_flags(output: dict[str, Any]) -> dict[str, bool]:
+    value = output.get("forbidden_claims_check")
+    if not isinstance(value, dict):
+        return {"claims_true_win_probability": True, "claims_guaranteed_win": True}
+    return {
+        "claims_true_win_probability": bool(value.get("claims_true_win_probability")),
+        "claims_guaranteed_win": bool(value.get("claims_guaranteed_win")),
+    }
+
+
+def _hidden_actual_mentions(output: dict[str, Any], context: dict[str, Any] | None) -> list[str]:
+    if context and context.get("revealed", False):
+        return []
+    text = _flatten_text(output).casefold()
+    return sorted(field for field in ACTUAL_RESULT_FIELDS if field.casefold() in text)
+
+
+def validate_advisor_output(output: dict[str, Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
     missing = [field for field in REQUIRED_ADVISOR_FIELDS if field not in output]
-    combined_text = " ".join(str(value) for key, value in output.items() if key != "disclaimer")
+    schema_errors = validate_json_schema(output, ADVISOR_OUTPUT_JSON_SCHEMA)
+    combined_text = _flatten_text({key: value for key, value in output.items() if key != "forbidden_claims_check"})
     forbidden = detect_forbidden_claims(combined_text)
-    disclaimer_ok = output.get("disclaimer") == DISCLAIMER
-    valid = not missing and not forbidden["forbidden_claims_detected"] and disclaimer_ok
-    schema_valid = not missing and isinstance(output.get("evidence_used"), list)
+    flags = _forbidden_claim_flags(output)
+    forbidden_by_flag = any(flags.values())
+    grounding = validate_grounding(output, context or {})
+    hidden_actual_fields = _hidden_actual_mentions(output, context)
+    schema_valid = not missing and not schema_errors
+    valid = (
+        schema_valid
+        and not forbidden["forbidden_claims_detected"]
+        and not forbidden_by_flag
+        and grounding["grounded"]
+        and not hidden_actual_fields
+    )
     return {
         "valid": valid,
         "schema_valid": schema_valid,
         "missing_fields": missing,
+        "schema_errors": schema_errors,
         "forbidden": forbidden,
-        "forbidden_claims_detected": forbidden["forbidden_claims_detected"],
-        "disclaimer_ok": disclaimer_ok,
+        "forbidden_claims_check": flags,
+        "forbidden_claims_detected": forbidden["forbidden_claims_detected"] or forbidden_by_flag,
+        "hidden_actual_fields_used": hidden_actual_fields,
+        "grounding": grounding,
         "advisor_validation_status": "pass" if valid else "fail",
         "llm_validation_status": "pass" if valid else "fail",
-        "grounding_score": 1.0 if valid else 0.0,
+        "grounding_score": grounding["grounding_score"] if valid else min(grounding["grounding_score"], 0.49),
         "prompt_injection_detected": False,
         "fallback_used": False,
     }

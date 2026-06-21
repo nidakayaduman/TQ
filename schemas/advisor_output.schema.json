@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TenderIQAdvisorOutput",
+  "type": "object",
+  "required": [
+    "executive_summary",
+    "recommended_action",
+    "scenario_rationale",
+    "evidence_used",
+    "risk_warnings",
+    "human_checks_required",
+    "confidence_rationale",
+    "limitations",
+    "forbidden_claims_check"
+  ],
+  "properties": {
+    "executive_summary": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "recommended_action": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "scenario_rationale": {
+      "type": "string",
+      "maxLength": 1800
+    },
+    "evidence_used": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "claim"
+        ],
+        "properties": {
+          "evidence_id": {
+            "type": "string"
+          },
+          "claim": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "risk_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "human_checks_required": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence_rationale": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_claims_check": {
+      "type": "object",
+      "required": [
+        "claims_true_win_probability",
+        "claims_guaranteed_win"
+      ],
+      "properties": {
+        "claims_true_win_probability": {
+          "type": "boolean"
+        },
+        "claims_guaranteed_win": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -7,7 +7,7 @@ import yaml
 
 from src.config_loader import load_observability_config
 from src.evaluation.backtest_runner import run_backtest
-from src.reporting.audit_log import AUDIT_LOG_SCHEMA, write_audit_event
+from src.reporting.audit_log import AUDIT_LOG_SCHEMA, normalize_audit_event, validate_audit_log_event, write_audit_event
 from src.reporting.model_artifacts import write_backtest_artifacts
 
 
@@ -38,6 +38,42 @@ def test_audit_event_contains_required_fields(tmp_path):
         assert field in payload
     assert payload["input_hash"]
     assert payload["output_hash"]
+    assert payload["reveal_status"] == "hidden"
+    assert "user_id" not in payload
+    assert payload["user_id_hash"]
+
+
+def test_audit_event_schema_rejects_missing_required_field():
+    event = normalize_audit_event({"event_type": "scenario_generated", "session_id": "s-1"})
+    event.pop("event_type")
+    result = validate_audit_log_event(event)
+    assert not result["valid"]
+    assert any("event_type" in error for error in result["errors"])
+
+
+def test_audit_event_reveal_status_enum_is_enforced():
+    event = normalize_audit_event({"event_type": "backtest_run", "reveal_status": "revealed_for_backtest"})
+    assert event["reveal_status"] == "not_applicable"
+    assert validate_audit_log_event(event)["valid"]
+
+    event["reveal_status"] = "revealed_for_backtest"
+    result = validate_audit_log_event(event)
+    assert not result["valid"]
+    assert any("enum" in error for error in result["errors"])
+
+
+def test_audit_event_masks_hidden_actual_values():
+    event = normalize_audit_event(
+        {
+            "event_type": "leakage_audit_result",
+            "details": {"actual_margin_pct": 23.5, "safe": "ok"},
+            "reveal_status": "hidden",
+        }
+    )
+    assert "actual_margin_pct" not in event["details"]
+    assert event["details"]["actual_margin_pct_masked"] is True
+    assert event["details"]["actual_margin_pct_hash"]
+    assert event["details"]["safe"] == "ok"
 
 
 def test_backtest_artifacts_are_written(tmp_path, tiny_df):
