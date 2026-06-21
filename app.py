@@ -55,15 +55,15 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS = [
     {
         "number": "1",
-        "label": "NVIDIA Nemotron 3 Super 120B A12B",
-        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
-        "description": "OpenRouter free model havuzundaki geniş bağlamlı Nemotron seçeneği.",
-    },
-    {
-        "number": "2",
         "label": "Google Gemma 4 31B IT",
         "model_id": "google/gemma-4-31b-it:free",
         "description": "OpenRouter free model havuzundaki Google Gemma instruct seçeneği.",
+    },
+    {
+        "number": "2",
+        "label": "NVIDIA Nemotron 3 Super 120B A12B",
+        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+        "description": "OpenRouter free model havuzundaki geniş bağlamlı Nemotron seçeneği.",
     },
     {
         "number": "3",
