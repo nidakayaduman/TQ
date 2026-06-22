@@ -1316,28 +1316,1431 @@ def glass_card(title: str, body: str, kicker: str = "", status_html: str = "") -
     )
 
 
+def inject_data_quality_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .dq-shell {
+                max-width: 1240px;
+                margin: 0 auto;
+            }
+            .dq-section {
+                margin-top: 52px;
+            }
+            .dq-section-tight {
+                margin-top: 34px;
+            }
+            .dq-section .section-title,
+            .dq-section-tight .section-title {
+                font-size: 1.22rem;
+                line-height: 1.25;
+                margin-bottom: 0.18rem;
+            }
+            .dq-section .section-subtitle,
+            .dq-section-tight .section-subtitle {
+                margin-top: 0.42rem;
+                margin-bottom: 18px;
+                max-width: 760px;
+                font-size: 0.92rem;
+                line-height: 1.55;
+            }
+            .dq-info {
+                margin-top: 32px;
+            }
+            .dq-info .info-callout {
+                padding: 1.05rem 1.15rem;
+                border-radius: 18px;
+                background:
+                    linear-gradient(135deg, rgba(255, 79, 31, 0.105), rgba(255, 157, 66, 0.045)),
+                    rgba(18, 16, 15, 0.78);
+                border-color: rgba(255, 123, 66, 0.24);
+                box-shadow: 0 16px 34px rgba(0, 0, 0, 0.26);
+            }
+            .dq-grid {
+                display: grid;
+                gap: 22px;
+                align-items: stretch;
+                width: 100%;
+            }
+            .dq-grid-four {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+            .dq-grid-three {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .dq-quality-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+            .dq-quality-grid .dq-quality-card {
+                grid-column: span 2;
+            }
+            .dq-quality-grid .dq-quality-card:nth-last-child(2):nth-child(3n + 1),
+            .dq-quality-grid .dq-quality-card:last-child:nth-child(3n + 2) {
+                grid-column: span 3;
+            }
+            .dq-feature-card,
+            .dq-metric-card,
+            .dq-quality-card {
+                position: relative;
+                min-width: 0;
+                border-radius: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.065), rgba(255,255,255,0.032)),
+                    rgba(18, 17, 16, 0.84);
+                box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
+                overflow: hidden;
+            }
+            .dq-feature-card:before,
+            .dq-metric-card:before,
+            .dq-quality-card:before {
+                content: '';
+                position: absolute;
+                inset: 0 0 auto 0;
+                height: 2px;
+                background: linear-gradient(90deg, rgba(255,79,31,0.0), rgba(255,116,72,0.72), rgba(255,157,66,0.0));
+                opacity: .62;
+            }
+            .dq-feature-card {
+                min-height: 164px;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
+                gap: 12px;
+            }
+            .dq-feature-top,
+            .dq-quality-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 14px;
+            }
+            .dq-index {
+                width: 34px;
+                height: 34px;
+                flex: 0 0 34px;
+                display: inline-grid;
+                place-items: center;
+                border-radius: 12px;
+                color: #fff;
+                font-size: .78rem;
+                font-weight: 720;
+                background: rgba(255, 79, 31, 0.14);
+                border: 1px solid rgba(255, 123, 66, 0.22);
+            }
+            .dq-card-title {
+                color: #ffffff;
+                font-size: 1.02rem;
+                line-height: 1.24;
+                font-weight: 700;
+                margin: 0;
+            }
+            .dq-card-body {
+                color: rgba(255,255,255,0.86);
+                font-size: .88rem;
+                line-height: 1.52;
+                margin: 0;
+                overflow-wrap: anywhere;
+            }
+            .dq-metric-card {
+                min-height: 132px;
+                padding: 22px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 12px;
+            }
+            .dq-metric-label {
+                color: rgba(255,255,255,0.72);
+                font-size: .72rem;
+                font-weight: 700;
+                letter-spacing: .08em;
+                text-transform: uppercase;
+            }
+            .dq-metric-value {
+                color: #ffffff;
+                font-size: 1.72rem;
+                line-height: 1.12;
+                font-weight: 760;
+                overflow-wrap: anywhere;
+            }
+            .dq-metric-note {
+                color: rgba(255,255,255,0.76);
+                font-size: .82rem;
+                line-height: 1.35;
+            }
+            .dq-quality-card {
+                min-height: 150px;
+                padding: 22px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 18px;
+            }
+            .dq-quality-card .status-badge {
+                flex: 0 0 auto;
+                padding: .26rem .56rem;
+                font-size: .7rem;
+                white-space: nowrap;
+                box-shadow: none;
+            }
+            .dq-quality-text {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                min-width: 0;
+            }
+            .dq-table-card {
+                border-radius: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.11);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)),
+                    rgba(14, 13, 13, 0.92);
+                box-shadow: 0 18px 38px rgba(0, 0, 0, 0.30);
+                overflow: hidden;
+            }
+            .dq-table-scroll {
+                width: 100%;
+                overflow-x: auto;
+            }
+            .dq-table {
+                width: 100%;
+                border-collapse: collapse;
+                min-width: 760px;
+                color: #ffffff;
+            }
+            .dq-table thead th {
+                background: rgba(26, 24, 23, 0.98);
+                color: rgba(255,255,255,0.88);
+                font-size: .76rem;
+                letter-spacing: .07em;
+                text-transform: uppercase;
+                text-align: left;
+                padding: 15px 18px;
+                border-bottom: 1px solid rgba(255, 123, 66, 0.22);
+            }
+            .dq-table tbody td {
+                color: rgba(255,255,255,0.88);
+                font-size: .88rem;
+                line-height: 1.45;
+                padding: 15px 18px;
+                border-bottom: 1px solid rgba(255,255,255,0.075);
+                background: rgba(255,255,255,0.018);
+                vertical-align: top;
+            }
+            .dq-table tbody tr:nth-child(even) td {
+                background: rgba(255,255,255,0.038);
+            }
+            .dq-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
+            .dq-table-code {
+                color: #ffbd8a;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: .84rem;
+                white-space: nowrap;
+            }
+            @media (max-width: 1180px) {
+                .dq-grid-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .dq-grid-three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            }
+            @media (max-width: 760px) {
+                .dq-shell { max-width: 100%; }
+                .dq-section { margin-top: 42px; }
+                .dq-section-tight { margin-top: 28px; }
+                .dq-grid-four,
+                .dq-grid-three,
+                .dq-quality-grid { grid-template-columns: 1fr; gap: 16px; }
+                .dq-quality-grid .dq-quality-card,
+                .dq-quality-grid .dq-quality-card:nth-last-child(2):nth-child(3n + 1),
+                .dq-quality-grid .dq-quality-card:last-child:nth-child(3n + 2) {
+                    grid-column: auto;
+                }
+                .dq-feature-card,
+                .dq-metric-card,
+                .dq-quality-card {
+                    min-height: auto;
+                    padding: 20px;
+                    border-radius: 18px;
+                }
+                .dq-metric-value { font-size: 1.5rem; }
+                .dq-quality-top { flex-direction: column; }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_data_quality_feature_grid(items: list[tuple[str, str]]) -> None:
+    cards = []
+    for idx, (title, body) in enumerate(items, start=1):
+        cards.append(
+            "<div class='dq-feature-card'>"
+            "<div class='dq-feature-top'>"
+            f"<div class='dq-card-title'>{escape(title)}</div>"
+            f"<span class='dq-index'>{idx:02d}</span>"
+            "</div>"
+            f"<div class='dq-card-body'>{escape(body)}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='dq-grid dq-grid-four'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_data_quality_metric_grid(items: list[tuple[str, str, str]]) -> None:
+    cards = []
+    for label, value, note in items:
+        cards.append(
+            "<div class='dq-metric-card'>"
+            f"<div class='dq-metric-label'>{escape(label)}</div>"
+            f"<div class='dq-metric-value'>{escape(value)}</div>"
+            f"<div class='dq-metric-note'>{escape(note)}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='dq-grid dq-grid-four'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_data_quality_status_grid(items: list[tuple[str, str, str, str]]) -> None:
+    cards = []
+    for title, value, body, card_status in items:
+        cards.append(
+            "<div class='dq-quality-card'>"
+            "<div class='dq-quality-top'>"
+            "<div class='dq-quality-text'>"
+            f"<div class='dq-card-title'>{escape(title)}</div>"
+            f"<div class='dq-card-body'>{escape(body)}</div>"
+            "</div>"
+            f"{badge(value, card_status)}"
+            "</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='dq-grid dq-quality-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_dark_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        for column in df.columns:
+            value = escape(str(row[column]))
+            css_class = " class='dq-table-code'" if column == "Kolon" else ""
+            cells.append(f"<td{css_class}>{value}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    st.markdown(
+        "<div class='dq-table-card'><div class='dq-table-scroll'>"
+        f"<table class='dq-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def inject_test_simulator_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .ts-section {
+                margin-top: 50px;
+            }
+            .ts-section-tight {
+                margin-top: 32px;
+            }
+            .ts-section .section-title,
+            .ts-section-tight .section-title {
+                font-size: 1.22rem;
+                line-height: 1.25;
+                margin-bottom: 0.18rem;
+            }
+            .ts-section .section-subtitle,
+            .ts-section-tight .section-subtitle {
+                max-width: 820px;
+                margin-top: 0.42rem;
+                margin-bottom: 18px;
+                font-size: .92rem;
+                line-height: 1.55;
+            }
+            .ts-warning {
+                margin-top: 30px;
+                border-radius: 18px;
+                padding: 18px 20px;
+                color: #ffffff;
+                border: 1px solid rgba(255,157,66,0.28);
+                background:
+                    linear-gradient(135deg, rgba(255,157,66,0.11), rgba(255,79,31,0.055)),
+                    rgba(18, 16, 15, 0.82);
+                box-shadow: 0 16px 34px rgba(0,0,0,0.26);
+                line-height: 1.55;
+            }
+            .ts-card,
+            .st-key-ts_select_card,
+            .st-key-ts_inputs_card {
+                position: relative;
+                border-radius: 20px;
+                border: 1px solid rgba(255,255,255,0.10);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.060), rgba(255,255,255,0.030)),
+                    rgba(18, 17, 16, 0.84);
+                box-shadow: 0 16px 34px rgba(0,0,0,0.28);
+            }
+            .st-key-ts_select_card,
+            .st-key-ts_inputs_card {
+                padding: 22px;
+            }
+            .st-key-ts_select_card [data-testid='stVerticalBlock'],
+            .st-key-ts_inputs_card [data-testid='stVerticalBlock'] {
+                gap: .8rem;
+            }
+            .ts-control-title {
+                color: #ffffff;
+                font-size: 1.02rem;
+                font-weight: 720;
+                line-height: 1.25;
+                margin-bottom: .22rem;
+            }
+            .ts-control-copy {
+                color: rgba(255,255,255,0.78);
+                font-size: .86rem;
+                line-height: 1.48;
+                margin-bottom: .3rem;
+            }
+            .st-key-ts_select_card div[data-baseweb='select'] > div,
+            .st-key-ts_inputs_card div[data-baseweb='input'] > div,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] input {
+                background: rgba(6, 6, 6, 0.62) !important;
+                border: 1px solid rgba(255,123,66,0.28) !important;
+                border-radius: 12px !important;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+                box-shadow: none !important;
+            }
+            .st-key-ts_select_card div[data-baseweb='select'] *,
+            .st-key-ts_inputs_card div[data-baseweb='input'] *,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] input,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] button,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] button * {
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+            }
+            .st-key-ts_select_card svg *,
+            .st-key-ts_inputs_card svg * {
+                fill: #ffffff !important;
+                color: #ffffff !important;
+            }
+            .st-key-ts_select_card label,
+            .st-key-ts_inputs_card label {
+                color: rgba(255,255,255,0.86) !important;
+                font-size: .82rem !important;
+                font-weight: 650 !important;
+            }
+            .st-key-ts_inputs_card div[data-testid='column'] {
+                min-width: 0;
+            }
+            .st-key-ts_inputs_card div[data-testid='stButton'] button {
+                min-height: 44px !important;
+                width: auto !important;
+                padding: .54rem 1.05rem !important;
+                border-radius: 999px !important;
+                font-weight: 720 !important;
+                background: linear-gradient(180deg, rgba(255,93,36,0.98), rgba(181,40,13,0.98)) !important;
+                border-color: rgba(255,184,117,0.38) !important;
+                box-shadow: 0 14px 30px rgba(255,79,31,0.20) !important;
+            }
+            .ts-summary-card {
+                padding: 22px;
+            }
+            .ts-summary-head {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 16px;
+                margin-bottom: 14px;
+            }
+            .ts-summary-title {
+                color: #ffffff;
+                font-size: 1.08rem;
+                line-height: 1.25;
+                font-weight: 740;
+            }
+            .ts-summary-subtitle {
+                color: rgba(255,255,255,0.74);
+                font-size: .84rem;
+                line-height: 1.45;
+                margin-top: .25rem;
+            }
+            .ts-badge-row {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 8px;
+            }
+            .ts-kv-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 8px 16px;
+            }
+            .ts-kv-row {
+                min-width: 0;
+                padding: 8px 0;
+                border-top: 1px solid rgba(255,255,255,0.075);
+            }
+            .ts-kv-label {
+                color: rgba(255,255,255,0.58);
+                font-size: .70rem;
+                font-weight: 720;
+                letter-spacing: .08em;
+                text-transform: uppercase;
+                margin-bottom: .22rem;
+            }
+            .ts-kv-value {
+                color: rgba(255,255,255,0.92);
+                font-size: .86rem;
+                line-height: 1.35;
+                overflow-wrap: anywhere;
+            }
+            .ts-process-grid {
+                display: grid;
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 20px;
+                align-items: stretch;
+            }
+            .ts-process-card {
+                grid-column: span 2;
+                min-height: 148px;
+                padding: 20px;
+                position: relative;
+                overflow: hidden;
+            }
+            .ts-process-card:nth-last-child(2):nth-child(3n + 1),
+            .ts-process-card:last-child:nth-child(3n + 2) {
+                grid-column: span 3;
+            }
+            .ts-process-card:before,
+            .ts-summary-card:before {
+                content: '';
+                position: absolute;
+                inset: 0 0 auto 0;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, rgba(255,116,72,.72), transparent);
+                opacity: .62;
+            }
+            .ts-process-top {
+                display: flex;
+                justify-content: space-between;
+                gap: 14px;
+                align-items: flex-start;
+                margin-bottom: 12px;
+            }
+            .ts-step {
+                width: 32px;
+                height: 32px;
+                flex: 0 0 32px;
+                display: inline-grid;
+                place-items: center;
+                border-radius: 12px;
+                color: #ffffff;
+                font-size: .76rem;
+                font-weight: 760;
+                background: rgba(255,79,31,0.14);
+                border: 1px solid rgba(255,123,66,0.22);
+            }
+            .ts-process-title {
+                color: #ffffff;
+                font-size: 1rem;
+                line-height: 1.25;
+                font-weight: 720;
+            }
+            .ts-process-body {
+                color: rgba(255,255,255,0.82);
+                font-size: .86rem;
+                line-height: 1.5;
+            }
+            .st-key-ts_masked_expander {
+                margin-top: 26px;
+            }
+            .st-key-ts_masked_expander div[data-testid='stExpander'] {
+                border-radius: 18px;
+                border: 1px solid rgba(255,123,66,0.20);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.050), rgba(255,255,255,0.025)),
+                    rgba(14,13,13,0.88);
+                box-shadow: 0 14px 30px rgba(0,0,0,0.24);
+                overflow: hidden;
+            }
+            .st-key-ts_masked_expander div[data-testid='stExpander'] summary {
+                color: #ffffff !important;
+                font-weight: 700;
+            }
+            .st-key-ts_masked_expander div[data-testid='stDataFrame'] {
+                border-color: rgba(255,123,66,0.20);
+                border-radius: 12px;
+            }
+            .ts-masked-table-wrap {
+                border-radius: 14px;
+                border: 1px solid rgba(255,123,66,0.18);
+                background: rgba(6,6,6,0.42);
+                overflow: hidden;
+            }
+            .ts-masked-table-scroll {
+                width: 100%;
+                max-height: 420px;
+                overflow: auto;
+            }
+            .ts-masked-table {
+                width: 100%;
+                min-width: 620px;
+                border-collapse: collapse;
+            }
+            .ts-masked-table th {
+                text-align: left;
+                padding: 12px 15px;
+                color: rgba(255,255,255,0.86);
+                background: rgba(26,24,23,0.98);
+                border-bottom: 1px solid rgba(255,123,66,0.20);
+                font-size: .74rem;
+                letter-spacing: .07em;
+                text-transform: uppercase;
+            }
+            .ts-masked-table td {
+                padding: 11px 15px;
+                color: rgba(255,255,255,0.86);
+                background: rgba(255,255,255,0.018);
+                border-bottom: 1px solid rgba(255,255,255,0.07);
+                font-size: .84rem;
+                line-height: 1.4;
+                vertical-align: top;
+            }
+            .ts-masked-table tr:nth-child(even) td {
+                background: rgba(255,255,255,0.035);
+            }
+            .ts-masked-table tr:last-child td {
+                border-bottom: 0;
+            }
+            @media (max-width: 1180px) {
+                .ts-process-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .ts-process-card,
+                .ts-process-card:nth-last-child(2):nth-child(3n + 1),
+                .ts-process-card:last-child:nth-child(3n + 2) {
+                    grid-column: auto;
+                }
+            }
+            @media (max-width: 760px) {
+                .ts-section { margin-top: 42px; }
+                .ts-section-tight { margin-top: 28px; }
+                .st-key-ts_select_card,
+                .st-key-ts_inputs_card,
+                .ts-summary-card,
+                .ts-process-card {
+                    padding: 20px;
+                    border-radius: 18px;
+                }
+                .ts-process-grid {
+                    grid-template-columns: 1fr;
+                    gap: 16px;
+                }
+                .ts-kv-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 8px 14px;
+                }
+                .ts-summary-head {
+                    flex-direction: column;
+                }
+                .ts-badge-row {
+                    justify-content: flex-start;
+                }
+                .ts-process-card { min-height: auto; }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_test_tender_summary(selected: str, masked: dict[str, Any], audit: dict[str, Any]) -> None:
+    rows = [
+        ("İhale ID", selected),
+        ("Ürün grubu", str(masked.get("product_group", "-"))),
+        ("Bölge", str(masked.get("region", "-"))),
+        ("Kurum", str(masked.get("buyer_institution", "-"))),
+        ("Ürün adı", str(masked.get("product_name", "-"))),
+        ("Miktar", format_int(masked.get("quantity", 0))),
+        ("Teslim süresi", f"{masked.get('delivery_months', '-')} ay"),
+    ]
+    kv_html = "".join(
+        "<div class='ts-kv-row'>"
+        f"<div class='ts-kv-label'>{escape(label)}</div>"
+        f"<div class='ts-kv-value'>{escape(value)}</div>"
+        "</div>"
+        for label, value in rows
+    )
+    leak_badge = badge("Sızıntı yok" if audit["audit_status"] == "pass" else "Sızıntı uyarısı", "good" if audit["audit_status"] == "pass" else "bad")
+    st.markdown(
+        "<div class='ts-card ts-summary-card'>"
+        "<div class='ts-summary-head'>"
+        "<div>"
+        "<div class='ts-summary-title'>Seçili İhale</div>"
+        "<div class='ts-summary-subtitle'>Bu bilgiler canlı ihale girdisi gibi kullanılır; gerçek sonuç alanları maskelidir.</div>"
+        "</div>"
+        f"<div class='ts-badge-row'>{badge('Gerçek sonuç gizli', 'warn')}{leak_badge}</div>"
+        "</div>"
+        f"<div class='ts-kv-grid'>{kv_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_test_process_grid(items: list[tuple[str, str]]) -> None:
+    cards = []
+    for idx, (title, body) in enumerate(items, start=1):
+        cards.append(
+            "<div class='ts-card ts-process-card'>"
+            "<div class='ts-process-top'>"
+            f"<div class='ts-process-title'>{escape(title)}</div>"
+            f"<span class='ts-step'>{idx:02d}</span>"
+            "</div>"
+            f"<div class='ts-process-body'>{escape(body)}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='ts-process-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_test_masked_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = "".join(f"<td>{escape(str(row[column]))}</td>" for column in df.columns)
+        rows.append(f"<tr>{cells}</tr>")
+    st.markdown(
+        "<div class='ts-masked-table-wrap'><div class='ts-masked-table-scroll'>"
+        f"<table class='ts-masked-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def inject_similar_tenders_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .sim-section {
+                margin-top: 50px;
+            }
+            .sim-section-tight {
+                margin-top: 32px;
+            }
+            .sim-section .section-title,
+            .sim-section-tight .section-title {
+                font-size: 1.22rem;
+                line-height: 1.25;
+                margin-bottom: .18rem;
+            }
+            .sim-section .section-subtitle,
+            .sim-section-tight .section-subtitle {
+                max-width: 820px;
+                margin-top: .42rem;
+                margin-bottom: 18px;
+                font-size: .92rem;
+                line-height: 1.55;
+            }
+            .sim-callout {
+                margin-top: 30px;
+                border-radius: 18px;
+                padding: 18px 20px;
+                border: 1px solid rgba(255,123,66,0.24);
+                background:
+                    linear-gradient(135deg, rgba(255,79,31,0.10), rgba(255,157,66,0.045)),
+                    rgba(18,16,15,0.82);
+                box-shadow: 0 16px 34px rgba(0,0,0,0.26);
+            }
+            .sim-callout-title {
+                color: #ffffff;
+                font-size: 1rem;
+                line-height: 1.25;
+                font-weight: 740;
+                margin-bottom: 10px;
+            }
+            .sim-callout-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 14px;
+            }
+            .sim-callout-item {
+                min-width: 0;
+                padding-top: 10px;
+                border-top: 1px solid rgba(255,255,255,0.08);
+                color: rgba(255,255,255,0.82);
+                font-size: .86rem;
+                line-height: 1.48;
+            }
+            .sim-callout-item b {
+                display: block;
+                color: #ffffff;
+                font-size: .78rem;
+                letter-spacing: .07em;
+                text-transform: uppercase;
+                margin-bottom: 4px;
+            }
+            .sim-metric-grid {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 20px;
+                align-items: stretch;
+            }
+            .sim-metric-card {
+                min-width: 0;
+                min-height: 128px;
+                padding: 16px;
+                border-radius: 20px;
+                border: 1px solid rgba(255,255,255,0.10);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.060), rgba(255,255,255,0.030)),
+                    rgba(18,17,16,0.84);
+                box-shadow: 0 16px 34px rgba(0,0,0,0.28);
+                position: relative;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 8px;
+            }
+            .sim-metric-card:before,
+            .sim-table-card:before {
+                content: '';
+                position: absolute;
+                inset: 0 0 auto 0;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, rgba(255,116,72,.72), transparent);
+                opacity: .62;
+            }
+            .sim-metric-label {
+                color: rgba(255,255,255,0.70);
+                font-size: .62rem;
+                font-weight: 740;
+                letter-spacing: .075em;
+                text-transform: uppercase;
+                line-height: 1.28;
+            }
+            .sim-metric-value {
+                color: #ffffff;
+                font-size: 1.36rem;
+                line-height: 1.1;
+                font-weight: 760;
+                overflow-wrap: anywhere;
+            }
+            .sim-metric-note {
+                color: rgba(255,255,255,0.76);
+                font-size: .74rem;
+                line-height: 1.32;
+            }
+            .sim-table-card {
+                position: relative;
+                border-radius: 20px;
+                border: 1px solid rgba(255,255,255,0.11);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)),
+                    rgba(14,13,13,0.92);
+                box-shadow: 0 18px 38px rgba(0,0,0,0.30);
+                overflow: hidden;
+            }
+            .sim-table-scroll {
+                width: 100%;
+                overflow-x: auto;
+            }
+            .sim-table {
+                width: 100%;
+                min-width: 1180px;
+                border-collapse: collapse;
+            }
+            .sim-table th {
+                text-align: left;
+                padding: 14px 16px;
+                color: rgba(255,255,255,0.86);
+                background: rgba(26,24,23,0.98);
+                border-bottom: 1px solid rgba(255,123,66,0.22);
+                font-size: .72rem;
+                letter-spacing: .07em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+            .sim-table td {
+                padding: 13px 16px;
+                color: rgba(255,255,255,0.86);
+                background: rgba(255,255,255,0.018);
+                border-bottom: 1px solid rgba(255,255,255,0.07);
+                font-size: .84rem;
+                line-height: 1.42;
+                vertical-align: middle;
+            }
+            .sim-table tr:nth-child(even) td {
+                background: rgba(255,255,255,0.035);
+            }
+            .sim-table tr:last-child td {
+                border-bottom: 0;
+            }
+            .sim-id {
+                color: #ffbd8a;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: .80rem;
+                white-space: nowrap;
+            }
+            .sim-number {
+                white-space: nowrap;
+                text-align: right;
+            }
+            .sim-score-cell {
+                min-width: 142px;
+            }
+            .sim-score-wrap {
+                display: grid;
+                grid-template-columns: minmax(72px, 1fr) 48px;
+                gap: 10px;
+                align-items: center;
+            }
+            .sim-score-track {
+                height: 7px;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.10);
+                overflow: hidden;
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,0.035);
+            }
+            .sim-score-fill {
+                height: 100%;
+                border-radius: 999px;
+                background: linear-gradient(90deg, #ff4f1f, #ff9d42);
+                box-shadow: 0 0 12px rgba(255,79,31,0.22);
+            }
+            .sim-score-value {
+                color: #ffffff;
+                font-size: .80rem;
+                font-weight: 720;
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            @media (max-width: 1180px) {
+                .sim-metric-grid {
+                    grid-template-columns: repeat(6, minmax(0, 1fr));
+                }
+                .sim-metric-card {
+                    grid-column: span 2;
+                }
+                .sim-metric-card:nth-last-child(2):nth-child(3n + 1),
+                .sim-metric-card:last-child:nth-child(3n + 2) {
+                    grid-column: span 3;
+                }
+                .sim-callout-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+            @media (max-width: 760px) {
+                .sim-section { margin-top: 42px; }
+                .sim-section-tight { margin-top: 28px; }
+                .sim-metric-grid {
+                    grid-template-columns: 1fr;
+                    gap: 16px;
+                }
+                .sim-metric-card,
+                .sim-metric-card:nth-last-child(2):nth-child(3n + 1),
+                .sim-metric-card:last-child:nth-child(3n + 2) {
+                    grid-column: auto;
+                    min-height: auto;
+                    padding: 20px;
+                    border-radius: 18px;
+                }
+                .sim-callout,
+                .sim-table-card {
+                    border-radius: 18px;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_similar_methodology_callout() -> None:
+    st.markdown(
+        """
+        <div class='sim-callout'>
+            <div class='sim-callout-title'>Benzerlik hesabı ve basit örnek</div>
+            <div class='sim-callout-grid'>
+                <div class='sim-callout-item'><b>Girdi sinyalleri</b>Ürün adı, ürün grubu, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rekabet birlikte değerlendirilir.</div>
+                <div class='sim-callout-item'><b>Skor disiplini</b>Fiyat, marj ve maliyet alanları benzerlik skoruna girmez; metinsel alanlar yerel embedding ile sayısallaştırılır.</div>
+                <div class='sim-callout-item'><b>Yorumlama</b>Tarihsel fiyatlar sadece emsal bilgisini yorumlamak için gösterilir; seçili test ihalesinin gerçek sonucu reveal öncesi kullanılmaz.</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_similar_metric_grid(items: list[tuple[str, str, str]]) -> None:
+    html = "".join(
+        "<div class='sim-metric-card'>"
+        f"<div class='sim-metric-label'>{escape(label)}</div>"
+        f"<div class='sim-metric-value'>{escape(value)}</div>"
+        f"<div class='sim-metric-note'>{escape(note)}</div>"
+        "</div>"
+        for label, value, note in items
+    )
+    st.markdown(f"<div class='sim-metric-grid'>{html}</div>", unsafe_allow_html=True)
+
+
+def render_similar_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        for column in df.columns:
+            value = row[column]
+            if column == "Benzerlik Skoru":
+                score = 0.0 if pd.isna(value) else max(0.0, min(1.0, float(value)))
+                cells.append(
+                    "<td class='sim-score-cell'>"
+                    "<div class='sim-score-wrap'>"
+                    "<div class='sim-score-track'>"
+                    f"<div class='sim-score-fill' style='width:{score * 100:.1f}%'></div>"
+                    "</div>"
+                    f"<div class='sim-score-value'>{score:.3f}</div>"
+                    "</div>"
+                    "</td>"
+                )
+            elif column == "İhale ID":
+                cells.append(f"<td><span class='sim-id'>{escape(str(value))}</span></td>")
+            elif column == "Miktar":
+                cells.append(f"<td class='sim-number'>{escape(format_int(value))}</td>")
+            elif column == "Tarihsel Kazanılmış Fiyat":
+                cells.append(f"<td class='sim-number'>{escape(format_try(value))}</td>")
+            elif column == "Karlılık Oranı":
+                cells.append(f"<td class='sim-number'>{escape(format_decimal(value, 2))}</td>")
+            else:
+                cells.append(f"<td>{escape(str(value))}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    st.markdown(
+        "<div class='sim-table-card'><div class='sim-table-scroll'>"
+        f"<table class='sim-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def inject_profile_fit_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .pf-section {
+                margin-top: 50px;
+            }
+            .pf-section-tight {
+                margin-top: 32px;
+            }
+            .pf-section .section-title,
+            .pf-section-tight .section-title {
+                font-size: 1.22rem;
+                line-height: 1.25;
+                margin-bottom: .18rem;
+            }
+            .pf-section .section-subtitle,
+            .pf-section-tight .section-subtitle {
+                max-width: 840px;
+                margin-top: .42rem;
+                margin-bottom: 18px;
+                font-size: .92rem;
+                line-height: 1.55;
+            }
+            .pf-callout {
+                margin-top: 30px;
+                border-radius: 18px;
+                padding: 18px 20px;
+                color: #ffffff;
+                border: 1px solid rgba(255,123,66,0.24);
+                background:
+                    linear-gradient(135deg, rgba(255,79,31,0.10), rgba(255,157,66,0.045)),
+                    rgba(18,16,15,0.82);
+                box-shadow: 0 16px 34px rgba(0,0,0,0.26);
+            }
+            .pf-callout-title {
+                font-size: 1rem;
+                line-height: 1.25;
+                font-weight: 740;
+                margin-bottom: 8px;
+            }
+            .pf-callout-body {
+                color: rgba(255,255,255,0.84);
+                font-size: .88rem;
+                line-height: 1.55;
+            }
+            .pf-grid {
+                display: grid;
+                gap: 20px;
+                align-items: stretch;
+            }
+            .pf-kpi-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .pf-metric-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+            .pf-two-col {
+                grid-template-columns: minmax(0, 1.16fr) minmax(300px, .84fr);
+                align-items: start;
+            }
+            .pf-card,
+            .pf-kpi-card,
+            .pf-metric-card,
+            .pf-gauge-card,
+            .pf-table-card,
+            .st-key-pf_gauge_card {
+                position: relative;
+                min-width: 0;
+                border-radius: 20px;
+                border: 1px solid rgba(255,255,255,0.10);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.060), rgba(255,255,255,0.030)),
+                    rgba(18,17,16,0.84);
+                box-shadow: 0 16px 34px rgba(0,0,0,0.28);
+                overflow: hidden;
+            }
+            .pf-kpi-card:before,
+            .pf-metric-card:before,
+            .pf-card:before,
+            .pf-gauge-card:before,
+            .pf-table-card:before,
+            .st-key-pf_gauge_card:before {
+                content: '';
+                position: absolute;
+                inset: 0 0 auto 0;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, rgba(255,116,72,.72), transparent);
+                opacity: .62;
+            }
+            .pf-kpi-card {
+                min-height: 158px;
+                padding: 18px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 12px;
+            }
+            .pf-kpi-head {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            .pf-kpi-label,
+            .pf-metric-label {
+                color: rgba(255,255,255,0.70);
+                font-size: .66rem;
+                font-weight: 740;
+                letter-spacing: .075em;
+                text-transform: uppercase;
+                line-height: 1.28;
+            }
+            .pf-kpi-value {
+                color: #ffffff;
+                font-size: 1.18rem;
+                line-height: 1.18;
+                font-weight: 760;
+                overflow-wrap: anywhere;
+            }
+            .pf-kpi-body,
+            .pf-metric-note {
+                color: rgba(255,255,255,0.78);
+                font-size: .78rem;
+                line-height: 1.38;
+            }
+            .pf-kpi-card .status-badge {
+                flex: 0 0 auto;
+                padding: .24rem .52rem;
+                font-size: .68rem;
+                box-shadow: none;
+                white-space: nowrap;
+            }
+            .pf-score-note {
+                margin-top: 12px;
+                color: rgba(255,255,255,0.80);
+                font-size: .86rem;
+                line-height: 1.55;
+            }
+            .pf-card {
+                padding: 20px;
+            }
+            .pf-card-title,
+            .pf-gauge-title {
+                color: #ffffff;
+                font-size: 1.04rem;
+                line-height: 1.25;
+                font-weight: 740;
+                margin-bottom: 8px;
+            }
+            .pf-card-note {
+                color: rgba(255,255,255,0.76);
+                font-size: .84rem;
+                line-height: 1.48;
+                margin-bottom: 14px;
+            }
+            .pf-kv-list {
+                display: grid;
+                gap: 0;
+            }
+            .pf-kv-row {
+                display: grid;
+                grid-template-columns: minmax(0, .9fr) minmax(0, 1fr);
+                gap: 14px;
+                padding: 9px 0;
+                border-top: 1px solid rgba(255,255,255,0.075);
+                align-items: baseline;
+            }
+            .pf-kv-label {
+                color: rgba(255,255,255,0.58);
+                font-size: .70rem;
+                font-weight: 720;
+                letter-spacing: .06em;
+                text-transform: uppercase;
+            }
+            .pf-kv-value {
+                color: rgba(255,255,255,0.92);
+                font-size: .86rem;
+                line-height: 1.35;
+                text-align: right;
+                overflow-wrap: anywhere;
+            }
+            .pf-gauge-card {
+                padding: 18px;
+            }
+            .st-key-pf_gauge_card {
+                padding: 18px;
+            }
+            .st-key-pf_gauge_card [data-testid='stVerticalBlock'] {
+                gap: .35rem;
+            }
+            .pf-gauge-copy {
+                color: rgba(255,255,255,0.80);
+                font-size: .86rem;
+                line-height: 1.52;
+                margin-top: 10px;
+                padding-top: 12px;
+                border-top: 1px solid rgba(255,255,255,0.075);
+            }
+            .pf-metric-card {
+                min-height: 142px;
+                padding: 16px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 8px;
+            }
+            .pf-metric-value {
+                color: #ffffff;
+                font-size: 1.34rem;
+                line-height: 1.1;
+                font-weight: 760;
+                overflow-wrap: anywhere;
+            }
+            .pf-table-card {
+                border-color: rgba(255,255,255,0.11);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)),
+                    rgba(14,13,13,0.92);
+            }
+            .pf-table-scroll {
+                width: 100%;
+                overflow-x: auto;
+            }
+            .pf-table {
+                width: 100%;
+                min-width: 920px;
+                border-collapse: collapse;
+            }
+            .pf-table th {
+                text-align: left;
+                padding: 13px 15px;
+                color: rgba(255,255,255,0.86);
+                background: rgba(26,24,23,0.98);
+                border-bottom: 1px solid rgba(255,123,66,0.22);
+                font-size: .72rem;
+                letter-spacing: .07em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+            .pf-table td {
+                padding: 12px 15px;
+                color: rgba(255,255,255,0.86);
+                background: rgba(255,255,255,0.018);
+                border-bottom: 1px solid rgba(255,255,255,0.07);
+                font-size: .84rem;
+                line-height: 1.42;
+                vertical-align: middle;
+            }
+            .pf-table tr:nth-child(even) td {
+                background: rgba(255,255,255,0.035);
+            }
+            .pf-table tr:last-child td {
+                border-bottom: 0;
+            }
+            .pf-id {
+                color: #ffbd8a;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: .80rem;
+                white-space: nowrap;
+            }
+            .pf-number {
+                white-space: nowrap;
+                text-align: right;
+            }
+            @media (max-width: 1180px) {
+                .pf-metric-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .pf-two-col {
+                    grid-template-columns: 1fr;
+                }
+            }
+            @media (max-width: 760px) {
+                .pf-section { margin-top: 42px; }
+                .pf-section-tight { margin-top: 28px; }
+                .pf-kpi-grid,
+                .pf-metric-grid {
+                    grid-template-columns: 1fr;
+                    gap: 16px;
+                }
+                .pf-kpi-card,
+                .pf-metric-card,
+                .pf-card,
+                .pf-gauge-card,
+                .st-key-pf_gauge_card,
+                .pf-callout,
+                .pf-table-card {
+                    border-radius: 18px;
+                }
+                .pf-kv-row {
+                    grid-template-columns: 1fr;
+                    gap: 4px;
+                }
+                .pf-kv-value {
+                    text-align: left;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_profile_callout() -> None:
+    st.markdown(
+        """
+        <div class='pf-callout'>
+            <div class='pf-callout-title'>Profil modelleri ne yapar?</div>
+            <div class='pf-callout-body'>
+                KNN emsal arama, mixed-type clustering ve Isolation Forest fiyat önermez; seçili ihalenin geçmiş kazanılmış ihale profillerine yapısal olarak ne kadar benzediğini ve sıra dışı olup olmadığını analiz eder.
+                Fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_profile_kpi_grid(items: list[dict[str, str]]) -> None:
+    cards = []
+    for item in items:
+        cards.append(
+            "<div class='pf-kpi-card'>"
+            "<div class='pf-kpi-head'>"
+            f"<div class='pf-kpi-label'>{escape(item['label'])}</div>"
+            f"{badge(item.get('badge', ''), item.get('status', 'good')) if item.get('badge') else ''}"
+            "</div>"
+            f"<div class='pf-kpi-value'>{escape(item['value'])}</div>"
+            f"<div class='pf-kpi-body'>{escape(item['body'])}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='pf-grid pf-kpi-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_profile_kv_panel(title: str, rows: list[tuple[str, str]], note: str = "") -> None:
+    rows_html = "".join(
+        "<div class='pf-kv-row'>"
+        f"<div class='pf-kv-label'>{escape(label)}</div>"
+        f"<div class='pf-kv-value'>{escape(value)}</div>"
+        "</div>"
+        for label, value in rows
+    )
+    note_html = f"<div class='pf-card-note'>{escape(note)}</div>" if note else ""
+    st.markdown(
+        "<div class='pf-card'>"
+        f"<div class='pf-card-title'>{escape(title)}</div>"
+        f"{note_html}"
+        f"<div class='pf-kv-list'>{rows_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_profile_metric_grid(items: list[tuple[str, str, str]]) -> None:
+    cards = []
+    for label, value, note in items:
+        cards.append(
+            "<div class='pf-metric-card'>"
+            f"<div class='pf-metric-label'>{escape(label)}</div>"
+            f"<div class='pf-metric-value'>{escape(value)}</div>"
+            f"<div class='pf-metric-note'>{escape(note)}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='pf-grid pf-metric-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_profile_examples_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        for column in df.columns:
+            value = row[column]
+            if column == "İhale ID":
+                cells.append(f"<td><span class='pf-id'>{escape(str(value))}</span></td>")
+            elif column in {"Miktar", "Teslim süresi"}:
+                cells.append(f"<td class='pf-number'>{escape(format_decimal(value, 1) if column == 'Teslim süresi' else format_int(value))}</td>")
+            elif column == "Seçili ihaleye uzaklık":
+                cells.append(f"<td class='pf-number'>{escape(format_decimal(value, 3))}</td>")
+            else:
+                cells.append(f"<td>{escape(str(value))}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    st.markdown(
+        "<div class='pf-table-card'><div class='pf-table-scroll'>"
+        f"<table class='pf-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def build_gauge(score: float, title: str = "Skor") -> go.Figure:
     fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
             value=float(score),
-            number={"suffix": "/100", "font": {"size": 34}},
-            title={"text": title, "font": {"size": 15}},
+            number={"suffix": "/100", "font": {"size": 30, "color": "#ffffff"}},
+            title={"text": title, "font": {"size": 14, "color": "rgba(255,255,255,0.84)"}},
             gauge={
                 "axis": {"range": [0, 100]},
-                "bar": {"color": "#2563eb"},
-                "bgcolor": "white",
+                "bar": {"color": "#ff6a2b"},
+                "bgcolor": "rgba(255,255,255,0.06)",
                 "borderwidth": 1,
-                "bordercolor": "rgba(15, 23, 42, 0.18)",
+                "bordercolor": "rgba(255, 123, 66, 0.22)",
                 "steps": [
-                    {"range": [0, 45], "color": "rgba(220, 38, 38, 0.14)"},
-                    {"range": [45, 70], "color": "rgba(217, 119, 6, 0.14)"},
-                    {"range": [70, 100], "color": "rgba(22, 163, 74, 0.14)"},
+                    {"range": [0, 45], "color": "rgba(255, 79, 31, 0.16)"},
+                    {"range": [45, 70], "color": "rgba(255, 157, 66, 0.14)"},
+                    {"range": [70, 100], "color": "rgba(216, 155, 82, 0.14)"},
                 ],
             },
         )
     )
-    fig.update_layout(height=260, margin=dict(l=20, r=20, t=45, b=15), paper_bgcolor="rgba(0,0,0,0)")
+    fig.update_layout(
+        height=220,
+        margin=dict(l=12, r=12, t=36, b=8),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font={"color": "#ffffff"},
+    )
     return fig
 
 
@@ -1971,6 +3374,7 @@ def render_home() -> None:
 
 
 def render_data_quality() -> None:
+    inject_data_quality_css()
     page_header(
         "Veri Seti ve Kalite Kontrol",
         "Bu sayfa, sistemin kullandığı tarihsel kazanılmış ihale verisini ve analiz güvenliğini gösterir.",
@@ -2000,38 +3404,46 @@ def render_data_quality() -> None:
         },
     )
 
-    info_callout(
-        "Bu adım, sistemin fiyat koridoru, benzer ihale eşleştirmesi, profil uyumu ve senaryo skorlaması için kullandığı tarihsel kazanılmış ihale veri setini yükler ve doğrular. Kalite kontrolleri, verinin analiz için uygun ve güvenli olup olmadığını gösterir.",
-        "Veri neden önemli?",
+    st.markdown(
+        "<div class='dq-info'>"
+        "<div class='info-callout'><b>Veri neden önemli?</b> "
+        "Bu adım, sistemin fiyat koridoru, benzer ihale eşleştirmesi, profil uyumu ve senaryo skorlaması için kullandığı tarihsel kazanılmış ihale veri setini yükler ve doğrular. Kalite kontrolleri, verinin analiz için uygun ve güvenli olup olmadığını gösterir."
+        "</div></div>",
+        unsafe_allow_html=True,
     )
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
-    section_header("Veri ne işe yarıyor?", "Veri seti, Tender IQ'nun tüm karar destek çıktılarının temel girdisidir.")
+    st.markdown(
+        "<div class='dq-section-tight'><div class='section-title'>Veri ne işe yarıyor?</div>"
+        "<div class='section-subtitle'>Veri seti, Tender IQ'nun tüm karar destek çıktılarının temel girdisidir.</div></div>",
+        unsafe_allow_html=True,
+    )
     data_use_cards = [
         ("Benzer ihale bulma", "Yeni ihale, geçmiş kazanılmış ihalelerle karşılaştırılır ve en yakın emsaller bulunur."),
         ("Fiyat koridoru üretme", "Benzer kazanılmış ihalelerden düşük, orta ve yüksek fiyat bandı çıkarılır."),
         ("Profil uyumu hesaplama", "Yeni ihalenin geçmiş kazanılmış işlere ne kadar tanıdık göründüğü ölçülür."),
         ("Senaryo ve karlılık analizi", "Aday teklif fiyatlarının karlılık, katkı ve risk etkisi karşılaştırılır."),
     ]
-    cols = st.columns(4, gap="medium")
-    for idx, (title, body) in enumerate(data_use_cards):
-        with cols[idx]:
-            glass_card(title, body)
+    render_data_quality_feature_grid(data_use_cards)
 
-    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
-    section_header("Veri özeti", "Demo veri setinin iş seviyesindeki kısa görünümü.")
-    c1, c2, c3, c4 = st.columns(4, gap="medium")
-    with c1:
-        metric_card("Kayıt sayısı", format_int(summary["row_count"]), "Normalize edilmiş ihale")
-    with c2:
-        metric_card("Ürün grubu sayısı", format_int(data["product_group"].nunique()), "Kategori")
-    with c3:
-        metric_card("Kurum sayısı", format_int(data["buyer_institution"].nunique()), "Alıcı kurum")
-    with c4:
-        metric_card("Tarih aralığı", f"{start} - {end}", "İhale tarihi")
+    st.markdown(
+        "<div class='dq-section'><div class='section-title'>Veri özeti</div>"
+        "<div class='section-subtitle'>Demo veri setinin iş seviyesindeki kısa görünümü.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_data_quality_metric_grid(
+        [
+            ("Kayıt sayısı", format_int(summary["row_count"]), "Normalize edilmiş ihale"),
+            ("Ürün grubu sayısı", format_int(data["product_group"].nunique()), "Kategori"),
+            ("Kurum sayısı", format_int(data["buyer_institution"].nunique()), "Alıcı kurum"),
+            ("Tarih aralığı", f"{start} - {end}", "İhale tarihi"),
+        ]
+    )
 
-    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
-    section_header("Kalite kontrol sonuçları", "Analize başlamadan önce veri setinin kullanılabilirliği doğrulanır.")
+    st.markdown(
+        "<div class='dq-section'><div class='section-title'>Kalite kontrol sonucu</div>"
+        "<div class='section-subtitle'>Analize başlamadan önce veri setinin kullanılabilirliği doğrulanır.</div></div>",
+        unsafe_allow_html=True,
+    )
     status = "good" if schema_result.valid and quality["passed"] else "warn"
     quality_cards = [
         ("Şema kontrolü", "Geçti" if schema_result.valid else "Eksik", "Zorunlu kolonların bulunup bulunmadığını kontrol eder.", "good" if schema_result.valid else "bad"),
@@ -2040,14 +3452,13 @@ def render_data_quality() -> None:
         ("Tekrarlı kayıt kontrolü", format_int(summary["duplicate_tender_ids"]), "Aynı tender_id ile gelen tekrarları görünür kılar.", "good" if summary["duplicate_tender_ids"] == 0 else "warn"),
         ("Veri kullanıma hazır mı?", "Hazır" if status == "good" else "Kontrol gerekli", "Kalite ve şema kontrollerinin ortak sonucudur.", status),
     ]
-    for start_idx in range(0, len(quality_cards), 3):
-        cols = st.columns(3, gap="medium")
-        for offset, (title, value, body, card_status) in enumerate(quality_cards[start_idx : start_idx + 3]):
-            with cols[offset]:
-                glass_card(title, body, "", badge(value, card_status))
+    render_data_quality_status_grid(quality_cards)
 
-    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
-    section_header("Zorunlu kolonlar", "Teknik kolon adları iş dilindeki anlamlarıyla birlikte gösterilir.")
+    st.markdown(
+        "<div class='dq-section'><div class='section-title'>Zorunlu kolonlar</div>"
+        "<div class='section-subtitle'>Teknik kolon adları iş dilindeki anlamlarıyla birlikte gösterilir.</div></div>",
+        unsafe_allow_html=True,
+    )
     required_columns = pd.DataFrame(
         [
             ["product_name", "Ürün adı", "İhale konusu ürün veya hizmet adı."],
@@ -2062,7 +3473,7 @@ def render_data_quality() -> None:
         ],
         columns=["Kolon", "İş anlamı", "Sistemdeki rolü"],
     )
-    st.dataframe(required_columns, hide_index=True, width="stretch")
+    render_dark_table(required_columns)
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     tabs = st.tabs(["Eksik veri kontrolü", "Kolon eşleştirme", "Veri önizleme", "İsteğe bağlı yeni veri yükleme"])
@@ -2359,17 +3770,32 @@ def render_methodology() -> None:
             ]
         )
 def render_test_simulator() -> None:
+    inject_test_simulator_css()
     page_header(
         "Test için İhale Seç",
         "Geçmişte kazanılmış bir ihale, gerçek sonucu gizlenmiş şekilde yeni gelen ihale gibi seçilir. Sistem sonuç açılmadan önce emsal, profil, fiyat ve teklif senaryosu üretir.",
         "Test seçimi",
     )
-    info_callout(
-        "Skor gerçek kazanma olasılığı değil, geçmiş kazanılmış ihale profiline uyum göstergesidir. Gerçek kazanılmış fiyat ve karlılık oranı, karşılaştırma adımına kadar gizli kalır.",
+    st.markdown(
+        "<div class='ts-warning'><b>Skor gerçek kazanma olasılığı değildir.</b> "
+        "Skor gerçek kazanma olasılığı değil, geçmiş kazanılmış ihale profiline uyum göstergesidir. Gerçek kazanılmış fiyat ve karlılık oranı, karşılaştırma adımına kadar gizli kalır."
+        "</div>",
+        unsafe_allow_html=True,
     )
     split = get_split()
     test = split["test"]
-    selected = st.selectbox("Test ihalesi seç", test["tender_id"].astype(str).tolist())
+    st.markdown(
+        "<div class='ts-section-tight'><div class='section-title'>1. Test ihalesi seç</div>"
+        "<div class='section-subtitle'>Geçmiş test döneminden bir ihale seçilir ve gerçek sonuç alanları simülasyon boyunca gizlenir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    with st.container(key="ts_select_card"):
+        st.markdown(
+            "<div class='ts-control-title'>Test ihalesi seç</div>"
+            "<div class='ts-control-copy'>Seçim değiştiğinde seçili ihale özeti ve maskelenmiş girdi alanları güncellenir.</div>",
+            unsafe_allow_html=True,
+        )
+        selected = st.selectbox("Test ihalesi seç", test["tender_id"].astype(str).tolist())
     st.session_state.selected_tender_id = selected
     if st.session_state.get("last_audited_selected_tender") != selected:
         audit_event(
@@ -2442,15 +3868,18 @@ def render_test_simulator() -> None:
             }
         )
 
-    section_header("Seçili ihale", "Bu bilgiler canlı ihale girdisi gibi kullanılır; gerçek sonuç alanları maskelidir.")
-    selected_body = (
-        f"İhale ID: {selected} | Ürün grubu: {masked.get('product_group', '-')} | "
-        f"Bölge: {masked.get('region', '-')} | Kurum: {masked.get('buyer_institution', '-')}"
+    st.markdown(
+        "<div class='ts-section'><div class='section-title'>2. Seçili ihale özeti</div>"
+        "<div class='section-subtitle'>Bu bilgiler canlı ihale girdisi gibi kullanılır; gerçek sonuç alanları maskelidir.</div></div>",
+        unsafe_allow_html=True,
     )
-    glass_card("Test girdisi", selected_body, "Gerçek sonuç gizli", badge("Sızıntı yok" if audit["audit_status"] == "pass" else "Sızıntı uyarısı", "good" if audit["audit_status"] == "pass" else "bad"))
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    render_test_tender_summary(selected, masked, audit)
 
-    section_header("Bu test akışı ne üretir?", "Sonuçlar ayrı sayfalarda, aynı simülasyon çıktısı üzerinden gösterilir.")
+    st.markdown(
+        "<div class='ts-section'><div class='section-title'>3. Bu test akışı ne üretir?</div>"
+        "<div class='section-subtitle'>Sonuçlar ayrı sayfalarda, aynı simülasyon çıktısı üzerinden gösterilir.</div></div>",
+        unsafe_allow_html=True,
+    )
     test_cards = [
         ("Emsal ihale analizi", "Geçmişte kazanılmış en benzer ihaleleri ve eşleşme gücünü gösterir."),
         ("Profil uyum analizi", "Başarı grubu ve sıra dışılık kontrolünü tek sayfada açıklar."),
@@ -2458,46 +3887,53 @@ def render_test_simulator() -> None:
         ("Teklif senaryoları", "Agresif, dengeli ve muhafazakar teklif seçeneklerini skorlar."),
         ("Gerçek sonuçla karşılaştırma", "Sonuç açıldıktan sonra gerçek fiyatı, profili ve senaryo sırasını kıyaslar."),
     ]
-    for start_idx in range(0, len(test_cards), 3):
-        cols = st.columns(3, gap="medium")
-        for offset, (title, body) in enumerate(test_cards[start_idx : start_idx + 3]):
-            with cols[offset]:
-                render_small_card(title, body)
+    render_test_process_grid(test_cards)
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Canlı ihale girdileri", "Bu alanlar simülasyon için düzenlenebilir; gerçek kazanılmış fiyat ve karlılık oranı görünmez.", "Kontrol paneli")
-    with st.container():
-        c1, c2, c3, c4 = st.columns(4)
+    st.markdown(
+        "<div class='ts-section'><div class='section-kicker'>Kontrol paneli</div>"
+        "<div class='section-title'>4. Canlı ihale girdileri</div>"
+        "<div class='section-subtitle'>Bu alanlar simülasyon için düzenlenebilir; gerçek kazanılmış fiyat ve karlılık oranı görünmez.</div></div>",
+        unsafe_allow_html=True,
+    )
+    with st.container(key="ts_inputs_card"):
+        st.markdown(
+            "<div class='ts-control-title'>Canlı ihale girdileri</div>"
+            "<div class='ts-control-copy'>Miktar, teslim süresi, rekabet ve tahmini maliyet simülasyon bağlamını günceller.</div>",
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3, c4 = st.columns(4, gap="medium")
         masked["quantity"] = int(c1.number_input("Miktar", min_value=1, value=int(masked.get("quantity", 1))))
         masked["delivery_months"] = int(c2.number_input("Teslim Süresi (Ay)", min_value=1, value=int(masked.get("delivery_months", 6))))
         masked["competitor_count_estimate"] = int(c3.number_input("Tahmini Rakip Sayısı", min_value=0, value=int(masked.get("competitor_count_estimate", 3))))
         masked["estimated_unit_cost"] = float(c4.number_input("Tahmini Birim Maliyet", min_value=0.01, value=float(masked.get("estimated_unit_cost", 1.0))))
-    st.session_state.adjusted_tender = masked
+        st.session_state.adjusted_tender = masked
 
-    if st.button("Simülasyonu çalıştır", type="primary"):
-        st.session_state.pop("scenario_result", None)
-        result = ensure_scenario_result()
-        audit_event(
-            {
-                "event_type": "test_tender_simulation",
-                "user_action": "run_simulation",
-                "tender_id": selected,
-                "module": "simulation",
-                "input_summary": "masked_tender",
-                "output_summary": "scenario_result_created" if result else "scenario_result_empty",
-                "validation_status": "pass" if result else "fail",
-                "leakage_status": audit.get("audit_status", "unknown"),
-                "leakage_audit": audit,
-            }
-        )
-        if result:
-            st.success("Simülasyon tamamlandı. Sonuçları Emsal İhale Analizi sayfasından başlayarak inceleyebilirsiniz.")
+        if st.button("Simülasyonu çalıştır", type="primary"):
+            st.session_state.pop("scenario_result", None)
+            result = ensure_scenario_result()
+            audit_event(
+                {
+                    "event_type": "test_tender_simulation",
+                    "user_action": "run_simulation",
+                    "tender_id": selected,
+                    "module": "simulation",
+                    "input_summary": "masked_tender",
+                    "output_summary": "scenario_result_created" if result else "scenario_result_empty",
+                    "validation_status": "pass" if result else "fail",
+                    "leakage_status": audit.get("audit_status", "unknown"),
+                    "leakage_audit": audit,
+                }
+            )
+            if result:
+                st.success("Simülasyon tamamlandı. Sonuçları Emsal İhale Analizi sayfasından başlayarak inceleyebilirsiniz.")
 
-    with st.expander("Maskelenmiş girdi alanları", expanded=False):
-        safe_preview = pd.DataFrame([masked]).T.reset_index()
-        safe_preview.columns = ["Alan", "Değer"]
-        safe_preview["Değer"] = safe_preview["Değer"].astype(str)
-        st.dataframe(safe_preview, hide_index=True, width="stretch")
+    with st.container(key="ts_masked_expander"):
+        with st.expander("Maskelenmiş girdi alanları", expanded=False):
+            st.markdown("Gerçek fiyat, gerçek marj ve final sonuç alanları karşılaştırma adımına kadar gizli tutulur.")
+            safe_preview = pd.DataFrame([masked]).T.reset_index()
+            safe_preview.columns = ["Alan", "Değer"]
+            safe_preview["Değer"] = safe_preview["Değer"].astype(str)
+            render_test_masked_table(safe_preview)
 
 
 def scenario_name(index: int) -> str:
@@ -2506,6 +3942,7 @@ def scenario_name(index: int) -> str:
 
 
 def render_profile_fit_analysis() -> None:
+    inject_profile_fit_css()
     page_header(
         "Profil Uyum Analizi",
         "Bu sayfa, seçili ihalenin geçmişte kazanılmış ihale profillerine ne kadar benzediğini gösterir. Sistem; benzer ihaleleri, geçmiş başarı gruplarını ve sıra dışılık kontrolünü birlikte değerlendirir.",
@@ -2542,68 +3979,64 @@ def render_profile_fit_analysis() -> None:
         },
     )
 
-    info_callout(
-        "KNN emsal arama, mixed-type clustering ve Isolation Forest fiyat önermez. Bu modeller, seçili ihalenin geçmiş kazanılmış ihale profillerine yapısal olarak benzerliğini ve sıra dışı olup olmadığını analiz eder. Fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.",
-        "Profil modelleri ne yapar?",
-    )
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    render_profile_callout()
 
-    section_header("Genel Uyum Özeti", "Üç temel soruyu yanıtlar: hangi geçmiş profile benziyor, normal mi görünüyor, genel skor ne söylüyor?")
-    render_premium_grid(
+    st.markdown(
+        "<div class='pf-section'><div class='section-title'>Genel Uyum Özeti</div>"
+        "<div class='section-subtitle'>Profil tanılaması; geçmiş başarı grubu, sıra dışılık sinyali, emsal gücü ve genel uyum skorunu birlikte okur.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_profile_kpi_grid(
         [
             {
-                "icon": "Skor",
-                "title": "Kazanılmış Profil Uyum Skoru",
+                "label": "Kazanılmış Profil Uyum Skoru",
                 "value": format_score(best.get("won_profile_fit_score")),
                 "body": "KNN emsal benzerliği ana sinyaldir; Isolation Forest ve mixed-type profil grubu destekleyici tanılama sağlar.",
-                "pill": fit_level(best.get("won_profile_fit_score")),
-                "color": "blue",
+                "badge": fit_level(best.get("won_profile_fit_score")),
+                "status": "good" if float(best.get("won_profile_fit_score", 0) or 0) >= 70 else "warn",
             },
             {
-                "icon": "Grup",
-                "title": "Geçmiş Başarı Grubu",
+                "label": "Geçmiş Başarı Grubu",
                 "value": str(best.get("cluster_id", "Hesaplanamadı")),
                 "body": str(best.get("cluster_name", "Geçmiş başarı grubu")),
-                "pill": "Mixed-type",
-                "color": "purple",
+                "badge": "Mixed-type",
+                "status": "good",
             },
             {
-                "icon": "Kontrol",
-                "title": "Sıra Dışılık Kontrolü (Isolation Forest)",
+                "label": "Sıra Dışılık Kontrolü",
                 "value": profile_label,
                 "body": "Geçmiş kazanılmış kayıtlar içinde normal mi, yoksa manuel inceleme gerektirecek kadar farklı mı?",
-                "pill": "Isolation Forest",
-                "color": "amber",
+                "badge": "Isolation Forest",
+                "status": profile_status,
             },
             {
-                "icon": "Emsal",
-                "title": "Emsal Benzerlik Gücü",
+                "label": "Emsal Benzerlik Gücü",
                 "value": f"{result.get('top10_avg_similarity', 0):.2f}",
                 "body": "En yakın emsallerin seçili ihaleye ortalama yakınlığını gösterir.",
-                "pill": "0-1 yakınlık",
-                "color": "mint",
+                "badge": "0-1 yakınlık",
+                "status": "good",
             },
-        ],
-        columns=2,
-        size="metric-size",
+        ]
     )
-    info_callout(
-        "Bu skor fiyat veya maliyet alanlarını kullanmadan hesaplanan yapısal profil uyumudur. KNN emsal benzerliği ana ağırlığı taşır; Isolation Forest geçmiş kazanılmış dağılıma alışıldık uyumu, mixed-type clustering ise destekleyici profil grubu yakınlığını ve saflığını gösterir. Skor fiyat kararı veya gerçek kazanma olasılığı değildir.",
-        "Profil uyum skoru nasıl hesaplanır?",
+    st.markdown(
+        "<div class='pf-score-note'><b>Profil uyum skoru nasıl hesaplanır?</b> "
+        "Bu skor fiyat veya maliyet alanlarını kullanmadan hesaplanan yapısal profil uyumudur. KNN emsal benzerliği ana ağırlığı taşır; Isolation Forest geçmiş kazanılmış dağılıma alışıldık uyumu, mixed-type clustering ise destekleyici profil grubu yakınlığını ve saflığını gösterir. Skor fiyat kararı veya gerçek kazanma olasılığı değildir.</div>",
+        unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header(
-        "Mixed-Type Cluster Analizi",
-        "Mixed-type clustering, geçmişte kazanılmış ihaleleri kategorik ve sayısal profil alanlarını birlikte okuyan Gower mesafesiyle gruplar. Seçili ihalenin hangi geçmiş kazanılmış ihale grubuna benzediğini gösterir; bu bir fiyat tahmini değildir.",
+    st.markdown(
+        "<div class='pf-section'><div class='section-title'>Profil Grubu Detayı</div>"
+        "<div class='section-kicker'>Mixed-Type Cluster Analizi</div>"
+        "<div class='section-subtitle'>Mixed-type clustering, geçmişte kazanılmış ihaleleri kategorik ve sayısal profil alanlarını birlikte okuyan Gower mesafesiyle gruplar; bu bir fiyat tahmini değildir.</div></div>",
+        unsafe_allow_html=True,
     )
-    info_callout(
-        "Mixed-type profil atamasında ürün grubu, ürün adı, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rakip sayısı kullanılır. Gerçek kazanılmış fiyat, tahmini maliyet, gerçek marj veya önerilen senaryo fiyatı kullanılmaz.",
-        "Mixed-type clustering hangi bilgileri kullanır?",
+    st.markdown(
+        "<div class='pf-score-note'>Mixed-type profil atamasında ürün grubu, ürün adı, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rakip sayısı kullanılır. Gerçek kazanılmış fiyat, tahmini maliyet, gerçek marj veya önerilen senaryo fiyatı kullanılmaz.</div>",
+        unsafe_allow_html=True,
     )
-    left, right = st.columns([1.15, 0.85], gap="medium")
+    left, right = st.columns([1.16, 0.84], gap="medium")
     with left:
-        render_kv_card(
+        render_profile_kv_panel(
             "Başarı grubu detayı",
             [
                 ("Başarı grubu adı", str(best.get("cluster_name", "Hesaplanamadı"))),
@@ -2626,22 +4059,35 @@ def render_profile_fit_analysis() -> None:
             profile_business_comment(best),
         )
     with right:
-        st.plotly_chart(build_gauge(float(best.get("won_profile_fit_score", 0)), "Profil uyum skoru"), use_container_width=True)
+        with st.container(key="pf_gauge_card"):
+            st.markdown("<div class='pf-gauge-title'>Profil uyum skoru</div>", unsafe_allow_html=True)
+            st.plotly_chart(build_gauge(float(best.get("won_profile_fit_score", 0)), "Profil uyum skoru"), use_container_width=True)
+            st.markdown(
+                f"<div class='pf-gauge-copy'>{escape(format_score(best.get('won_profile_fit_score')))} seviyesi {escape(fit_level(best.get('won_profile_fit_score')).lower())} olarak okunur; seçili ihale geçmiş kazanılmış profile yapısal olarak ne kadar benziyor sorusuna tanılama yanıtı verir.</div>",
+                unsafe_allow_html=True,
+            )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Mixed-Type Cluster Kalitesi", "Bu metrikler Gower tabanlı cluster yapısının ayrışmasını, dengesini ve seçili ihalenin atamasının ne kadar net olduğunu gösterir.")
-    k1, k2, k3, k4 = st.columns(4, gap="medium")
-    with k1:
-        metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "1'e yakınsa profil grupları daha net ayrılır; 0'a yakınsa gruplar birbirine karışır.", "purple")
-    with k2:
-        metric_card("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Kayıtların kendi profil grubundaki ortalama Gower uzaklığına dayalı sıkılık göstergesidir. Daha düşük değer daha sıkı profil grubu anlamına gelir.", "blue")
-    with k3:
-        metric_card("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük profil grubunun kayıt sayısıdır. Çok dengesiz dağılım yorum güvenini düşürür.", "green")
-    with k4:
-        metric_card("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Çok küçük veya boş cluster sayısı.", "amber")
+    st.markdown(
+        "<div class='pf-section'><div class='section-title'>Mixed-Type Cluster Kalitesi</div>"
+        "<div class='section-subtitle'>Bu metrikler Gower tabanlı cluster yapısının ayrışmasını, dengesini ve seçili ihalenin atamasının ne kadar net olduğunu gösterir; fiyat metriği değildir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_profile_metric_grid(
+        [
+            ("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "1'e yakınsa profil grupları daha net ayrılır."),
+            ("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Daha düşük değer daha sıkı profil grubu anlamına gelir."),
+            ("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük profil grubunun kayıt sayısı."),
+            ("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Çok küçük veya boş cluster sayısı."),
+        ]
+    )
 
     nearest_examples = best.get("nearest_cluster_examples", [])
     if isinstance(nearest_examples, list) and nearest_examples:
+        st.markdown(
+            "<div class='pf-section'><div class='section-title'>En Yakın Geçmiş Kazanılmış Örnekler</div>"
+            "<div class='section-subtitle'>Bu tablo profil grubuna yakın geçmiş örnekleri gösterir; fiyat önerisi değildir.</div></div>",
+            unsafe_allow_html=True,
+        )
         examples_df = pd.DataFrame(nearest_examples)
         rename_map = {
             "tender_id": "İhale ID",
@@ -2655,22 +4101,26 @@ def render_profile_fit_analysis() -> None:
             "query_distance": "Seçili ihaleye uzaklık",
         }
         examples_df = examples_df.rename(columns=rename_map)
-        st.dataframe(examples_df[[column for column in rename_map.values() if column in examples_df.columns]], hide_index=True, width="stretch")
+        render_profile_examples_table(examples_df[[column for column in rename_map.values() if column in examples_df.columns]])
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header(
-        "Sıra Dışılık Kontrolü (Isolation Forest)",
-        "Bu kontrol, seçili ihalenin geçmişte kazanılmış işlere ne kadar alışıldık göründüğünü anlatır. Sıra dışı sonuç kötü ihale anlamına gelmez; yalnızca geçmiş örneklerden farklılaştığı için manuel inceleme gerekebileceğini söyler.",
+    st.markdown(
+        "<div class='pf-section'><div class='section-title'>Isolation Forest Sıra Dışılık Kontrolü</div>"
+        "<div class='section-kicker'>Sıra Dışılık Kontrolü (Isolation Forest)</div>"
+        "<div class='section-subtitle'>Bu kontrol, seçili ihalenin geçmişte kazanılmış işlere ne kadar alışıldık göründüğünü anlatır. Sıra dışı sonuç kötü ihale anlamına gelmez; manuel inceleme sinyalidir.</div></div>",
+        unsafe_allow_html=True,
     )
-    c1, c2, c3, c4 = st.columns(4, gap="medium")
-    with c1:
-        metric_card("Durum", profile_label, isolation_business_comment(best), "amber" if profile_status == "warn" else "green")
-    with c2:
-        metric_card("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Pozitif değer geçmiş kazanılmış profile daha yakın; eşik altı değer daha sıra dışı kabul edilir.")
-    with c3:
-        metric_card("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Karar sınırıdır. Anomaly score bu sınırın altına inerse manuel inceleme sinyali doğar.")
-    with c4:
-        metric_card("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise profil geçmiş kazanılmış örneklere göre farklıdır; kayıp tahmini değildir.", "amber" if bool(best.get("manual_review_flag", False)) else "green")
+    render_profile_metric_grid(
+        [
+            ("Durum", profile_label, "Geçmiş kazanılmış dağılım içindeki tipiklik sinyali; kayıp tahmini değildir."),
+            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Eşik altı değer daha sıra dışı kabul edilir."),
+            ("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Isolation Forest karar sınırıdır."),
+            ("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise manuel kontrol sinyali vardır."),
+            ("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Kazanılmış kayıtların tipik profil oranı."),
+            ("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Daha az tipik görülen kayıt oranı."),
+            ("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Modelin beklenen sıra dışı oranı."),
+            ("Ürün grubunda manuel inceleme oranı", format_pct(float(segment_rate) * 100) if segment_rate is not None and not pd.isna(segment_rate) else "-", "Aynı ürün grubundaki manuel inceleme sinyali."),
+        ]
+    )
 
     reasons = best.get("manual_review_reasons")
     if isinstance(reasons, list):
@@ -2680,35 +4130,28 @@ def render_profile_fit_analysis() -> None:
     if reason_text:
         info_callout(reason_text, "Manuel inceleme gerekçeleri")
 
-    i5, i6, i7 = st.columns(3, gap="medium")
-    with i5:
-        metric_card("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Geçmiş kazanılmış kayıtların model tarafından tipik profil olarak görülen oranı")
-    with i6:
-        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Geçmiş kazanılmış kayıtlar içinde daha az tipik görülen ve kontrol önerilen oran")
-    with i7:
-        metric_card("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Modelin beklenen sıra dışı oranıdır; yüzde 5 ise yaklaşık 100 kayıttan 5'i manuel incelemeye düşebilir")
-
     info_callout(
         "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle Isolation Forest’ın sıra dışı dediği bir kayıt, kaybedilecek ihale anlamına gelmez. Sadece geçmiş kazanılmış ihaleler arasında daha az tipik bir örnek olduğunu gösterir.",
         "Sıra dışılık nasıl okunmalı?",
     )
-    if segment_rate is not None and not pd.isna(segment_rate):
-        st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-        metric_card("Ürün grubunda manuel inceleme oranı", format_pct(float(segment_rate) * 100), "Aynı ürün grubundaki geçmiş kazanılmış kayıtlar içinde daha az tipik görülen oran", "purple")
     if anomaly_rate >= 0.25:
         st.warning("Eğer kazanılmış test ihalelerinin büyük kısmı manuel inceleme gerektiriyor görünüyorsa, model fazla hassas olabilir ve hassasiyet ayarı gözden geçirilmelidir.")
     elif float(best.get("isolation_contamination", 0)) >= 0.10:
         st.info("Hassasiyet ayarı orta seviyede. Çok sayıda kazanılmış ihale sıra dışı görünürse ayar düşürülebilir.")
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Emsal sinyali", "Profil uyumu emsal ihale kalitesiyle birlikte okunur.")
-    e1, e2, e3 = st.columns(3, gap="medium")
-    with e1:
-        metric_card("Ürün grubu eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Benzer ihalelerin ne kadarı aynı ürün grubunda?")
-    with e2:
-        metric_card("Bölge eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Benzer ihalelerin ne kadarı aynı bölgede?")
-    with e3:
-        metric_card("Miktar bandı eşleşmesi", format_pct(quality.get("quantity_band_match_rate", 0) * 100), "Benzer ihalelerin ne kadarı yakın miktar ölçeğinde?")
+    st.markdown(
+        "<div class='pf-section'><div class='section-title'>Emsal sinyali</div>"
+        "<div class='section-subtitle'>Profil uyumu emsal ihale kalitesiyle birlikte okunur.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_profile_metric_grid(
+        [
+            ("Ürün grubu eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Benzer ihalelerin aynı ürün grubunda olma oranı."),
+            ("Bölge eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Benzer ihalelerin aynı bölgede olma oranı."),
+            ("Miktar bandı eşleşmesi", format_pct(quality.get("quantity_band_match_rate", 0) * 100), "Benzer ihalelerin yakın miktar ölçeğinde olma oranı."),
+            ("Top-10 emsal benzerliği", f"{result.get('top10_avg_similarity', 0):.2f}", "En yakın emsal havuzunun ortalama yakınlığı."),
+        ]
+    )
 
 
 def render_price_corridor_models() -> None:
@@ -3644,6 +5087,7 @@ def render_backtest() -> None:
 
 
 def render_similar_tenders() -> None:
+    inject_similar_tenders_css()
     page_header(
         "Emsal İhale Analizi",
         "Bu sayfa, seçili ihaleye geçmişte kazanılmış en benzer ihaleleri gösterir. Bu emsaller profil uyumu, fiyat koridoru ve teklif senaryolarını besleyen ana referanslardır.",
@@ -3653,11 +5097,7 @@ def render_similar_tenders() -> None:
     if not tender:
         require_test_tender_message()
         return
-    info_callout(
-        "Benzerlik hesabında ürün adı, ürün grubu, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rekabet birlikte değerlendirilir. Metinsel alanlar yerel embedding ile sayısallaştırılır; fiyat, marj ve maliyet alanları benzerlik skoruna girmez. Örneğin yeni ihale IV Solution ürün grubundaysa sistem geçmişteki IV Solution ihalelerini daha yüksek benzerlikte görür; aynı kurum tipi, benzer bölge ve yakın miktar varsa benzerlik daha da güçlenir.",
-        "Benzerlik hesabı ve basit örnek:",
-    )
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    render_similar_methodology_callout()
     retriever = RetrievalEngine.fit(get_history_frame())
     similar = retriever.retrieve(tender, top_k=50)
     quality = retrieval_quality(similar, tender)
@@ -3681,17 +5121,20 @@ def render_similar_tenders() -> None:
         },
     )
 
-    c1, c2, c3, c4 = st.columns(4, gap="medium")
-    with c1:
-        metric_card("Ortalama Benzerlik", f"{quality['topk_avg_similarity']:.2f}", "İlk 50 benzer ihale", "blue")
-    with c2:
-        metric_card("Ürün Grubu Eşleşme Oranı", format_pct(quality["product_group_match_rate"] * 100), "Top-K içinde aynı ürün grubu", "green")
-    with c3:
-        metric_card("Bölge Eşleşme Oranı", format_pct(quality["region_match_rate"] * 100), "Top-K içinde aynı bölge", "purple")
-    with c4:
-        metric_card("Miktar Bandı Eşleşme Oranı", format_pct(quality["quantity_band_match_rate"] * 100), "Yakın ölçek oranı", "amber")
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    metric_card("Top-10 Emsal İhale Sayısı", format_int(min(10, len(similar))), "Karar ekranlarında ilk 10 güçlü emsal ayrıca izlenir.", "cyan")
+    st.markdown(
+        "<div class='sim-section'><div class='section-title'>Benzerlik özeti</div>"
+        "<div class='section-subtitle'>Top-K emsal havuzunun seçili ihale profiliyle yapısal ve metinsel yakınlığı.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_similar_metric_grid(
+        [
+            ("Ortalama Benzerlik", f"{quality['topk_avg_similarity']:.2f}", "İlk 50 benzer ihale"),
+            ("Ürün Grubu Eşleşme Oranı", format_pct(quality["product_group_match_rate"] * 100), "Top-K içinde aynı ürün grubu"),
+            ("Bölge Eşleşme Oranı", format_pct(quality["region_match_rate"] * 100), "Top-K içinde aynı bölge"),
+            ("Miktar Bandı Eşleşme Oranı", format_pct(quality["quantity_band_match_rate"] * 100), "Yakın ölçek oranı"),
+            ("Top-10 Emsal İhale Sayısı", format_int(min(10, len(similar))), "Karar ekranlarında izlenen güçlü emsaller"),
+        ]
+    )
 
     display = similar[
         [
@@ -3717,17 +5160,13 @@ def render_similar_tenders() -> None:
         "Tarihsel Kazanılmış Fiyat",
         "Karlılık Oranı",
     ]
-    section_header("Top-K Emsal İhaleler", "Benzerlik skoru yükseldikçe yeni ihale geçmiş kazanılmış profile daha yakın görünür.", "Emsal liste")
-    st.dataframe(
-        display.head(25),
-        hide_index=True,
-        width="stretch",
-        column_config={
-            "Benzerlik Skoru": st.column_config.ProgressColumn(format="%.3f", min_value=0, max_value=1),
-            "Tarihsel Kazanılmış Fiyat": st.column_config.NumberColumn(format="%.2f TL"),
-            "Karlılık Oranı": st.column_config.NumberColumn(format="%.2f"),
-        },
+    st.markdown(
+        "<div class='sim-section'><div class='section-kicker'>Emsal liste</div>"
+        "<div class='section-title'>Top-K Emsal İhaleler</div>"
+        "<div class='section-subtitle'>Benzerlik skoru yükseldikçe yeni ihale geçmiş kazanılmış profile daha yakın görünür.</div></div>",
+        unsafe_allow_html=True,
     )
+    render_similar_table(display.head(25))
 
 
 def render_advisor() -> None:
