@@ -11,6 +11,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import requests
@@ -405,6 +406,116 @@ def inject_global_css() -> None:
             .quick-question button { border-radius: 8px !important; border-color: var(--line) !important; background: rgba(255,255,255,.055) !important; color: var(--primary) !important; box-shadow: none !important; }
             .warning-box { border: 1px solid rgba(255,157,66,0.28); background: rgba(255,157,66,0.10); color: #ffffff; border-radius: 8px; padding: .9rem 1rem; }
             .info-box { border: 1px solid var(--line-soft); background: rgba(255,79,31,0.075); color: #ffffff; border-radius: 8px; padding: .9rem 1rem; }
+            .global-table-card {
+                border-radius: 20px;
+                border: 1px solid rgba(255, 123, 66, 0.16);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.02)),
+                    rgba(14, 15, 18, 0.94);
+                box-shadow: 0 18px 42px rgba(0,0,0,0.26);
+                overflow: hidden;
+                margin: .55rem 0 1rem;
+            }
+            .global-table-scroll {
+                width: 100%;
+                overflow-x: auto;
+            }
+            .global-dark-table {
+                width: 100%;
+                min-width: 760px;
+                border-collapse: collapse;
+                color: #ffffff;
+            }
+            .global-dark-table th {
+                background: rgba(24, 24, 28, 0.98);
+                color: rgba(255,247,237,0.88);
+                font-size: .76rem;
+                letter-spacing: .055em;
+                text-transform: uppercase;
+                text-align: left;
+                padding: 14px 16px;
+                border-bottom: 1px solid rgba(255,123,66,0.20);
+                white-space: nowrap;
+            }
+            .global-dark-table td {
+                color: rgba(245,247,250,0.84);
+                font-size: .88rem;
+                line-height: 1.44;
+                padding: 13px 16px;
+                border-bottom: 1px solid rgba(255,255,255,0.07);
+                background: rgba(255,255,255,0.018);
+                vertical-align: top;
+            }
+            .global-dark-table tr:nth-child(even) td {
+                background: rgba(255,255,255,0.036);
+            }
+            .global-dark-table tr:last-child td {
+                border-bottom: 0;
+            }
+            .global-table-strong {
+                color: #fff7ed !important;
+                font-weight: 760;
+            }
+            .global-table-code {
+                color: #ffbd8a !important;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: .84rem !important;
+                white-space: nowrap;
+            }
+            .global-status-pill {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                min-height: 24px;
+                padding: 3px 9px;
+                border: 1px solid rgba(255,255,255,0.12);
+                background: rgba(255,255,255,0.06);
+                color: #fff7ed;
+                font-size: .73rem;
+                font-weight: 760;
+                white-space: nowrap;
+            }
+            .global-status-good {
+                border-color: rgba(34,197,94,0.28);
+                background: rgba(34,197,94,0.12);
+                color: #bbf7d0;
+            }
+            .global-status-warn {
+                border-color: rgba(251,146,60,0.32);
+                background: rgba(251,146,60,0.12);
+                color: #fed7aa;
+            }
+            .global-status-bad {
+                border-color: rgba(248,113,113,0.32);
+                background: rgba(248,113,113,0.13);
+                color: #fecaca;
+            }
+            .global-progress {
+                display: flex;
+                align-items: center;
+                gap: 9px;
+                min-width: 150px;
+            }
+            .global-progress-track {
+                flex: 1;
+                height: 7px;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.08);
+                overflow: hidden;
+                border: 1px solid rgba(255,255,255,0.06);
+            }
+            .global-progress-fill {
+                height: 100%;
+                border-radius: 999px;
+                background: linear-gradient(90deg, rgba(255,79,31,0.95), rgba(255,157,66,0.95));
+            }
+            .global-progress-value {
+                min-width: 48px;
+                color: #fff7ed;
+                font-size: .8rem;
+                font-weight: 760;
+                text-align: right;
+            }
             .st-key-advisor_chat_module {
                 max-width: 1120px;
                 margin: 0 auto;
@@ -1728,6 +1839,54 @@ def render_data_quality_status_grid(items: list[tuple[str, str, str, str]]) -> N
             "</div>"
         )
     st.markdown(f"<div class='dq-grid dq-quality-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def dark_table_cell_html(column: str, value: Any) -> tuple[str, str]:
+    column_text = str(column)
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "-", ""
+    if isinstance(value, (int, float, np.integer, np.floating)) and any(token in column_text.casefold() for token in ["oran", "rate", "pct", "yüzde", "%"]):
+        numeric = float(value)
+        pct_value = numeric * 100 if abs(numeric) <= 1 else numeric
+        width = max(0, min(100, pct_value))
+        html = (
+            "<div class='global-progress'>"
+            "<div class='global-progress-track'>"
+            f"<div class='global-progress-fill' style='width:{width:.1f}%'></div>"
+            "</div>"
+            f"<span class='global-progress-value'>{escape(format_pct(pct_value))}</span>"
+            "</div>"
+        )
+        return html, ""
+    status_columns = {"Durum", "Audit durumu", "Sızıntı durumu", "Band İçinde mi", "Manual review flag"}
+    if column_text in status_columns or any(token in column_text.casefold() for token in ["status", "durumu", "kontrol"]):
+        text = str(value)
+        normalized = text.casefold()
+        status = "good" if any(token in normalized for token in ["geçti", "pass", "bulundu", "uygun", "evet", "hazır", "yok"]) else "bad" if any(token in normalized for token in ["fail", "eksik", "ihlal", "var", "uyarı"]) else "warn"
+        return f"<span class='global-status-pill global-status-{status}'>{escape(text)}</span>", ""
+    if column_text in {"Kolon", "Kullanılan kolon"} or "column" in column_text.casefold():
+        return escape(str(value)), "global-table-code"
+    if column_text in {"Metrik", "İş anlamı", "Kontrol", "Özet"}:
+        return escape(str(value)), "global-table-strong"
+    return escape(str(value)), ""
+
+
+def render_global_dark_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        for column in df.columns:
+            value_html, css_class = dark_table_cell_html(str(column), row[column])
+            class_attr = f" class='{css_class}'" if css_class else ""
+            cells.append(f"<td{class_attr}>{value_html}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    st.markdown(
+        "<div class='global-table-card'><div class='global-table-scroll'>"
+        f"<table class='global-dark-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_dark_table(df: pd.DataFrame) -> None:
@@ -5380,7 +5539,7 @@ def render_data_quality() -> None:
         null_df = pd.DataFrame(
             [{"Kolon": key, "Boş oran": value} for key, value in summary["null_rates"].items()]
         ).sort_values("Boş oran", ascending=False)
-        st.dataframe(null_df, hide_index=True, width="stretch", column_config={"Boş oran": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=1)})
+        render_global_dark_table(null_df)
         if quality["issues"]:
             st.warning("; ".join(str(issue) for issue in quality["issues"]))
         if schema_result.warnings:
@@ -5395,9 +5554,9 @@ def render_data_quality() -> None:
             ],
             columns=["İş anlamı", "Kullanılan kolon", "Durum"],
         )
-        st.dataframe(mapping, hide_index=True, width="stretch")
+        render_global_dark_table(mapping)
     with tabs[2]:
-        st.dataframe(data.head(25), hide_index=True, width="stretch")
+        render_global_dark_table(data.head(25))
     with tabs[3]:
         info_callout(
             "Yeni CSV yüklemek, demo veri seti yerine kurumunuza ait tarihsel kazanılmış ihale verisini kullanmak içindir. Dosyada ürün, kurum, bölge, miktar, tarih, tahmini maliyet, kazanılmış fiyat ve karlılık oranı alanları bulunmalıdır.",
@@ -5544,7 +5703,7 @@ def render_methodology() -> None:
             ],
             columns=["Metrik", "Ne anlatır?"],
         )
-        st.dataframe(metrics, hide_index=True, width="stretch")
+        render_global_dark_table(metrics)
 
     with tabs[2]:
         section_header("Model Bileşenleri", "Her bileşen karar destek çıktısının farklı bir parçasını açıklar.", "Model")
@@ -5636,7 +5795,7 @@ def render_methodology() -> None:
             ],
             columns=["Metrik", "Ne anlatır?"],
         )
-        st.dataframe(metrics_table, hide_index=True, width="stretch")
+        render_global_dark_table(metrics_table)
         with st.expander("Sızıntı kontrolü nedir?", expanded=False):
             st.markdown(
                 """
@@ -5656,7 +5815,7 @@ def render_methodology() -> None:
                 ],
                 columns=["Sonuç açılmadan önce engellenen alan örnekleri"],
             )
-            st.dataframe(blocked, hide_index=True, width="stretch")
+            render_global_dark_table(blocked)
 
     with tabs[5]:
         section_header("AI Danışman", "Skor hesaplamaz; mevcut model çıktılarını güvenli Türkçe açıklamaya dönüştürür.", "LLM Guardrails")
