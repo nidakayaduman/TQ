@@ -289,6 +289,22 @@ def test_backtest_distinguishes_selected_tender_from_full_test_set():
         assert text in APP_TEXT
 
 
+def test_price_reveal_and_backtest_explanations_are_business_clear():
+    for text in [
+        "Benzerlik Tabanlı Koridor ile Product Group Median farkı",
+        "Product Group Median ise yalnızca aynı ürün grubundaki genel medyan fiyatı alır",
+        "Baseline modeller ana koridora alternatif karar değildir",
+        "Profil grubu nasıl okunur?",
+        "Mixed-type/Gower modelinin bulduğu geçmiş kazanım segmentidir",
+        "Cluster tablosu nasıl okunur?",
+        "Karma profil adı, grubun tek bir ürün/bölge karakterine indirgenemediğini",
+        "Test ihalelerinin yüzde kaçı tek bir profil grubuna net oturmuyor?",
+        "Modelin baştan beklediği yaklaşık sıra dışı kayıt oranıdır",
+        "ihale kazanılmış olsa bile geçmiş kazanım profiline göre alışılmadık özellikler taşıyor olabilir",
+    ]:
+        assert text in APP_TEXT
+
+
 def test_backtest_profile_diagnostics_cache_is_versioned():
     for text in [
         "BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION",

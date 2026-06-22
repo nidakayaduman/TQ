@@ -6562,11 +6562,18 @@ def render_price_corridor_models() -> None:
         unsafe_allow_html=True,
     )
     render_primary_corridor_card(corridor, confidence_label)
+    st.markdown(
+        "<div class='pc-note-card'><b>Benzerlik Tabanlı Koridor ile Product Group Median farkı:</b> "
+        "Benzerlik Tabanlı Koridor seçili ihaleye en yakın Top-K emsalleri tek tek bulur ve bu emsal havuzunun p25 / p50 / p75 fiyatlarından düşük-orta-yüksek band üretir. "
+        "Product Group Median ise yalnızca aynı ürün grubundaki genel medyan fiyatı alır; seçili ihalenin kurumunu, bölgesini, miktarını veya metinsel benzerliğini tek tek eşleştirmez. "
+        "Bu yüzden Product Group Median ana öneri değil, ana koridorun ürün grubu ortalamasına göre nerede durduğunu gösteren basit kontrol referansıdır.</div>",
+        unsafe_allow_html=True,
+    )
 
     baseline_rows = [row for row in rows if row["Yöntem"] != "Benzerlik Tabanlı Fiyat Koridoru"]
     st.markdown(
         "<div class='pc-section'><div class='section-title'>Baseline karşılaştırması</div>"
-        "<div class='section-subtitle'>Linear Regression, Random Forest / Ağaç Tabanlı Baseline, Product Group Median ve Cost Plus Margin tek fiyat referansı üretir; düşük/yüksek aralıklar bu referansın etrafında emsal koridor genişliğiyle türetilir.</div></div>",
+        "<div class='section-subtitle'>Baseline modeller ana koridora alternatif karar değildir; her biri farklı ve daha basit bir referans üretir. Kartlardaki düşük/yüksek aralıklar, bu tek referans fiyatın etrafına ana emsal koridorunun genişlik oranı uygulanarak gösterilir.</div></div>",
         unsafe_allow_html=True,
     )
     render_price_baseline_grid(baseline_rows)
@@ -6817,19 +6824,25 @@ def render_reveal_compare() -> None:
 
     st.markdown(
         "<div class='rc-section'><div class='section-title'>Profil Özeti</div>"
-        "<div class='section-subtitle'>Profil tanılama bu ihalenin geçmiş kazanılmış profillere uygun görünüp görünmediğini gösterir. K-Means / mixed-type clustering ve Isolation Forest fiyat önermez; profil ve sıra dışılık sinyali verir.</div></div>",
+        "<div class='section-subtitle'>Bu bölüm fiyat sonucunu değil, seçili ihalenin geçmiş kazanılmış işlere yapısal olarak benzeyip benzemediğini açıklar. KNN emsal gücü, mixed-type/Gower profil grubu ve Isolation Forest tipiklik sinyali birlikte okunur.</div></div>",
         unsafe_allow_html=True,
     )
     render_reveal_metric_grid(
         [
-            ("Profil uyum skoru", format_score(best.get("won_profile_fit_score")), "Seçili ihalenin geçmiş kazanılmış profile yakınlığı."),
-            ("Uyum yorumu", fit_level(best.get("won_profile_fit_score")), "Düşükse manuel inceleme ihtiyacı artar."),
-            ("Veri güveni", format_score(best.get("model_confidence_score")), "Benzer ihale sayısı ve emsal gücüne göre okuma kalitesi."),
-            ("Profil grubu", str(best.get("cluster_name", "Hesaplanamadı")), f"Grup ID: {best.get('cluster_id', 'Hesaplanamadı')} · n={format_int(best.get('cluster_count'))}"),
-            ("Isolation Forest durumu", isolation_status, "Geçmiş kazanılmış dağılım içindeki tipiklik sinyali."),
-            ("Atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin profil grubuna ne kadar net yakın olduğu."),
+            ("Profil uyum skoru", format_score(best.get("won_profile_fit_score")), "KNN emsal yakınlığı, Isolation Forest tipikliği ve mixed-type/Gower cluster yakınlığının birleşik skorudur."),
+            ("Uyum yorumu", fit_level(best.get("won_profile_fit_score")), "Yüksekse ihale geçmiş kazanılmış işlere daha tanıdık görünür; düşükse manuel profil kontrolü gerekir."),
+            ("Veri güveni", format_score(best.get("model_confidence_score")), "Emsal sayısı, Top-K benzerlik gücü ve fiyat bandı tutarlılığına göre bu okumanın ne kadar güvenilir olduğunu gösterir."),
+            ("Profil grubu", str(best.get("cluster_name", "Hesaplanamadı")), f"Mixed-type/Gower modelinin bulduğu geçmiş kazanım segmentidir. Teknik grup ID: {best.get('cluster_id', 'Hesaplanamadı')} · bu grupta n={format_int(best.get('cluster_count'))} ihale var."),
+            ("Isolation Forest durumu", isolation_status, "Seçili ihale geçmiş kazanılmış dağılım içinde normal mi, yoksa manuel inceleme gerektirecek kadar farklı mı?"),
+            ("Atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Profil grubuna atama ne kadar net? Düşükse ihale birden fazla profil grubuna benziyor olabilir."),
         ],
         columns=3,
+    )
+    st.markdown(
+        "<div class='rc-export-card'><b>Profil grubu nasıl okunur?</b> "
+        "Karma profil veya benzeri cluster adı, seçili ihalenin geçmişteki hangi kazanım segmentine en yakın olduğunu anlatır. "
+        "Bu değer fiyat doğruluğu metriği değildir; fiyat sonucunu yorumlarken 'bu ihale geçmiş kazanılmış işlere yapısal olarak benziyor mu?' sorusuna cevap verir.</div>",
+        unsafe_allow_html=True,
     )
 
     st.markdown(
@@ -6840,10 +6853,10 @@ def render_reveal_compare() -> None:
     )
     render_reveal_metric_grid(
         [
-            ("Mixed-type atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Profil grubuna yakınlık netliği."),
-            ("Manual review", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise manuel kontrol sinyali vardır."),
-            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Eşik altı değer daha sıra dışı kabul edilir."),
-            ("Ürün grubu anomaly oranı", format_pct(float(best.get("segment_anomaly_rate", 0) or 0) * 100), "Aynı ürün grubunda daha az tipik kayıt oranı."),
+            ("Mixed-type atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin atandığı profil grubuna diğer gruplara kıyasla ne kadar net yakın olduğunu gösterir."),
+            ("Manual review", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise sistem bu ihalenin profil veya sıra dışılık açısından teklif komitesi tarafından ayrıca kontrol edilmesini ister."),
+            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Isolation Forest karar skorudur; eşik altına düşerse ihale geçmiş kazanılmış dağılıma göre daha az tipik kabul edilir."),
+            ("Ürün grubu anomaly oranı", format_pct(float(best.get("segment_anomaly_rate", 0) or 0) * 100), "Aynı ürün grubundaki kazanılmış test ihalelerinde manuel inceleme sinyali oranıdır; segmentin ne kadar oynak olduğunu gösterir."),
         ],
         columns=4,
     )
@@ -7065,19 +7078,25 @@ def render_backtest() -> None:
 
     st.markdown(
         f"<div class='rc-section'><div class='section-title'>Backtest Geneli: Mixed-Type Cluster Metrikleri</div>"
-        f"<div class='section-subtitle'>Bu metrikler geçmiş kazanılmış ihalelerin profil gruplarına ne kadar anlamlı ayrıldığını ve test ihalelerinin bu gruplara ne kadar net atandığını gösterir; fiyat önermez. n={len(results)}.</div></div>",
+        f"<div class='section-subtitle'>Bu bölüm fiyat tahmini değil, profil segmentasyonu kalitesidir. Amaç şu soruya cevap vermektir: test yılındaki ihaleler geçmiş kazanılmış profil gruplarına net ve anlamlı şekilde oturuyor mu? n={len(results)}.</div></div>",
         unsafe_allow_html=True,
     )
     assignment_confidence = pd.to_numeric(results["cluster_assignment_confidence"], errors="coerce").fillna(0)
     low_conf_rate = float((assignment_confidence < 25).mean()) if not results.empty else 0.0
     render_reveal_metric_grid(
         [
-            ("Silhouette Score", format_decimal(pd.to_numeric(results["cluster_silhouette_score"], errors="coerce").mean()), "1'e yakın değer daha net profil ayrımı demektir."),
-            ("Cluster sıkılığı", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Daha düşük değer daha sıkı profil gruplarını anlatır."),
-            ("Min / max cluster boyutu", f"{format_int(pd.to_numeric(results['cluster_min_size'], errors='coerce').min())} - {format_int(pd.to_numeric(results['cluster_max_size'], errors='coerce').max())}", "Profil grupları dengeli mi?"),
-            ("Düşük atama güveni", format_pct(low_conf_rate * 100), "Profil grubuna net yakın olmayan test ihalelerinin oranı."),
+            ("Silhouette Score", format_decimal(pd.to_numeric(results["cluster_silhouette_score"], errors="coerce").mean()), "Profil grupları birbirinden ne kadar ayrışıyor? 1'e yakın değer daha net ayrım, 0'a yakın değer grupların birbirine karıştığını gösterir."),
+            ("Cluster sıkılığı", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Aynı profil grubundaki ihaleler birbirine ne kadar yakın? Daha düşük değer daha kompakt ve tutarlı profil grupları demektir."),
+            ("Min / max cluster boyutu", f"{format_int(pd.to_numeric(results['cluster_min_size'], errors='coerce').min())} - {format_int(pd.to_numeric(results['cluster_max_size'], errors='coerce').max())}", "En küçük ve en büyük profil grubundaki ihale sayısıdır. Çok dengesizse bazı gruplar fazla genel, bazıları fazla dar olabilir."),
+            ("Düşük atama güveni", format_pct(low_conf_rate * 100), "Test ihalelerinin yüzde kaçı tek bir profil grubuna net oturmuyor? Yüksek oran, birçok ihalenin birden fazla profile benzediğini gösterir."),
         ],
         columns=4,
+    )
+    st.markdown(
+        "<div class='rc-export-card'><b>Cluster tablosu nasıl okunur?</b> "
+        "Her satır bir geçmiş kazanım profil grubudur. Cluster ID teknik numaradır; iş yorumu için Cluster adı, ihale sayısı, baskın ürün grubu, baskın kurum tipi, baskın bölge ve ortalama profil uyumu birlikte okunur. "
+        "Karma profil adı, grubun tek bir ürün/bölge karakterine indirgenemediğini; yani daha heterojen bir kazanım segmenti olduğunu anlatır.</div>",
+        unsafe_allow_html=True,
     )
     cluster_summary = (
         results.groupby(["cluster_id", "cluster_name"], dropna=False)
@@ -7106,22 +7125,23 @@ def render_backtest() -> None:
 
     st.markdown(
         f"<div class='rc-section'><div class='section-title'>Backtest Geneli: Sıra Dışılık Kontrolü</div>"
-        f"<div class='section-subtitle'>Isolation Forest kazanılmış test ihalelerini geçmiş profile göre normal mi daha az tipik mi görüyor? Bu bölüm fiyat tahmini değil, manuel inceleme sinyalidir; n={len(results)}.</div></div>",
+        f"<div class='section-subtitle'>Bu bölüm fiyat veya kazanma tahmini değildir. Isolation Forest yalnızca şunu ölçer: kazanılmış test ihaleleri geçmiş kazanım dağılımına tipik mi, yoksa manuel inceleme gerektirecek kadar farklı mı? n={len(results)}.</div></div>",
         unsafe_allow_html=True,
     )
     max_segment_anomaly = float(pd.to_numeric(results["segment_anomaly_rate"], errors="coerce").max())
     render_reveal_metric_grid(
         [
-            ("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin geçmiş başarı profiline tipik görünme oranı."),
-            ("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Geçmiş profile göre daha az tipik görülen test oranı."),
-            ("Hassasiyet ayarı", format_pct(float(pd.to_numeric(results["isolation_contamination"], errors="coerce").mean()) * 100), "Modelin beklediği yaklaşık sıra dışı kayıt oranı."),
-            ("En yüksek segment oranı", format_pct(max_segment_anomaly * 100), "Bir ürün grubunda görülen en yüksek manuel inceleme sinyali oranı."),
+            ("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin yüzde kaçı geçmiş kazanım dağılımına normal/alışıldık görünüyor? Yüksek değer profil modelinin test yılına uyduğunu gösterir."),
+            ("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Kazanılmış test ihalelerinin yüzde kaçı geçmiş profile göre daha az tipik? Bu oran yüksekse bazı ihaleler ayrı iş kontrolü gerektirir."),
+            ("Hassasiyet ayarı", format_pct(float(pd.to_numeric(results["isolation_contamination"], errors="coerce").mean()) * 100), "Modelin baştan beklediği yaklaşık sıra dışı kayıt oranıdır. %5 ayar, modelin yaklaşık %5 kaydı manuel inceleme adayı görebileceği anlamına gelir."),
+            ("En yüksek segment oranı", format_pct(max_segment_anomaly * 100), "Ürün grupları içinde en yüksek manuel inceleme oranıdır. Hangi ürün grubunda profil dışı örneklerin yoğunlaştığını gösterir."),
         ],
         columns=4,
     )
     st.markdown(
         "<div class='rc-export-card'><b>Sıra dışılık nasıl okunmalı?</b> "
-        "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle sıra dışı sonucu kayıp tahmini değildir; geçmiş kazanılmış profilden farklılık ve manuel inceleme sinyalidir.</div>",
+        "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle sıra dışı sonucu kayıp tahmini değildir. "
+        "Doğru yorum şudur: ihale kazanılmış olsa bile geçmiş kazanım profiline göre alışılmadık özellikler taşıyor olabilir; bu durumda maliyet, teslim, miktar, kurum ve ürün grubu varsayımları manuel kontrol edilir.</div>",
         unsafe_allow_html=True,
     )
     if anomaly_rate >= anomaly_warning_threshold:
