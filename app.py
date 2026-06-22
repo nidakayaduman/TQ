@@ -2598,8 +2598,10 @@ def render_similar_methodology_callout() -> None:
         <div class='sim-callout'>
             <div class='sim-callout-title'>Benzerlik hesabı ve basit örnek</div>
             <div class='sim-callout-grid'>
+                <div class='sim-callout-item'><b>Yöntem özeti</b>Bu sayfada yerel metin embedding + yapısal KNN yaklaşımı kullanılır: seçili ihale metinsel ve kategorik/sayısal alanlarda geçmiş kazanılmış ihalelerle karşılaştırılır, sonra en yakın Top-K emsal listelenir.</div>
                 <div class='sim-callout-item'><b>Girdi sinyalleri</b>Ürün adı, ürün grubu, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rekabet birlikte değerlendirilir.</div>
                 <div class='sim-callout-item'><b>Skor disiplini</b>Fiyat, marj ve maliyet alanları benzerlik skoruna girmez; metinsel alanlar yerel embedding ile sayısallaştırılır.</div>
+                <div class='sim-callout-item'><b>Basit örnek</b>Aynı ürün grubu, aynı bölge ve yakın miktar ölçeğinde iki ihale varsa skor yükselir; miktar veya teslim süresi çok farklıysa skor düşer ama ürün/kurum benzerliği tamamen sıfırlanmaz.</div>
                 <div class='sim-callout-item'><b>Yorumlama</b>Tarihsel fiyatlar sadece emsal bilgisini yorumlamak için gösterilir; seçili test ihalesinin gerçek sonucu reveal öncesi kullanılmaz.</div>
             </div>
         </div>
@@ -6195,7 +6197,7 @@ def scenario_name(index: int) -> str:
 def render_profile_fit_analysis() -> None:
     inject_profile_fit_css()
     page_header(
-        "Profil Uyum Analizi",
+        "Profil Uyum Analizi (KNN Emsal + Mixed-Type/Gower Cluster + Isolation Forest)",
         "Bu sayfa, seçili ihalenin geçmişte kazanılmış ihale profillerine ne kadar benzediğini gösterir. Sistem; benzer ihaleleri, geçmiş başarı gruplarını ve sıra dışılık kontrolünü birlikte değerlendirir.",
         "Profil uyumu",
     )
@@ -6257,14 +6259,14 @@ def render_profile_fit_analysis() -> None:
             {
                 "label": "Kazanılmış Profil Uyum Skoru",
                 "value": format_score(best.get("won_profile_fit_score")),
-                "body": f"Toplam skor: KNN %{knn_weight * 100:.0f}, Isolation Forest %{isolation_weight * 100:.0f}, mixed-type cluster %{cluster_weight * 100:.0f} ağırlıkla birleşir.",
+                "body": f"Seçili ihale geçmişte kazanılmış işlere genel olarak ne kadar benziyor? Skor; KNN emsal yakınlığı %{knn_weight * 100:.0f}, Isolation Forest tipikliği %{isolation_weight * 100:.0f}, mixed-type/Gower cluster yakınlığı %{cluster_weight * 100:.0f} ağırlıkla birleşir.",
                 "badge": fit_level(best.get("won_profile_fit_score")),
                 "status": "good" if float(best.get("won_profile_fit_score", 0) or 0) >= 70 else "warn",
             },
             {
                 "label": "Geçmiş Başarı Grubu",
-                "value": f"Cluster {format_int(best.get('cluster_id'))}",
-                "body": cluster_body,
+                "value": str(best.get("cluster_name", "Geçmiş başarı grubu")),
+                "body": f"Mixed-type/Gower modelinin seçili ihaleyi en yakın bulduğu geçmiş kazanım segmentidir. Teknik ID: Cluster {format_int(best.get('cluster_id'))}. {cluster_body}",
                 "badge": "Mixed-type cluster",
                 "status": "good",
             },
@@ -6278,7 +6280,7 @@ def render_profile_fit_analysis() -> None:
             {
                 "label": "Emsal Benzerlik Gücü",
                 "value": f"{result.get('top10_avg_similarity', 0):.2f}",
-                "body": "0-1 aralığında Top-10 yakınlık skorudur; 0.81 yaklaşık 81/100 benzerlik gücü gibi okunur.",
+                "body": "Top-10 KNN emsalinin ortalama yakınlığıdır. Ürün/metin/kategori/sayısal alanlardan gelen 0-1 skorudur; 0.81 yaklaşık 81/100 emsal yakınlığı gibi okunur.",
                 "badge": "KNN / Top-10",
                 "status": "good",
             },
@@ -6313,12 +6315,12 @@ def render_profile_fit_analysis() -> None:
             (
                 f"Mixed-type cluster skoru (%{cluster_weight * 100:.0f})",
                 format_score(profile_components.get("cluster_component_score", best.get("mixed_cluster_score"))),
-                "Gower mesafesiyle bulunan başarı grubuna yakınlık ve cluster saflığını birlikte okur.",
+                "Seçili ihale ile atandığı geçmiş başarı grubu arasındaki Gower uzaklığını ve grubun saflığını 100'lük skora çevirir. Yüksekse seçili ihale bu segmentin tipik örneklerine daha yakındır.",
             ),
             (
                 "Toplam profil uyumu",
                 format_score(best.get("won_profile_fit_score")),
-                "Yukarıdaki üç sinyalin ağırlıklı birleşimidir; fiyat önerisi veya kazanma olasılığı değildir.",
+                "Yukarıdaki üç sinyalin ağırlıklı birleşimidir; gerçek kazanma olasılığı değildir.",
             ),
         ]
     )
@@ -6326,7 +6328,7 @@ def render_profile_fit_analysis() -> None:
     st.markdown(
         "<div class='pf-section'><div class='section-title'>Profil Grubu Detayı</div>"
         "<div class='section-kicker'>Mixed-Type Cluster Analizi</div>"
-        "<div class='section-subtitle'>Mixed-type clustering, geçmişte kazanılmış ihaleleri kategorik ve sayısal profil alanlarını birlikte okuyan Gower mesafesiyle gruplar; bu bir fiyat tahmini değildir.</div></div>",
+        "<div class='section-subtitle'>Mixed-type/Gower cluster analizi geçmiş kazanılmış ihaleleri ürün, kurum, bölge, ihale tipi, miktar, teslim ve rekabet alanlarına göre benzer profil segmentlerine ayırır.</div></div>",
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -6369,15 +6371,15 @@ def render_profile_fit_analysis() -> None:
 
     st.markdown(
         "<div class='pf-section'><div class='section-title'>Mixed-Type Cluster Kalitesi</div>"
-        "<div class='section-subtitle'>Bu bölüm yalnızca mixed-type clustering kalitesidir. KNN emsal yakınlığı ve Isolation Forest sıra dışılık metrikleri değildir; fiyat tahmini hiç değildir.</div></div>",
+        "<div class='section-subtitle'>Bu bölüm yalnızca mixed-type/Gower cluster yapısının ne kadar dengeli ve okunabilir olduğunu gösterir; KNN emsal yakınlığı ve Isolation Forest sıra dışılık metrikleri değildir.</div></div>",
         unsafe_allow_html=True,
     )
     render_profile_metric_grid(
         [
             ("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Mixed-type cluster ayrışmasıdır. 1'e yakınsa gruplar birbirinden daha net ayrılır; 0'a yakınsa sınırlar daha bulanıktır."),
-            ("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Cluster içi Gower uzaklıklarının toplamıdır. Daha düşük değer, aynı gruptaki ihalelerin birbirine daha benzer olduğunu gösterir."),
+            ("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Aynı cluster içindeki ihalelerin cluster merkezine olan Gower uzaklıklarının toplamıdır. Seçili cluster değil, tüm cluster yapısı için sıkılık göstergesidir; düşük değer grupların daha kompakt olduğunu anlatır."),
             ("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük geçmiş başarı grubunda kaç ihale olduğunu gösterir; dengesiz aralık segmentlerin eşit dağılmadığını anlatır."),
-            ("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Çok küçük cluster az örnekli profil grubu demektir; boş cluster modelin beklenen grup sayısıyla veri dağılımı arasındaki farkı gösterir."),
+            ("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Soldaki sayı az kayıt içeren profil grubu sayısıdır; sağdaki sayı hiç kayıt alamayan grup sayısıdır. Örneğin 1 / 0 = bir küçük grup var, boş grup yok."),
         ]
     )
 
@@ -6412,7 +6414,7 @@ def render_profile_fit_analysis() -> None:
     render_profile_metric_grid(
         [
             ("Durum", profile_label, "Seçili ihale Isolation Forest kararına göre geçmiş kazanılmış profiller içinde tipik mi? Bu kayıp/kazanım tahmini değildir."),
-            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Seçili ihalenin Isolation Forest ham tipiklik skorudur. Eşik olan 0'ın altına düşerse sıra dışı kabul edilir."),
+            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Isolation Forest'ın seçili ihale için ürettiği karar skorudur. Bu skor, seçili ihalenin geçmiş kazanılmış dağılıma benzerliği ile modelin karar eşiği arasında okunur; 0'ın altına düşerse manuel inceleme sinyali verir."),
             ("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Karar sınırıdır. Anomaly score bu değerin altındaysa manuel inceleme sinyali üretir."),
             ("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise bu ihale geçmiş kazanılmış profile göre ayrıca iş kontrolü gerektirir."),
             ("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Isolation Forest eğitimdeki kazanılmış kayıtların ne kadarını tipik gördüğünü gösterir."),

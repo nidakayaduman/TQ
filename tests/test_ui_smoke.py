@@ -155,6 +155,7 @@ def test_methodology_terms_are_present():
 def test_profile_page_contains_mixed_type_and_isolation_diagnostics():
     for text in [
         "Bu sayfa üç farklı profil sinyalini ayrı okur",
+        "Profil Uyum Analizi (KNN Emsal + Mixed-Type/Gower Cluster + Isolation Forest)",
         "Profil skoru bileşenleri",
         "KNN emsal benzerliği",
         "Isolation tipiklik skoru",
@@ -168,6 +169,20 @@ def test_profile_page_contains_mixed_type_and_isolation_diagnostics():
         "Anomaly score",
         "Threshold",
         "Manual review flag",
+        "Teknik ID: Cluster",
+        "Örneğin 1 / 0 = bir küçük grup var, boş grup yok.",
+        "Aynı cluster içindeki ihalelerin cluster merkezine olan Gower uzaklıklarının toplamıdır",
+    ]:
+        assert text in APP_TEXT
+
+
+def test_similar_tender_methodology_explains_retrieval_from_basics():
+    for text in [
+        "Yöntem özeti",
+        "yerel metin embedding + yapısal KNN yaklaşımı",
+        "en yakın Top-K emsal listelenir",
+        "Basit örnek",
+        "miktar veya teslim süresi çok farklıysa skor düşer",
     ]:
         assert text in APP_TEXT
 
