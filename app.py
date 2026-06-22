@@ -2786,6 +2786,19 @@ def inject_profile_fit_css() -> None:
                 font-size: .78rem;
                 line-height: 1.38;
             }
+            .pf-metric-card-highlight {
+                border-color: rgba(255,123,66,0.36);
+                background:
+                    linear-gradient(135deg, rgba(255,79,31,0.15), rgba(255,157,66,0.060)),
+                    rgba(22,18,17,0.90);
+                box-shadow:
+                    0 0 0 1px rgba(255,123,66,0.12),
+                    0 20px 48px rgba(255,79,31,0.20),
+                    0 16px 34px rgba(0,0,0,0.30);
+            }
+            .pf-metric-card-highlight:before {
+                opacity: .95;
+            }
             .pf-kpi-card .status-badge {
                 flex: 0 0 auto;
                 padding: .24rem .52rem;
@@ -3017,8 +3030,9 @@ def render_profile_kv_panel(title: str, rows: list[tuple[str, str]], note: str =
 def render_profile_metric_grid(items: list[tuple[str, str, str]]) -> None:
     cards = []
     for label, value, note in items:
+        extra_class = " pf-metric-card-highlight" if label == "Toplam profil uyumu" else ""
         cards.append(
-            "<div class='pf-metric-card'>"
+            f"<div class='pf-metric-card{extra_class}'>"
             f"<div class='pf-metric-label'>{escape(label)}</div>"
             f"<div class='pf-metric-value'>{escape(value)}</div>"
             f"<div class='pf-metric-note'>{escape(note)}</div>"
@@ -6223,7 +6237,7 @@ def render_profile_fit_analysis() -> None:
     cluster_weight = float(component_weights.get("cluster", 0.15) or 0.15)
     cluster_name = str(best.get("cluster_name", "Geçmiş başarı grubu"))
     cluster_body = (
-        "Karma profil: Bu cluster içinde tek bir ürün grubu ve bölge baskın değil; bu bilgi boş değil, grubun heterojen olduğunu anlatır."
+        "Karma profil: Bu cluster içinde tek bir ürün grubu ve bölge baskın değil; grubun heterojen olduğunu anlatır."
         if cluster_name == "Karma profil"
         else f"{cluster_name}: Seçili ihale en yakın bu geçmiş kazanım grubuna atanmıştır."
     )
@@ -6280,7 +6294,7 @@ def render_profile_fit_analysis() -> None:
             {
                 "label": "Emsal Benzerlik Gücü",
                 "value": f"{result.get('top10_avg_similarity', 0):.2f}",
-                "body": "Top-10 KNN emsalinin ortalama yakınlığıdır. Ürün/metin/kategori/sayısal alanlardan gelen 0-1 skorudur; 0.81 yaklaşık 81/100 emsal yakınlığı gibi okunur.",
+                "body": "Top-10 KNN emsalinin ortalama yakınlığıdır. Ürün, metin, kategori ve sayısal alanlardan gelen 0-1 skorudur; değer 1'e yaklaştıkça emsal havuzu seçili ihaleye daha yakın kabul edilir.",
                 "badge": "KNN / Top-10",
                 "status": "good",
             },
@@ -6320,7 +6334,7 @@ def render_profile_fit_analysis() -> None:
             (
                 "Toplam profil uyumu",
                 format_score(best.get("won_profile_fit_score")),
-                "Yukarıdaki üç sinyalin ağırlıklı birleşimidir; gerçek kazanma olasılığı değildir.",
+                "Yandaki üç sinyalin ağırlıklı birleşimidir; gerçek kazanma olasılığı değildir.",
             ),
         ]
     )
@@ -6377,7 +6391,7 @@ def render_profile_fit_analysis() -> None:
     render_profile_metric_grid(
         [
             ("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Mixed-type cluster ayrışmasıdır. 1'e yakınsa gruplar birbirinden daha net ayrılır; 0'a yakınsa sınırlar daha bulanıktır."),
-            ("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Aynı cluster içindeki ihalelerin cluster merkezine olan Gower uzaklıklarının toplamıdır. Seçili cluster değil, tüm cluster yapısı için sıkılık göstergesidir; düşük değer grupların daha kompakt olduğunu anlatır."),
+            ("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Sabit 0-100 aralığı yoktur; aynı cluster içindeki ihalelerin cluster merkezine Gower uzaklıklarının toplamıdır. 0'a yaklaştıkça gruplar daha kompakt olur; veri büyüdükçe değer doğal olarak artabilir."),
             ("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük geçmiş başarı grubunda kaç ihale olduğunu gösterir; dengesiz aralık segmentlerin eşit dağılmadığını anlatır."),
             ("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Soldaki sayı az kayıt içeren profil grubu sayısıdır; sağdaki sayı hiç kayıt alamayan grup sayısıdır. Örneğin 1 / 0 = bir küçük grup var, boş grup yok."),
         ]
@@ -6451,7 +6465,7 @@ def render_profile_fit_analysis() -> None:
             ("Ürün grubu eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Top-K emsal havuzunda seçili ihale ile aynı ürün grubunda olan kazanılmış ihale oranıdır."),
             ("Bölge eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Top-K emsallerin seçili ihale ile aynı bölgede olma oranıdır; bölgesel fiyat/profil benzerliğini destekler."),
             ("Miktar bandı eşleşmesi", format_pct(quality.get("quantity_band_match_rate", 0) * 100), "Top-K emsallerin seçili ihaleye yakın miktar ölçeğinde olma oranıdır; hacim farkı riskini anlatır."),
-            ("Top-10 emsal benzerliği", f"{result.get('top10_avg_similarity', 0):.2f}", "0-1 aralığında ortalama yakınlıktır. 0.81 yaklaşık 81/100 güçlü emsal yakınlığı demektir."),
+            ("Top-10 emsal benzerliği", f"{result.get('top10_avg_similarity', 0):.2f}", "0-1 aralığında ortalama yakınlıktır; değer 1'e yaklaştıkça Top-10 emsal havuzu seçili ihaleye daha güçlü benzer."),
         ]
     )
 
@@ -7086,7 +7100,7 @@ def render_backtest() -> None:
     render_reveal_metric_grid(
         [
             ("Silhouette Score", format_decimal(pd.to_numeric(results["cluster_silhouette_score"], errors="coerce").mean()), "Profil grupları birbirinden ne kadar ayrışıyor? 1'e yakın değer daha net ayrım, 0'a yakın değer grupların birbirine karıştığını gösterir."),
-            ("Cluster sıkılığı", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Aynı profil grubundaki ihaleler birbirine ne kadar yakın? Daha düşük değer daha kompakt ve tutarlı profil grupları demektir."),
+            ("Cluster sıkılığı", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Sabit 0-100 aralığı yoktur; aynı profil grubundaki ihalelerin merkeze olan Gower uzaklıklarının toplamıdır. Düşük değer daha kompakt grupları gösterir, farklı veri büyüklükleriyle tek başına kıyaslanmaz."),
             ("Min / max cluster boyutu", f"{format_int(pd.to_numeric(results['cluster_min_size'], errors='coerce').min())} - {format_int(pd.to_numeric(results['cluster_max_size'], errors='coerce').max())}", "En küçük ve en büyük profil grubundaki ihale sayısıdır. Çok dengesizse bazı gruplar fazla genel, bazıları fazla dar olabilir."),
             ("Düşük atama güveni", format_pct(low_conf_rate * 100), "Test ihalelerinin yüzde kaçı tek bir profil grubuna net oturmuyor? Yüksek oran, birçok ihalenin birden fazla profile benzediğini gösterir."),
         ],
@@ -7134,7 +7148,7 @@ def render_backtest() -> None:
             ("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin yüzde kaçı geçmiş kazanım dağılımına normal/alışıldık görünüyor? Yüksek değer profil modelinin test yılına uyduğunu gösterir."),
             ("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Kazanılmış test ihalelerinin yüzde kaçı geçmiş profile göre daha az tipik? Bu oran yüksekse bazı ihaleler ayrı iş kontrolü gerektirir."),
             ("Hassasiyet ayarı", format_pct(float(pd.to_numeric(results["isolation_contamination"], errors="coerce").mean()) * 100), "Modelin baştan beklediği yaklaşık sıra dışı kayıt oranıdır. %5 ayar, modelin yaklaşık %5 kaydı manuel inceleme adayı görebileceği anlamına gelir."),
-            ("En yüksek segment oranı", format_pct(max_segment_anomaly * 100), "Ürün grupları içinde en yüksek manuel inceleme oranıdır. Hangi ürün grubunda profil dışı örneklerin yoğunlaştığını gösterir."),
+            ("En yüksek segment oranı", format_pct(max_segment_anomaly * 100), "Ürün grupları içindeki en yüksek manuel inceleme oranıdır. Örneğin %11,9 ise en riskli görünen ürün grubunda her 100 test ihalesinin yaklaşık 12'si manuel inceleme sinyali almıştır."),
         ],
         columns=4,
     )
@@ -7677,7 +7691,6 @@ def render_advisor() -> None:
         "<div class='advisor-secondary-subtitle'>OpenRouter Model Seçimi burada yapılır. Seçim değiştiğinde yeni sorular bu modelle yanıtlanır.</div></div>",
         unsafe_allow_html=True,
     )
-    st.markdown("<div class='advisor-setup-card'>", unsafe_allow_html=True)
     selected_model_id = st.selectbox(
         "Aktif LLM modeli",
         model_options,
@@ -7689,7 +7702,6 @@ def render_advisor() -> None:
         "<div class='chat-header-subtitle'>AI Danışman önce seçili primary modeli çağırır; yanıt alınamazsa listedeki backup model otomatik denenir. Tüm çağrılar doğrulanmış ve maskelenmiş bağlam üzerinden yapılır.</div>",
         unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
     selected_model = next(model for model in OPENROUTER_MODELS if model["model_id"] == selected_model_id)
     st.session_state.llm_primary_label = selected_model_id
     if selected_model_id != previous_model_id:

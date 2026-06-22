@@ -171,7 +171,7 @@ def test_profile_page_contains_mixed_type_and_isolation_diagnostics():
         "Manual review flag",
         "Teknik ID: Cluster",
         "Örneğin 1 / 0 = bir küçük grup var, boş grup yok.",
-        "Aynı cluster içindeki ihalelerin cluster merkezine olan Gower uzaklıklarının toplamıdır",
+        "Sabit 0-100 aralığı yoktur; aynı cluster içindeki ihalelerin cluster merkezine Gower uzaklıklarının toplamıdır",
     ]:
         assert text in APP_TEXT
 
