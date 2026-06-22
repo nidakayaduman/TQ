@@ -81,17 +81,16 @@ def test_openrouter_models_are_explicit_and_selectable():
         "key=\"selected_openrouter_model\"",
         "format_func=lambda model_id",
         '"number": "1"',
-        "Google Gemma 4 31B IT",
-        "google/gemma-4-31b-it:free",
+        "Nex AGI Nex-N2-Pro",
+        "nex-agi/nex-n2-pro:free",
         '"number": "2"',
-        "NVIDIA Nemotron 3 Super 120B A12B",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        '"number": "3"',
-        "OpenRouter Owl Alpha",
-        "openrouter/owl-alpha",
+        "OpenAI gpt-oss-120b",
+        "openai/gpt-oss-120b:free",
+        "openrouter_model_attempt_order",
         "selected_openrouter_model_id()",
     ]:
         assert text in APP_TEXT
+    assert "google/gemma-4-31b-it:free" not in APP_TEXT
 
 
 def test_advisor_answer_source_is_visible():

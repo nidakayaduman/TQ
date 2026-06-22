@@ -56,24 +56,18 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS = [
     {
         "number": "1",
-        "label": "Google Gemma 4 31B IT",
-        "model_id": "google/gemma-4-31b-it:free",
-        "description": "OpenRouter free model havuzundaki Google Gemma instruct seçeneği.",
+        "label": "Nex AGI Nex-N2-Pro",
+        "model_id": "nex-agi/nex-n2-pro:free",
+        "description": "Primary OpenRouter free model; agentic MoE, structured output ve uzun bağlam için kullanılır.",
     },
     {
         "number": "2",
-        "label": "NVIDIA Nemotron 3 Super 120B A12B",
-        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
-        "description": "OpenRouter free model havuzundaki geniş bağlamlı Nemotron seçeneği.",
-    },
-    {
-        "number": "3",
-        "label": "OpenRouter Owl Alpha",
-        "model_id": "openrouter/owl-alpha",
-        "description": "OpenRouter üzerinde doğrudan seçilebilen Owl Alpha modeli.",
+        "label": "OpenAI gpt-oss-120b",
+        "model_id": "openai/gpt-oss-120b:free",
+        "description": "Backup OpenRouter free model; primary model yanıt vermezse otomatik denenir.",
     },
 ]
-DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[1]["model_id"]
+DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[0]["model_id"]
 
 
 def load_local_env_file() -> None:
