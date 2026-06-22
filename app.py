@@ -724,6 +724,38 @@ def inject_global_css() -> None:
                 line-height: 1.4;
                 margin-top: .72rem;
             }
+            .advisor-model-chain {
+                margin-top: 1rem;
+                display: flex;
+                flex-wrap: wrap;
+                gap: .55rem;
+                align-items: center;
+            }
+            .advisor-model-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: .42rem;
+                max-width: 100%;
+                border-radius: 999px;
+                border: 1px solid rgba(255,123,66,0.20);
+                background: rgba(255,255,255,0.055);
+                color: rgba(255,247,237,0.86);
+                padding: .48rem .68rem;
+                font-size: .78rem;
+                font-weight: 760;
+                overflow-wrap: anywhere;
+            }
+            .advisor-model-chip b {
+                color: #fed7aa;
+            }
+            .advisor-model-chip-primary {
+                border-color: rgba(34,197,94,0.28);
+                background: rgba(34,197,94,0.10);
+            }
+            .advisor-model-chip-backup {
+                border-color: rgba(251,146,60,0.26);
+                background: rgba(251,146,60,0.09);
+            }
             .advisor-advanced-table {
                 width: 100%;
                 border-collapse: collapse;
@@ -1054,6 +1086,13 @@ def openrouter_model_attempt_order(selected_model: str) -> list[str]:
     ordered = [selected_model] if selected_model in model_ids else []
     ordered.extend(model_id for model_id in model_ids if model_id not in ordered)
     return ordered
+
+
+def openrouter_model_label(model_id: str) -> str:
+    for model in OPENROUTER_MODELS:
+        if model["model_id"] == model_id:
+            return f"{model['number']}. {model['label']}"
+    return model_id
 
 
 def openrouter_model_option_label(model: dict[str, str]) -> str:
@@ -7386,6 +7425,19 @@ def render_advisor() -> None:
         (idx for idx, model_id in enumerate(model_options) if model_id == previous_model_id),
         0,
     )
+    model_attempts = openrouter_model_attempt_order(previous_model_id)
+    primary_model_id = model_attempts[0] if model_attempts else previous_model_id
+    backup_model_ids = model_attempts[1:]
+    active_llm_status = st.session_state.get("advisor_llm_status", {})
+    last_used_model = str(active_llm_status.get("model") or primary_model_id)
+    backup_text = " -> ".join(openrouter_model_label(model_id) for model_id in backup_model_ids) if backup_model_ids else "Yedek model yok"
+    model_chain_html = (
+        "<div class='advisor-model-chain'>"
+        f"<span class='advisor-model-chip advisor-model-chip-primary'><b>Primary</b>{escape(openrouter_model_label(primary_model_id))}</span>"
+        f"<span class='advisor-model-chip advisor-model-chip-backup'><b>Backup</b>{escape(backup_text)}</span>"
+        f"<span class='advisor-model-chip'><b>Son kullanılan</b>{escape(openrouter_model_label(last_used_model))}</span>"
+        "</div>"
+    )
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
     risk_status = "Uyarı var" if risk_flags else "Düşük"
@@ -7433,6 +7485,7 @@ def render_advisor() -> None:
                     </div>
                 </div>
                 <div class='advisor-status-pills'>{status_pills_html}</div>
+                {model_chain_html}
             </div>
             """,
             unsafe_allow_html=True,
@@ -7519,7 +7572,9 @@ def render_advisor() -> None:
         ("Yanıt doğrulama", "Yanıt doğrulandı" if current_validation.get("advisor_validation_status") == "pass" else "Kontrol gerekiyor", "Schema, yasak iddia ve grounding kontrolleri izlenir."),
         ("Yasak iddia kontrolü", "Bulunmadı" if not current_validation.get("forbidden_claims_detected") else "Tespit edildi", "Kesin sonuç, garanti veya rakip davranışı iddiaları engellenir."),
         ("Fallback durumu", "Kullanıldı" if current_validation.get("fallback_used") else "Kullanılmadı", "LLM yoksa veya doğrulama geçmezse güvenli deterministik yanıt döner."),
-        ("Aktif model", selected_openrouter_model_id(), "Sohbet yanıtı için OpenRouter request body içinde bu model ID'si kullanılır."),
+        ("Seçili primary model", openrouter_model_label(primary_model_id), primary_model_id),
+        ("Otomatik backup", backup_text, "Primary model hata verirse sıradaki model otomatik denenir."),
+        ("Son kullanılan model", openrouter_model_label(last_used_model), str(active_llm_status.get("reason") or "Henüz LLM çağrısı yapılmadı.")),
     ]
     status_cards_html = "".join(
         "<div class='advisor-status-card'>"
@@ -7549,7 +7604,7 @@ def render_advisor() -> None:
         format_func=lambda model_id: openrouter_model_option_label(next(model for model in OPENROUTER_MODELS if model["model_id"] == model_id)),
     )
     st.markdown(
-        "<div class='chat-header-subtitle'>AI Danışman, seçili modeli sadece doğrulanmış ve maskelenmiş bağlam üzerinden çağırır. Fallback davranışı korunur.</div>",
+        "<div class='chat-header-subtitle'>AI Danışman önce seçili primary modeli çağırır; yanıt alınamazsa listedeki backup model otomatik denenir. Tüm çağrılar doğrulanmış ve maskelenmiş bağlam üzerinden yapılır.</div>",
         unsafe_allow_html=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
@@ -7591,7 +7646,9 @@ def render_advisor() -> None:
                 ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
                 ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
                 ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
-                ["OpenRouter modeli", selected_openrouter_model_id()],
+                ["OpenRouter primary", f"{openrouter_model_label(primary_model_id)} / {primary_model_id}"],
+                ["OpenRouter backup", backup_text],
+                ["Son kullanılan model", f"{openrouter_model_label(last_used_model)} / {last_used_model}"],
             ],
             columns=["Kontrol", "Durum"],
         )

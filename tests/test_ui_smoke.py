@@ -87,6 +87,12 @@ def test_openrouter_models_are_explicit_and_selectable():
         "OpenAI gpt-oss-120b",
         "openai/gpt-oss-120b:free",
         "openrouter_model_attempt_order",
+        "openrouter_model_label",
+        "advisor-model-chain",
+        "Seçili primary model",
+        "Otomatik backup",
+        "Son kullanılan model",
+        "Primary model hata verirse sıradaki model otomatik denenir.",
         "selected_openrouter_model_id()",
     ]:
         assert text in APP_TEXT
