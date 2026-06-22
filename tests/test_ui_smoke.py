@@ -106,6 +106,8 @@ def test_advisor_answer_source_is_visible():
         "set_advisor_llm_status",
     ]:
         assert text in APP_TEXT
+    assert "Güvenli fallback -" not in APP_TEXT
+    assert "ADVISOR_CHAT_UI_VERSION" in APP_TEXT
 
 
 def test_methodology_terms_are_present():
@@ -184,6 +186,9 @@ def test_scenario_page_labels_price_strategy_scope():
     assert "Öne Çıkan Fiyat Senaryoları" in APP_TEXT
     assert "Mixed-type clustering ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir." in APP_TEXT
     assert "Mixed-type clustering ve Isolation Forest burada fiyat tahmini olarak kullanılmaz" in APP_TEXT
+    assert "SCENARIO_RENDER_CACHE_VERSION" in APP_TEXT
+    assert "def select_strategy_cards" in APP_TEXT
+    assert "valid_candidates if not valid_candidates.empty else candidates" in APP_TEXT
 
 
 def test_removed_reports_and_openrouter_noise_are_absent():
@@ -221,6 +226,8 @@ def test_backtest_distinguishes_selected_tender_from_full_test_set():
         "Backtest Geneli: Fiyat Koridoru Metrikleri",
         "Bu metrikler seçili ihale için değil, test yılındaki tüm ihalelerin ortalamasıdır",
         "01 Benzerlik Tabanlı Koridor: düşük=p25, orta=predicted_mid_price/Top-K medyan, yüksek=p75",
+        "Backtest hazırlanıyor",
+        "Sonuçlar tamamlanmadan rapor bölümleri gösterilmez.",
     ]:
         assert text in APP_TEXT
 

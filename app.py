@@ -103,6 +103,8 @@ PWIN_PROXY_EXPLANATION = (
     "Isolation Forest uygunluğu, fiyat bandı uyumu, karlılık/risk dengesi ve model güveninden beslenir."
 )
 BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v3"
+SCENARIO_RENDER_CACHE_VERSION = "scenario-cards-v2"
+ADVISOR_CHAT_UI_VERSION = "advisor-chat-v2"
 PROFILE_DIAGNOSTIC_COLUMNS = [
     "cluster_silhouette_score",
     "cluster_inertia",
@@ -1503,6 +1505,10 @@ def chat_thread_html(messages: list[dict[str, Any]]) -> str:
         role = "user" if message.get("role") == "user" else "assistant"
         content = escape(compact_chat_text(message.get("content", "")))
         source = str(message.get("source", "")).strip()
+        if source.startswith("Güvenli fallback") or source.startswith("Güvenli sistem yanıtı"):
+            source = "Güvenli sistem yanıtı"
+        elif source == "Hazır bağlam mesajı":
+            source = "Bağlam hazır"
         source_html = f"<div class='chat-source'>{escape(source)}</div>" if role == "assistant" and source else ""
         pending_class = " chat-bubble-pending" if message.get("pending") else ""
         bubble = f"<div class='chat-bubble chat-bubble-{role}{pending_class}'>{source_html}{content}</div>"
@@ -5056,7 +5062,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         )
         return None
     if llm_provider() in {"none", "offline", "disabled", "fallback"}:
-        set_advisor_llm_status("fallback", "Güvenli fallback", "LLM_PROVIDER offline/fallback modunda.")
+        set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", "LLM_PROVIDER offline/fallback modunda.")
         log_event(
             "fallback_advisor_used",
             module="advisor",
@@ -5067,12 +5073,12 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         return None
     api_key = get_openrouter_api_key()
     if not api_key:
-        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter API anahtarı bulunamadı.")
+        set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", "OpenRouter API anahtarı bulunamadı.")
         return None
     safe_context = sanitize_advisor_context(context)
     context_validation = validate_advisor_context(safe_context)
     if not context_validation["context_valid"]:
-        set_advisor_llm_status("fallback", "Güvenli fallback", "Advisor bağlam doğrulaması başarısız.")
+        set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", "Advisor bağlam doğrulaması başarısız.")
         log_event(
             "advisor_validation_failed",
             module="advisor",
@@ -5132,13 +5138,13 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
             message="LLM çağrısı başarısız; fallback advisor kullanılacak.",
             tender_id=str(safe_context.get("tender_id") or "") or None,
         )
-        set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter çağrısı başarısız oldu.", selected_model)
+        set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", "OpenRouter çağrısı başarısız oldu.", selected_model)
         return None
     parsed = normalize_llm_payload(content)
     if not parsed:
         parsed = payload_from_free_text(content, safe_context, question)
         if not parsed:
-            set_advisor_llm_status("fallback", "Güvenli fallback", "OpenRouter yanıtı geçerli JSON olarak okunamadı ve güvenli şemaya dönüştürülemedi.", selected_model)
+            set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", "OpenRouter yanıtı geçerli JSON olarak okunamadı ve güvenli şemaya dönüştürülemedi.", selected_model)
             audit_event(
                 {
                     "event_type": "advisor_validation_failed",
@@ -5163,25 +5169,23 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
     grounding = validate_grounding(parsed, safe_context)
     support = validate_supported_claims(parsed, safe_context)
     forbidden = detect_forbidden_claims(advisor_semantic_text(parsed))
-    if (
-        not validation["valid"]
-        or not grounding["grounded"]
-        or not support["supported"]
+    hidden_actual_fields = validation.get("hidden_actual_fields_used", [])
+    critical_validation_failed = (
+        not validation["schema_valid"]
+        or validation.get("forbidden_claims_detected")
         or forbidden["forbidden_claims_detected"]
-    ):
+        or bool(hidden_actual_fields)
+    )
+    if critical_validation_failed:
         failure_parts = []
         if not validation["schema_valid"]:
             failure_parts.append("schema")
         if validation.get("forbidden_claims_detected") or forbidden["forbidden_claims_detected"]:
             failure_parts.append("forbidden_claim")
-        if validation.get("hidden_actual_fields_used"):
+        if hidden_actual_fields:
             failure_parts.append("hidden_actual")
-        if not grounding["grounded"]:
-            failure_parts.append("grounding")
-        if not support["supported"]:
-            failure_parts.append("support")
         failure_reason = ", ".join(failure_parts) or "unknown_validation_failure"
-        set_advisor_llm_status("fallback", "Güvenli fallback", f"OpenRouter yanıtı doğrulama hatası: {failure_reason}.", selected_model)
+        set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", f"OpenRouter yanıtı doğrulama hatası: {failure_reason}.", selected_model)
         audit_event(
             {
                 "event_type": "advisor_validation_failed",
@@ -5199,7 +5203,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
                     "schema_errors": validation.get("schema_errors", []),
                     "missing_fields": validation.get("missing_fields", []),
                     "forbidden_terms": forbidden.get("detected_terms", []),
-                    "hidden_actual_fields_used": validation.get("hidden_actual_fields_used", []),
+                    "hidden_actual_fields_used": hidden_actual_fields,
                     "grounding_unsupported_claims": grounding.get("unsupported_claims", []),
                     "support_unsupported_claims": support.get("unsupported_claims", []),
                 },
@@ -5215,6 +5219,10 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         "schema_valid": validation["schema_valid"],
         "forbidden_claims_detected": False,
         "grounding_score": grounding["grounding_score"],
+        "grounding_validation_status": grounding["grounding_validation_status"],
+        "support_validation_status": support["support_validation_status"],
+        "grounding_warnings": grounding.get("unsupported_claims", []),
+        "support_warnings": support.get("unsupported_claims", []),
         "prompt_injection_detected": False,
         "fallback_used": False,
     }
@@ -5295,7 +5303,26 @@ def scenario_input_signature(tender: dict[str, Any]) -> tuple[Any, ...]:
         "region",
         "procedure_type",
     ]
-    return tuple(tender.get(field) for field in signature_fields)
+    return (SCENARIO_RENDER_CACHE_VERSION, *[tender.get(field) for field in signature_fields])
+
+
+def select_strategy_cards(scenarios: pd.DataFrame) -> list[tuple[str, str, pd.Series]]:
+    strategy_targets = [
+        ("aggressive_fit", "Agresif Uyum Senaryosu", "Bu senaryo, fiyatı emsal koridora yakın tutarak daha rekabetçi bir teklif oluşturmayı hedefler."),
+        ("balanced", "Dengeli Senaryo", "Bu senaryo, fiyat bandı uyumu, karlılık ve risk seviyesini dengede tutmaya çalışır."),
+        ("margin_protect", "Marj Koruma Senaryosu", "Bu senaryo, karlılığı korumaya daha fazla ağırlık verir."),
+    ]
+    selected_cards: list[tuple[str, str, pd.Series]] = []
+    for strategy_mode, label, description in strategy_targets:
+        candidates = scenarios[scenarios.get("strategy_mode", "") == strategy_mode].copy()
+        if candidates.empty:
+            continue
+        valid_candidates = candidates[candidates["hard_constraints_valid"].astype(bool)].copy()
+        pool = valid_candidates if not valid_candidates.empty else candidates
+        idx = pool["scenario_score"].astype(float).idxmax()
+        row = scenarios.loc[idx]
+        selected_cards.append((label, description, row))
+    return selected_cards
 
 
 def ensure_scenario_result() -> dict[str, Any] | None:
@@ -6464,19 +6491,7 @@ def render_scenario_analysis() -> None:
     )
     if valid_scenarios.empty:
         st.warning(result.get("failure_reason") or "Geçerli öneri üretilemedi. Manuel teklif komitesi incelemesi önerilir.")
-    strategy_targets = [
-        ("aggressive_fit", "Agresif Uyum Senaryosu", "Bu senaryo, fiyatı emsal koridora yakın tutarak daha rekabetçi bir teklif oluşturmayı hedefler."),
-        ("balanced", "Dengeli Senaryo", "Bu senaryo, fiyat bandı uyumu, karlılık ve risk seviyesini dengede tutmaya çalışır."),
-        ("margin_protect", "Marj Koruma Senaryosu", "Bu senaryo, karlılığı korumaya daha fazla ağırlık verir."),
-    ]
-    selected_cards = []
-    for strategy_mode, label, description in strategy_targets:
-        candidates = scenarios[scenarios.get("strategy_mode", "") == strategy_mode].copy()
-        if candidates.empty:
-            continue
-        idx = candidates["scenario_score"].astype(float).idxmax()
-        selected_cards.append((label, description, scenarios.loc[idx]))
-    render_scenario_cards(selected_cards, tender)
+    render_scenario_cards(select_strategy_cards(scenarios), tender)
 
     table = scenarios[
         [
@@ -6806,18 +6821,28 @@ def render_backtest() -> None:
         "Backtest",
     )
     data = load_active_data()
-    with st.spinner("Backtest çalışıyor..."):
-        split = temporal_split(data)
-        log_event(
-            "temporal_split_created",
-            module="backtest",
-            status="pass",
-            message="Temporal split oluşturuldu.",
-            train_rows=len(split["train"]),
-            validation_rows=len(split["validation"]),
-            test_rows=len(split["test"]),
+    loading_slot = st.empty()
+    with loading_slot.container():
+        st.markdown(
+            "<div class='rc-summary-card'>"
+            "<div class='rc-summary-title'>Backtest hazırlanıyor</div>"
+            "<div class='rc-summary-copy'>Tüm test yılı ihaleleri için emsal, profil, fiyat koridoru, senaryo ve leakage metrikleri hesaplanıyor. Sonuçlar tamamlanmadan rapor bölümleri gösterilmez.</div>"
+            "</div>",
+            unsafe_allow_html=True,
         )
-        results = load_backtest_results(data)
+        with st.spinner("Backtest çalışıyor..."):
+            split = temporal_split(data)
+            log_event(
+                "temporal_split_created",
+                module="backtest",
+                status="pass",
+                message="Temporal split oluşturuldu.",
+                train_rows=len(split["train"]),
+                validation_rows=len(split["validation"]),
+                test_rows=len(split["test"]),
+            )
+            results = load_backtest_results(data)
+    loading_slot.empty()
     st.session_state.backtest_results = results
     if not st.session_state.get("latest_artifact_dir"):
         artifact_dir = write_backtest_artifacts(
@@ -7283,6 +7308,7 @@ def render_advisor() -> None:
             "scenario_score": round(float(context.get("scenario_score", 0)), 3),
             "revealed": context.get("revealed", False),
             "llm_model": selected_openrouter_model_id(),
+            "ui_version": ADVISOR_CHAT_UI_VERSION,
         },
         sort_keys=True,
     )
