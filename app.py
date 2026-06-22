@@ -2598,9 +2598,11 @@ def render_similar_methodology_callout() -> None:
         <div class='sim-callout'>
             <div class='sim-callout-title'>Benzerlik hesabı ve basit örnek</div>
             <div class='sim-callout-grid'>
-                <div class='sim-callout-item'><b>Yöntem özeti</b>Bu sayfada yerel metin embedding + yapısal KNN yaklaşımı kullanılır: seçili ihale metinsel ve kategorik/sayısal alanlarda geçmiş kazanılmış ihalelerle karşılaştırılır, sonra en yakın Top-K emsal listelenir.</div>
+                <div class='sim-callout-item'><b>Yöntem özeti</b>Bu sayfada yerel metin embedding + yapısal KNN yaklaşımı kullanılır: seçili ihale metinsel ve kategorik/sayısal alanlarda geçmiş kazanılmış ihalelerle karşılaştırılır, sonra bu ağırlıklı benzerlik skoruna göre en yakın Top-K benzer kazanılmış ihale listelenir.</div>
                 <div class='sim-callout-item'><b>Girdi sinyalleri</b>Ürün adı, ürün grubu, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rekabet birlikte değerlendirilir.</div>
                 <div class='sim-callout-item'><b>Skor disiplini</b>Fiyat, marj ve maliyet alanları benzerlik skoruna girmez; metinsel alanlar yerel embedding ile sayısallaştırılır.</div>
+                <div class='sim-callout-item'><b>KNN burada nerede?</b>KNN ayrı bir kazan/kaybet modeli değildir. Aşağıdaki weighted similarity formülü her geçmiş kazanılmış ihale için hesaplanır; skorlar büyükten küçüğe sıralanır ve en yakın Top-K kayıt seçilir.</div>
+                <div class='sim-callout-item'><b>Benzerlik skoru formülü</b>0.42 * embedding_similarity + 0.15 * product_group_match + 0.10 * region_match + 0.08 * procedure_match + 0.05 * institution_type_match + 0.12 * quantity_similarity + 0.05 * delivery_similarity + 0.03 * competitor_similarity.</div>
                 <div class='sim-callout-item'><b>Basit örnek</b>Aynı ürün grubu, aynı bölge ve yakın miktar ölçeğinde iki ihale varsa skor yükselir; miktar veya teslim süresi çok farklıysa skor düşer ama ürün/kurum benzerliği tamamen sıfırlanmaz.</div>
                 <div class='sim-callout-item'><b>Yorumlama</b>Tarihsel fiyatlar sadece emsal bilgisini yorumlamak için gösterilir; seçili test ihalesinin gerçek sonucu reveal öncesi kullanılmaz.</div>
             </div>
@@ -6576,6 +6578,13 @@ def render_price_corridor_models() -> None:
         unsafe_allow_html=True,
     )
     render_primary_corridor_card(corridor, confidence_label)
+    st.markdown(
+        "<div class='pc-note-card'><b>price_band_fit_score nasıl okunur?</b> "
+        "Önerilen fiyat p25-p75 koridorunun içindeyse 65-100 arası skor alır. "
+        "Fiyat medyana, yani p50 / orta fiyat noktasına yaklaştıkça skor yükselir. "
+        "Fiyat bandın dışına çıkarsa skor 0-65 aralığına düşer; banddan uzaklaştıkça ceza artar.</div>",
+        unsafe_allow_html=True,
+    )
     st.markdown(
         "<div class='pc-note-card'><b>Benzerlik Tabanlı Koridor ile Product Group Median farkı:</b> "
         "Benzerlik Tabanlı Koridor seçili ihaleye en yakın Top-K emsalleri tek tek bulur ve bu emsal havuzunun p25 / p50 / p75 fiyatlarından düşük-orta-yüksek band üretir. "
