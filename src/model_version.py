@@ -4,7 +4,7 @@ from __future__ import annotations
 
 MODEL_VERSION = {
     "retrieval_model_version": "retrieval-v1",
-    "kmeans_model_version": "kmeans-v1",
+    "profile_cluster_model_version": "gower-agglomerative-v1",
     "isolation_forest_model_version": "isolation-forest-v1",
     "baseline_model_version": "baseline-v1",
     "config_version": "config-v1",

@@ -42,7 +42,7 @@ def model_version_string() -> str:
         str(MODEL_VERSION.get(key, ""))
         for key in [
             "retrieval_model_version",
-            "kmeans_model_version",
+            "profile_cluster_model_version",
             "isolation_forest_model_version",
             "baseline_model_version",
         ]

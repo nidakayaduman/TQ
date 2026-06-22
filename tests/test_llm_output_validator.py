@@ -135,7 +135,7 @@ def test_normalized_payload_translates_raw_risk_codes():
 def test_prompt_requests_foundational_then_technical_explanation():
     prompt = build_advisor_prompt({"user_question": "Bu ihale hangi profile benziyor?", "cluster_name": "Injectable / Karadeniz"})
     assert "Önce konuyu temel seviyede açıkla" in prompt
-    assert "K-Means profil grubu" in prompt
+    assert "mixed-type/Gower profil grubu" in prompt
     assert "Risk kodlarını ham teknik etiket olarak yazma" in prompt
 
 

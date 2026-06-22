@@ -50,7 +50,7 @@ Docker image Python 3.11 tabanlıdır, non-root kullanıcıyla çalışır, Stre
 - `src/leakage_audit.py`: leakage audit
 - `src/retrieval.py`: benzer kazanılmış ihale retrieval
 - `src/price_corridor.py`: fiyat bandı ve band uyumu
-- `src/clustering.py`: Isolation Forest ve KMeans profil uyumu
+- `src/clustering.py`: Isolation Forest ve mixed-type/Gower profil kümeleme
 - `src/optimizer/`: senaryo üretimi, validasyon ve skor
 - `src/evaluation/`: backtest, metrics, baseline, segment/stress test
 - `src/advisor/`: guardrail, output validation, fallback advisor

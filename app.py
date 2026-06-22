@@ -1230,7 +1230,7 @@ def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
         "invalid_reason": "",
         "config_version": "config-v1",
         "retrieval_model_version": "retrieval-v1",
-        "kmeans_model_version": "kmeans-v1",
+        "profile_cluster_model_version": "gower-agglomerative-v1",
         "isolation_forest_model_version": "isolation-forest-v1",
         "baseline_model_version": "baseline-v1",
         "training_data_range": "2021-2024 train+validation; 2025 pseudo-live test",
@@ -5034,7 +5034,7 @@ def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, A
             "training_manual_review_rate": best.get("training_anomaly_rate"),
             "sensitivity_setting": best.get("isolation_contamination"),
         },
-        "kmeans": {
+        "profile_cluster": {
             "cluster_id": best.get("cluster_id"),
             "cluster_name": best.get("cluster_name"),
             "cluster_count": best.get("cluster_count"),
@@ -7346,7 +7346,7 @@ def render_backtest() -> None:
             "leakage_audit_status",
             "config_version",
             "retrieval_model_version",
-            "kmeans_model_version",
+            "profile_cluster_model_version",
             "isolation_forest_model_version",
             "baseline_model_version",
             "leakage_blocked_fields_present",
@@ -7883,7 +7883,7 @@ def render_reports() -> None:
     version_columns = [
         "config_version",
         "retrieval_model_version",
-        "kmeans_model_version",
+        "profile_cluster_model_version",
         "isolation_forest_model_version",
         "baseline_model_version",
         "training_data_range",
