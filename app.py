@@ -73,7 +73,7 @@ OPENROUTER_MODELS = [
         "description": "OpenRouter üzerinde doğrudan seçilebilen Owl Alpha modeli.",
     },
 ]
-DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[0]["model_id"]
+DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[1]["model_id"]
 
 
 def load_local_env_file() -> None:
@@ -104,7 +104,7 @@ PWIN_PROXY_EXPLANATION = (
 )
 BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v3"
 SCENARIO_RENDER_CACHE_VERSION = "scenario-cards-v2"
-ADVISOR_CHAT_UI_VERSION = "advisor-chat-v2"
+ADVISOR_CHAT_UI_VERSION = "advisor-chat-v3"
 PROFILE_DIAGNOSTIC_COLUMNS = [
     "cluster_silhouette_score",
     "cluster_inertia",
@@ -1053,6 +1053,13 @@ def selected_openrouter_model_id() -> str:
         return model_id
     env_model = os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL).strip()
     return env_model if env_model in available_model_ids else DEFAULT_OPENROUTER_MODEL
+
+
+def openrouter_model_attempt_order(selected_model: str) -> list[str]:
+    model_ids = [item["model_id"] for item in OPENROUTER_MODELS]
+    ordered = [selected_model] if selected_model in model_ids else []
+    ordered.extend(model_id for model_id in model_ids if model_id not in ordered)
+    return ordered
 
 
 def openrouter_model_option_label(model: dict[str, str]) -> str:
@@ -5102,10 +5109,11 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         return None
     prompt_context = {**safe_context, "user_question": question}
     prompt = build_advisor_prompt(prompt_context)
-    selected_model = selected_openrouter_model_id()
-    set_advisor_llm_status("calling", "OpenRouter LLM", "OpenRouter çağrısı yapılıyor.", selected_model)
+    requested_model = selected_openrouter_model_id()
+    selected_model = requested_model
+    set_advisor_llm_status("calling", "OpenRouter LLM", "OpenRouter çağrısı yapılıyor.", requested_model)
     body = {
-        "model": selected_model,
+        "model": requested_model,
         "messages": [
             {
                 "role": "system",
@@ -5128,29 +5136,60 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
         "max_tokens": 1200,
         "response_format": {"type": "json_object"},
     }
-    try:
-        response = requests.post(
-            OPENROUTER_API_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:8501",
-                "X-Title": "Tender IQ Agentic Bid Advisor",
-            },
-            json=body,
-            timeout=45,
-        )
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-    except Exception:
-        log_exception(
-            "advisor_llm_call_failed",
-            module="advisor",
-            status="fallback",
-            message="LLM çağrısı başarısız; fallback advisor kullanılacak.",
-            tender_id=str(safe_context.get("tender_id") or "") or None,
-        )
-        set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", "OpenRouter çağrısı başarısız oldu.", selected_model)
+    content = ""
+    attempt_errors: list[str] = []
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:8501",
+        "X-Title": "Tender IQ Agentic Bid Advisor",
+    }
+    for attempt_model in openrouter_model_attempt_order(requested_model):
+        selected_model = attempt_model
+        body["model"] = attempt_model
+        set_advisor_llm_status("calling", "OpenRouter LLM", "OpenRouter çağrısı yapılıyor.", attempt_model)
+        try:
+            response = requests.post(
+                OPENROUTER_API_URL,
+                headers=headers,
+                json=body,
+                timeout=45,
+            )
+            if not response.ok:
+                detail = ""
+                try:
+                    detail = str(response.json().get("error", {}).get("message", ""))[:180]
+                except Exception:
+                    detail = response.text[:180]
+                attempt_errors.append(f"{attempt_model}: HTTP {response.status_code} {detail}".strip())
+                log_event(
+                    "advisor_llm_model_attempt_failed",
+                    module="advisor",
+                    status="fallback",
+                    message="OpenRouter model denemesi başarısız oldu; sıradaki model denenecek.",
+                    tender_id=str(safe_context.get("tender_id") or "") or None,
+                    model=attempt_model,
+                    http_status=response.status_code,
+                )
+                continue
+            content = response.json()["choices"][0]["message"]["content"]
+            break
+        except Exception as exc:
+            attempt_errors.append(f"{attempt_model}: {type(exc).__name__}")
+            log_exception(
+                "advisor_llm_model_attempt_failed",
+                module="advisor",
+                status="fallback",
+                message="OpenRouter model denemesi hata verdi; sıradaki model denenecek.",
+                tender_id=str(safe_context.get("tender_id") or "") or None,
+                model=attempt_model,
+            )
+            continue
+    if not content:
+        reason = "OpenRouter çağrısı başarısız oldu."
+        if attempt_errors:
+            reason = f"{reason} Denenen modeller: {' | '.join(attempt_errors[:3])}"
+        set_advisor_llm_status("fallback", "Güvenli sistem yanıtı", reason, selected_model)
         return None
     parsed = normalize_llm_payload(content)
     if not parsed:
