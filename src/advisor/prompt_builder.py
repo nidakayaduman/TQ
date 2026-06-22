@@ -8,6 +8,12 @@ from typing import Any
 from ..constants import DISCLAIMER
 
 
+def _json_default(value: Any) -> Any:
+    if hasattr(value, "item"):
+        return value.item()
+    return str(value)
+
+
 def build_advisor_prompt(context: dict[str, Any]) -> str:
     safe_context = dict(context)
     question = safe_context.pop("user_question", "") or "Genel yönetici yorumu üret."
@@ -58,5 +64,5 @@ Yanıtı Türkçe ve geçerli JSON olarak ver. Markdown kullanma. Şema:
 Kullanıcı sorusu varsa özellikle onu cevapla: {question}
 
 MODEL_CONTEXT_JSON:
-{json.dumps(safe_context, ensure_ascii=False, indent=2)}
+{json.dumps(safe_context, ensure_ascii=False, indent=2, default=_json_default)}
 """

@@ -406,25 +406,26 @@ def inject_global_css() -> None:
             .warning-box { border: 1px solid rgba(255,157,66,0.28); background: rgba(255,157,66,0.10); color: #ffffff; border-radius: 8px; padding: .9rem 1rem; }
             .info-box { border: 1px solid var(--line-soft); background: rgba(255,79,31,0.075); color: #ffffff; border-radius: 8px; padding: .9rem 1rem; }
             .st-key-advisor_chat_module {
-                max-width: 980px;
+                max-width: 1120px;
                 margin: 0 auto;
-                padding: 1rem 1.05rem 1.05rem;
-                border-radius: 12px;
-                border: 1px solid rgba(255,123,66,0.22);
+                padding: 1.35rem;
+                border-radius: 22px;
+                border: 1px solid rgba(255,123,66,0.24);
                 background:
-                    radial-gradient(ellipse at 50% 0%, rgba(255,79,31,0.16), transparent 36%),
-                    linear-gradient(180deg, rgba(28,24,22,0.95), rgba(10,9,9,0.96));
-                box-shadow: 0 26px 70px rgba(0,0,0,0.42), 0 0 42px rgba(255,79,31,0.08);
+                    radial-gradient(ellipse at 16% 0%, rgba(255,79,31,0.20), transparent 34%),
+                    radial-gradient(ellipse at 88% 18%, rgba(255,157,66,0.10), transparent 34%),
+                    linear-gradient(180deg, rgba(25,22,21,0.98), rgba(7,7,8,0.98));
+                box-shadow: 0 28px 76px rgba(0,0,0,0.46), 0 0 48px rgba(255,79,31,0.075);
             }
             .st-key-advisor_chat_module [data-testid='stVerticalBlock'] {
-                gap: .75rem;
+                gap: .9rem;
             }
             .advisor-chat-header {
                 display: flex;
                 justify-content: space-between;
                 gap: 1rem;
                 align-items: flex-start;
-                padding: .55rem .6rem .35rem;
+                padding: .35rem .25rem .25rem;
             }
             .advisor-chat-title-row {
                 display: flex;
@@ -441,11 +442,11 @@ def inject_global_css() -> None:
             .advisor-status-pill {
                 display: inline-flex;
                 align-items: center;
-                min-height: 24px;
-                padding: .2rem .5rem;
+                min-height: 26px;
+                padding: .24rem .58rem;
                 border-radius: 999px;
                 border: 1px solid rgba(255,123,66,0.20);
-                background: rgba(255,255,255,0.055);
+                background: rgba(255,255,255,0.06);
                 color: #ffffff;
                 font-size: .72rem;
                 font-weight: 650;
@@ -460,12 +461,12 @@ def inject_global_css() -> None:
                 color: #ffb25e;
             }
             .st-key-advisor_chat_module div[data-testid='stButton'] button {
-                min-height: 34px !important;
-                width: auto !important;
-                padding: .28rem .72rem !important;
+                min-height: 42px !important;
+                width: 100% !important;
+                padding: .46rem .82rem !important;
                 border-radius: 999px !important;
                 border: 1px solid rgba(255,123,66,0.24) !important;
-                background: rgba(255,255,255,0.055) !important;
+                background: rgba(255,255,255,0.06) !important;
                 color: #ffffff !important;
                 box-shadow: none !important;
                 font-size: .82rem !important;
@@ -484,41 +485,44 @@ def inject_global_css() -> None:
                     rgba(7,7,7,0.62);
             }
             .st-key-advisor_chat_module .chat-body {
-                min-height: 220px;
-                max-height: 390px;
-                padding: .9rem;
+                min-height: 270px;
+                max-height: 460px;
+                padding: 1rem;
                 background: transparent;
             }
             .st-key-advisor_chat_module .chat-bubble {
                 max-width: min(760px, 82%);
-                border-radius: 12px;
+                border-radius: 18px;
+                padding: .95rem 1.08rem;
             }
             .st-key-advisor_chat_module .chat-bubble-user {
                 background: linear-gradient(135deg, rgba(255,79,31,.92), rgba(181,40,13,.92));
                 border-color: rgba(255,184,117,0.30);
+                border-bottom-right-radius: 6px;
             }
             .st-key-advisor_chat_module .chat-bubble-assistant {
                 background: rgba(255,255,255,0.07);
                 border-color: rgba(255,255,255,0.12);
+                border-bottom-left-radius: 6px;
             }
             .st-key-advisor_chat_module div[data-testid='stForm'] {
-                margin-top: .1rem;
-                padding: .72rem;
+                margin-top: .15rem;
+                padding: .82rem;
                 border: 1px solid rgba(255,255,255,0.10);
-                border-radius: 12px;
-                background: rgba(255,255,255,0.045);
+                border-radius: 20px;
+                background: rgba(255,255,255,0.05);
             }
             .st-key-advisor_chat_module div[data-testid='stForm'] input {
-                min-height: 44px;
+                min-height: 50px;
                 border-radius: 999px !important;
-                padding-left: 1rem !important;
+                padding-left: 1.1rem !important;
                 background: rgba(4,4,4,0.62) !important;
                 border: 1px solid rgba(255,123,66,0.26) !important;
                 color: #ffffff !important;
                 -webkit-text-fill-color: #ffffff !important;
             }
             .st-key-advisor_chat_module div[data-testid='stFormSubmitButton'] button {
-                min-height: 44px !important;
+                min-height: 50px !important;
                 width: 100% !important;
                 border-radius: 999px !important;
                 background: linear-gradient(180deg, rgba(255,93,36,0.98), rgba(181,40,13,0.98)) !important;
@@ -526,6 +530,113 @@ def inject_global_css() -> None:
                 color: #ffffff !important;
                 box-shadow: 0 14px 30px rgba(255,79,31,0.20) !important;
             }
+            .advisor-safe-banner,
+            .advisor-warning-banner {
+                margin: 1rem 0 1.35rem;
+                border-radius: 18px;
+                padding: .95rem 1.05rem;
+                border: 1px solid rgba(255,123,66,0.22);
+                background: linear-gradient(135deg, rgba(255,79,31,0.09), rgba(255,157,66,0.045)), rgba(15,14,14,0.86);
+                color: rgba(255,255,255,0.82);
+                line-height: 1.55;
+                box-shadow: 0 16px 38px rgba(0,0,0,0.22);
+            }
+            .advisor-warning-banner {
+                border-color: rgba(255,79,31,0.32);
+                background: linear-gradient(135deg, rgba(255,79,31,0.16), rgba(100,20,12,0.18)), rgba(15,12,12,0.92);
+            }
+            .advisor-secondary-section { margin-top: 46px; }
+            .advisor-secondary-title {
+                color: var(--primary);
+                font-size: 1.16rem;
+                font-weight: 720;
+                margin-bottom: .22rem;
+            }
+            .advisor-secondary-subtitle {
+                color: rgba(255,255,255,0.62);
+                line-height: 1.5;
+                margin-bottom: 1rem;
+                max-width: 900px;
+            }
+            .advisor-context-card,
+            .advisor-setup-card,
+            .advisor-status-card {
+                border-radius: 20px;
+                border: 1px solid rgba(255,123,66,0.16);
+                background: linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018)), rgba(15,15,16,0.92);
+                box-shadow: 0 18px 44px rgba(0,0,0,0.24);
+            }
+            .advisor-context-card,
+            .advisor-setup-card { padding: 1.15rem; }
+            .advisor-kv-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 1rem;
+                padding: .58rem 0;
+                border-top: 1px solid rgba(255,255,255,0.07);
+                color: rgba(255,255,255,0.66);
+                line-height: 1.35;
+            }
+            .advisor-kv-row:first-child { border-top: 0; }
+            .advisor-kv-row b {
+                color: #fff7ed;
+                text-align: right;
+                overflow-wrap: anywhere;
+            }
+            .advisor-status-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 18px;
+                margin-top: 20px;
+            }
+            .advisor-status-card {
+                min-height: 132px;
+                padding: 1rem;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+            }
+            .advisor-status-label {
+                color: rgba(255,255,255,0.56);
+                font-size: .72rem;
+                font-weight: 760;
+                letter-spacing: .06em;
+                text-transform: uppercase;
+            }
+            .advisor-status-value {
+                color: #fff7ed;
+                font-size: 1.18rem;
+                font-weight: 820;
+                line-height: 1.18;
+                margin-top: .48rem;
+                overflow-wrap: anywhere;
+            }
+            .advisor-status-note {
+                color: rgba(255,255,255,0.62);
+                font-size: .84rem;
+                line-height: 1.4;
+                margin-top: .72rem;
+            }
+            .advisor-advanced-table {
+                width: 100%;
+                border-collapse: collapse;
+                overflow: hidden;
+                border-radius: 14px;
+                border: 1px solid rgba(255,255,255,0.08);
+            }
+            .advisor-advanced-table th,
+            .advisor-advanced-table td {
+                text-align: left;
+                padding: .72rem .82rem;
+                border-bottom: 1px solid rgba(255,255,255,0.07);
+                color: rgba(255,255,255,0.78);
+                background: rgba(255,255,255,0.035);
+            }
+            .advisor-advanced-table th {
+                color: #fff7ed;
+                background: rgba(255,255,255,0.07);
+            }
+            .advisor-advanced-table tr:last-child td { border-bottom: 0; }
             .nav-card { min-height: 168px; display: flex; flex-direction: column; justify-content: space-between; }
             .card-grid {
                 display: grid;
@@ -775,6 +886,7 @@ def inject_global_css() -> None:
                 .advisor-status-pills { justify-content: flex-start; max-width: 100%; }
                 .st-key-advisor_chat_module .chat-body { max-height: 360px; }
                 .st-key-advisor_chat_module .chat-bubble { max-width: 92%; }
+                .advisor-status-grid { grid-template-columns: 1fr; }
             }
         </style>
         """,
@@ -2714,6 +2826,1793 @@ def render_profile_examples_table(df: pd.DataFrame) -> None:
     )
 
 
+def inject_price_corridor_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .pc-section {
+                margin-top: 48px;
+            }
+            .pc-section .section-title {
+                font-size: 1.24rem;
+                line-height: 1.25;
+                margin-bottom: 0.18rem;
+            }
+            .pc-section .section-subtitle {
+                max-width: 860px;
+                color: rgba(245, 247, 250, 0.68);
+                line-height: 1.55;
+                margin-bottom: 18px;
+            }
+            .pc-grid {
+                display: grid;
+                gap: 20px;
+                align-items: stretch;
+            }
+            .pc-kpi-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                margin-top: 28px;
+            }
+            .pc-baseline-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+            .pc-kpi-card,
+            .pc-primary-card,
+            .pc-baseline-card,
+            .pc-note-card,
+            .pc-table-card {
+                border: 1px solid rgba(248, 113, 113, 0.16);
+                background:
+                    linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02)),
+                    rgba(16, 18, 22, 0.92);
+                box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+                border-radius: 20px;
+            }
+            .pc-kpi-card {
+                min-height: 132px;
+                padding: 22px 24px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+            }
+            .pc-label {
+                color: rgba(245, 247, 250, 0.62);
+                font-size: 0.78rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+            .pc-value {
+                color: #fff7ed;
+                font-size: 1.78rem;
+                line-height: 1.1;
+                font-weight: 850;
+                margin-top: 12px;
+            }
+            .pc-note {
+                color: rgba(245, 247, 250, 0.64);
+                font-size: 0.88rem;
+                line-height: 1.42;
+                margin-top: 12px;
+            }
+            .pc-primary-card {
+                padding: 24px;
+            }
+            .pc-primary-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 16px;
+                margin-bottom: 20px;
+            }
+            .pc-primary-title {
+                color: #fff7ed;
+                font-size: 1.2rem;
+                font-weight: 850;
+                line-height: 1.25;
+            }
+            .pc-primary-copy {
+                margin-top: 8px;
+                color: rgba(245, 247, 250, 0.68);
+                line-height: 1.55;
+                max-width: 780px;
+            }
+            .pc-pill {
+                flex: 0 0 auto;
+                border: 1px solid rgba(251, 146, 60, 0.34);
+                background: rgba(251, 146, 60, 0.12);
+                color: #fed7aa;
+                border-radius: 999px;
+                padding: 6px 10px;
+                font-size: 0.74rem;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+            .pc-band-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 14px;
+            }
+            .pc-band {
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                background: rgba(255, 255, 255, 0.035);
+                border-radius: 16px;
+                padding: 16px;
+            }
+            .pc-band-label {
+                color: rgba(245, 247, 250, 0.58);
+                font-size: 0.76rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .pc-band-value {
+                color: #fff7ed;
+                font-size: 1.38rem;
+                font-weight: 850;
+                margin-top: 8px;
+                line-height: 1.14;
+            }
+            .pc-baseline-card {
+                min-height: 178px;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 14px;
+            }
+            .pc-baseline-head {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            .pc-baseline-title {
+                color: #fff7ed;
+                font-size: 0.98rem;
+                font-weight: 830;
+                line-height: 1.25;
+            }
+            .pc-baseline-copy {
+                margin-top: 8px;
+                color: rgba(245, 247, 250, 0.62);
+                font-size: 0.86rem;
+                line-height: 1.42;
+            }
+            .pc-baseline-value {
+                color: #fff7ed;
+                font-size: 1.32rem;
+                font-weight: 850;
+                line-height: 1.12;
+            }
+            .pc-mini-band {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 8px;
+            }
+            .pc-mini-band div {
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.035);
+                border: 1px solid rgba(255, 255, 255, 0.07);
+                padding: 9px 8px;
+                min-width: 0;
+            }
+            .pc-mini-band span {
+                display: block;
+                color: rgba(245, 247, 250, 0.55);
+                font-size: 0.7rem;
+                font-weight: 760;
+                margin-bottom: 4px;
+            }
+            .pc-mini-band b {
+                display: block;
+                color: #fff7ed;
+                font-size: 0.82rem;
+                line-height: 1.18;
+                overflow-wrap: anywhere;
+            }
+            .pc-table-card {
+                padding: 18px;
+            }
+            .pc-table-scroll {
+                overflow-x: auto;
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+            .pc-table {
+                width: 100%;
+                border-collapse: collapse;
+                min-width: 980px;
+                background: rgba(12, 14, 18, 0.88);
+            }
+            .pc-table th {
+                text-align: left;
+                color: rgba(255, 247, 237, 0.82);
+                background: rgba(26, 29, 36, 0.98);
+                border-bottom: 1px solid rgba(248, 113, 113, 0.18);
+                padding: 13px 14px;
+                font-size: 0.76rem;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+            .pc-table td {
+                color: rgba(245, 247, 250, 0.82);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+                padding: 13px 14px;
+                font-size: 0.88rem;
+                vertical-align: top;
+                line-height: 1.42;
+            }
+            .pc-table tr:nth-child(even) td {
+                background: rgba(255, 255, 255, 0.025);
+            }
+            .pc-table tr:last-child td {
+                border-bottom: 0;
+            }
+            .pc-table .pc-method {
+                color: #fff7ed;
+                font-weight: 760;
+                white-space: nowrap;
+            }
+            .pc-table .pc-description {
+                max-width: 340px;
+                color: rgba(245, 247, 250, 0.68);
+            }
+            .pc-note-card {
+                margin-top: 28px;
+                padding: 18px 20px;
+                border-color: rgba(251, 146, 60, 0.22);
+                background:
+                    linear-gradient(135deg, rgba(251, 146, 60, 0.09), rgba(239, 68, 68, 0.045)),
+                    rgba(16, 18, 22, 0.92);
+                color: rgba(245, 247, 250, 0.74);
+                line-height: 1.55;
+            }
+            .pc-note-card b {
+                color: #fed7aa;
+            }
+            @media (max-width: 1180px) {
+                .pc-kpi-grid,
+                .pc-baseline-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+            }
+            @media (max-width: 720px) {
+                .pc-kpi-grid,
+                .pc-baseline-grid,
+                .pc-band-grid {
+                    grid-template-columns: 1fr;
+                }
+                .pc-primary-top {
+                    flex-direction: column;
+                }
+                .pc-kpi-card,
+                .pc-baseline-card,
+                .pc-primary-card {
+                    border-radius: 18px;
+                    padding: 18px;
+                }
+                .pc-value {
+                    font-size: 1.45rem;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_price_kpi_grid(items: list[tuple[str, str, str]]) -> None:
+    cards = []
+    for label, value, note in items:
+        cards.append(
+            "<div class='pc-kpi-card'>"
+            "<div>"
+            f"<div class='pc-label'>{escape(label)}</div>"
+            f"<div class='pc-value'>{escape(value)}</div>"
+            "</div>"
+            f"<div class='pc-note'>{escape(note)}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='pc-grid pc-kpi-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_primary_corridor_card(corridor: dict[str, Any], confidence_label: str) -> None:
+    bands = [
+        ("Alt fiyat", format_try(corridor.get("predicted_low_price"))),
+        ("Orta fiyat", format_try(corridor.get("predicted_mid_price"))),
+        ("Üst fiyat", format_try(corridor.get("predicted_high_price"))),
+    ]
+    band_html = "".join(
+        "<div class='pc-band'>"
+        f"<div class='pc-band-label'>{escape(label)}</div>"
+        f"<div class='pc-band-value'>{escape(value)}</div>"
+        "</div>"
+        for label, value in bands
+    )
+    st.markdown(
+        "<div class='pc-primary-card'>"
+        "<div class='pc-primary-top'>"
+        "<div>"
+        "<div class='pc-primary-title'>Benzerlik Tabanlı Koridor</div>"
+        "<div class='pc-primary-copy'>Top-K benzer kazanılmış ihalelerden tarihsel fiyat bandı üretir. Orta fiyat Top-K emsallerin medyan/p50 fiyatına dayanır; düşük ve yüksek uçlar aynı emsal bandının sınırlarını gösterir.</div>"
+        "</div>"
+        f"<span class='pc-pill'>Ana fiyat koridoru · {escape(confidence_label)}</span>"
+        "</div>"
+        f"<div class='pc-band-grid'>{band_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_price_baseline_grid(rows: list[dict[str, Any]]) -> None:
+    cards = []
+    for row in rows:
+        title = str(row["Yöntem"])
+        confidence = str(row["Güven seviyesi"])
+        description = clean_user_facing_note(row.get("Açıklama", ""), 138)
+        cards.append(
+            "<div class='pc-baseline-card'>"
+            "<div>"
+            "<div class='pc-baseline-head'>"
+            f"<div class='pc-baseline-title'>{escape(title)}</div>"
+            f"<span class='pc-pill'>{escape(confidence)}</span>"
+            "</div>"
+            f"<div class='pc-baseline-copy'>{escape(description)}</div>"
+            "</div>"
+            f"<div class='pc-baseline-value'>{escape(format_optional_try(row.get('Tahmin fiyatı'), 'Aktif değil'))}</div>"
+            "<div class='pc-mini-band'>"
+            f"<div><span>Düşük</span><b>{escape(format_optional_try(row.get('Düşük fiyat / low'), 'Aktif değil'))}</b></div>"
+            f"<div><span>Orta</span><b>{escape(format_optional_try(row.get('Orta fiyat / mid'), 'Aktif değil'))}</b></div>"
+            f"<div><span>Yüksek</span><b>{escape(format_optional_try(row.get('Yüksek fiyat / high'), 'Aktif değil'))}</b></div>"
+            "</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='pc-grid pc-baseline-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_price_comparison_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        for column in df.columns:
+            value = escape(str(row[column]))
+            if column == "Yöntem":
+                cells.append(f"<td class='pc-method'>{value}</td>")
+            elif column == "Açıklama":
+                cells.append(f"<td class='pc-description'>{value}</td>")
+            else:
+                cells.append(f"<td>{value}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    st.markdown(
+        "<div class='pc-table-card'><div class='pc-table-scroll'>"
+        f"<table class='pc-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_price_decision_note() -> None:
+    st.markdown(
+        "<div class='pc-note-card'><b>Karar notu:</b> "
+        "Fiyat koridoru tek başına karar değildir. Bu fiyatlar; emsal ihale analizi, profil uyumu, karlılık beklentisi ve risk göstergeleriyle birlikte değerlendirilmelidir."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def inject_scenario_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .sc-section {
+                margin-top: 50px;
+            }
+            .sc-section .section-title {
+                font-size: 1.24rem;
+                line-height: 1.25;
+                margin-bottom: 0.18rem;
+            }
+            .sc-section .section-subtitle {
+                max-width: 900px;
+                color: rgba(245, 247, 250, 0.68);
+                line-height: 1.55;
+                margin-bottom: 18px;
+            }
+            .sc-grid {
+                display: grid;
+                gap: 20px;
+                align-items: stretch;
+            }
+            .sc-kpi-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                margin-top: 28px;
+            }
+            .sc-card-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .sc-kpi-card,
+            .sc-score-card,
+            .sc-strategy-card,
+            .sc-table-card,
+            .sc-note-card {
+                border: 1px solid rgba(248, 113, 113, 0.16);
+                background:
+                    linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022)),
+                    rgba(16, 18, 22, 0.92);
+                box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+                border-radius: 20px;
+            }
+            .sc-kpi-card {
+                min-height: 132px;
+                padding: 22px 24px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+            }
+            .sc-label {
+                color: rgba(245, 247, 250, 0.62);
+                font-size: 0.78rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+            .sc-value {
+                color: #fff7ed;
+                font-size: 1.76rem;
+                line-height: 1.1;
+                font-weight: 850;
+                margin-top: 12px;
+            }
+            .sc-note {
+                color: rgba(245, 247, 250, 0.64);
+                font-size: 0.88rem;
+                line-height: 1.42;
+                margin-top: 12px;
+            }
+            .sc-score-card {
+                padding: 22px 24px;
+                border-color: rgba(251, 146, 60, 0.22);
+                background:
+                    linear-gradient(135deg, rgba(251, 146, 60, 0.09), rgba(239, 68, 68, 0.04)),
+                    rgba(16, 18, 22, 0.92);
+            }
+            .sc-score-title {
+                color: #fff7ed;
+                font-size: 1.08rem;
+                font-weight: 840;
+                margin-bottom: 10px;
+            }
+            .sc-score-copy {
+                color: rgba(245, 247, 250, 0.72);
+                line-height: 1.58;
+                max-width: 980px;
+            }
+            .sc-score-components {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 12px;
+                margin-top: 18px;
+            }
+            .sc-score-component {
+                border: 1px solid rgba(255, 255, 255, 0.075);
+                background: rgba(255, 255, 255, 0.035);
+                border-radius: 14px;
+                padding: 13px;
+            }
+            .sc-score-component b {
+                display: block;
+                color: #fed7aa;
+                font-size: 0.84rem;
+                margin-bottom: 7px;
+            }
+            .sc-score-component span {
+                display: block;
+                color: rgba(245, 247, 250, 0.66);
+                font-size: 0.8rem;
+                line-height: 1.42;
+            }
+            .sc-strategy-card {
+                padding: 22px;
+                display: flex;
+                flex-direction: column;
+                gap: 18px;
+                min-height: 0;
+                height: auto;
+                overflow: visible;
+            }
+            .sc-card-top {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 14px;
+            }
+            .sc-card-number {
+                width: 38px;
+                height: 38px;
+                display: inline-grid;
+                place-items: center;
+                border-radius: 12px;
+                border: 1px solid rgba(251, 146, 60, 0.24);
+                background: rgba(251, 146, 60, 0.10);
+                color: #fed7aa;
+                font-weight: 850;
+                flex: 0 0 auto;
+            }
+            .sc-card-title {
+                color: #fff7ed;
+                font-size: 1.06rem;
+                line-height: 1.22;
+                font-weight: 850;
+            }
+            .sc-pill {
+                flex: 0 0 auto;
+                border: 1px solid rgba(251, 146, 60, 0.34);
+                background: rgba(251, 146, 60, 0.12);
+                color: #fed7aa;
+                border-radius: 999px;
+                padding: 6px 10px;
+                font-size: 0.74rem;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+            .sc-pill-good {
+                border-color: rgba(34, 197, 94, 0.30);
+                background: rgba(34, 197, 94, 0.10);
+                color: #bbf7d0;
+            }
+            .sc-pill-bad {
+                border-color: rgba(248, 113, 113, 0.34);
+                background: rgba(248, 113, 113, 0.12);
+                color: #fecaca;
+            }
+            .sc-price-label {
+                color: rgba(245, 247, 250, 0.58);
+                font-size: 0.76rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .sc-price {
+                margin-top: 7px;
+                color: #fff7ed;
+                font-size: 1.72rem;
+                line-height: 1.08;
+                font-weight: 880;
+            }
+            .sc-summary {
+                color: rgba(245, 247, 250, 0.70);
+                line-height: 1.52;
+                font-size: 0.9rem;
+            }
+            .sc-metric-group-title {
+                color: rgba(245, 247, 250, 0.56);
+                font-size: 0.72rem;
+                font-weight: 820;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                margin-bottom: 9px;
+            }
+            .sc-primary-metrics,
+            .sc-secondary-metrics {
+                display: grid;
+                gap: 10px;
+            }
+            .sc-primary-metrics {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .sc-secondary-metrics {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .sc-mini-metric {
+                border-radius: 14px;
+                border: 1px solid rgba(255, 255, 255, 0.075);
+                background: rgba(255, 255, 255, 0.035);
+                padding: 11px 12px;
+                min-width: 0;
+            }
+            .sc-mini-metric span {
+                display: block;
+                color: rgba(245, 247, 250, 0.55);
+                font-size: 0.72rem;
+                font-weight: 760;
+                margin-bottom: 5px;
+            }
+            .sc-mini-metric b {
+                display: block;
+                color: #fff7ed;
+                font-size: 0.9rem;
+                line-height: 1.2;
+                overflow-wrap: anywhere;
+            }
+            .sc-risk-box {
+                border-top: 1px solid rgba(255, 255, 255, 0.08);
+                padding-top: 14px;
+            }
+            .sc-risk-title {
+                color: #fed7aa;
+                font-size: 0.84rem;
+                font-weight: 820;
+                margin-bottom: 8px;
+            }
+            .sc-risk-list {
+                margin: 0;
+                padding-left: 18px;
+                color: rgba(245, 247, 250, 0.70);
+                font-size: 0.86rem;
+                line-height: 1.5;
+            }
+            .sc-risk-list li {
+                margin: 4px 0;
+            }
+            .sc-rule-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                border-top: 1px solid rgba(255, 255, 255, 0.08);
+                padding-top: 14px;
+            }
+            .sc-rule-label {
+                color: rgba(245, 247, 250, 0.58);
+                font-size: 0.78rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .sc-table-card {
+                padding: 18px;
+            }
+            .sc-table-scroll {
+                overflow-x: auto;
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+            .sc-table {
+                width: 100%;
+                border-collapse: collapse;
+                min-width: 1320px;
+                background: rgba(12, 14, 18, 0.88);
+            }
+            .sc-table th {
+                text-align: left;
+                color: rgba(255, 247, 237, 0.84);
+                background: rgba(26, 29, 36, 0.98);
+                border-bottom: 1px solid rgba(248, 113, 113, 0.18);
+                padding: 13px 14px;
+                font-size: 0.74rem;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+            .sc-table td {
+                color: rgba(245, 247, 250, 0.82);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+                padding: 13px 14px;
+                font-size: 0.86rem;
+                vertical-align: top;
+                line-height: 1.42;
+            }
+            .sc-table tr:nth-child(even) td {
+                background: rgba(255, 255, 255, 0.025);
+            }
+            .sc-table tr:last-child td {
+                border-bottom: 0;
+            }
+            .sc-table .sc-id {
+                color: #fff7ed;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+            .sc-table .sc-text-cell {
+                min-width: 260px;
+                max-width: 380px;
+                white-space: normal;
+            }
+            .sc-progress {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                min-width: 132px;
+            }
+            .sc-progress-track {
+                height: 8px;
+                flex: 1 1 auto;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.08);
+                overflow: hidden;
+            }
+            .sc-progress-fill {
+                height: 100%;
+                border-radius: inherit;
+                background: linear-gradient(90deg, #ef4444, #fb923c);
+            }
+            .sc-progress-value {
+                color: #fff7ed;
+                font-weight: 780;
+                font-size: 0.82rem;
+                min-width: 42px;
+                text-align: right;
+            }
+            .sc-note-card {
+                margin-top: 28px;
+                padding: 18px 20px;
+                border-color: rgba(251, 146, 60, 0.22);
+                background:
+                    linear-gradient(135deg, rgba(251, 146, 60, 0.09), rgba(239, 68, 68, 0.045)),
+                    rgba(16, 18, 22, 0.92);
+                color: rgba(245, 247, 250, 0.74);
+                line-height: 1.55;
+            }
+            .sc-note-card b {
+                color: #fed7aa;
+            }
+            @media (max-width: 1180px) {
+                .sc-kpi-grid,
+                .sc-card-grid {
+                    grid-template-columns: 1fr;
+                }
+                .sc-score-components {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+            }
+            @media (max-width: 720px) {
+                .sc-kpi-grid,
+                .sc-score-components,
+                .sc-primary-metrics,
+                .sc-secondary-metrics {
+                    grid-template-columns: 1fr;
+                }
+                .sc-card-top,
+                .sc-rule-row {
+                    align-items: flex-start;
+                    flex-direction: column;
+                }
+                .sc-kpi-card,
+                .sc-score-card,
+                .sc-strategy-card {
+                    border-radius: 18px;
+                    padding: 18px;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_scenario_kpi_grid(items: list[tuple[str, str, str]]) -> None:
+    cards = []
+    for label, value, note in items:
+        cards.append(
+            "<div class='sc-kpi-card'>"
+            "<div>"
+            f"<div class='sc-label'>{escape(label)}</div>"
+            f"<div class='sc-value'>{escape(value)}</div>"
+            "</div>"
+            f"<div class='sc-note'>{escape(note)}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='sc-grid sc-kpi-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def business_risk_note(text: Any) -> str:
+    note = clean_user_facing_note(text)
+    replacements = [
+        ("Fiyat koridoru geniş", "Fiyat koridoru geniş olduğu için önerinin belirsizliği artıyor."),
+        ("Farklı fiyat modelleri arasında belirgin fark var", "Farklı fiyat modelleri birbirinden uzak sonuç verdiği için fiyat varsayımı manuel kontrol edilmeli."),
+        ("Teslimat süresi baskılı", "Teslimat süresi baskılı göründüğü için operasyonel uygulanabilirlik ayrıca kontrol edilmeli."),
+        ("geçmiş kazanılmış başarı grubunun tipik örneklerinden uzak", "Seçili ihale geçmiş kazanılmış başarı grubuna göre daha az tipik görünüyor; manuel inceleme önerilir."),
+        ("Fiyat tarihsel fiyat bandının dışında", "Önerilen fiyat tarihsel emsal bandının dışında kaldığı için rekabet ve marj birlikte kontrol edilmeli."),
+    ]
+    for needle, replacement in replacements:
+        if needle in note:
+            return replacement
+    return note.rstrip(" .;") + "." if note else ""
+
+
+def scenario_risk_items(value: Any) -> list[str]:
+    if isinstance(value, list):
+        raw_items = [str(item) for item in value]
+    else:
+        raw = clean_user_facing_note(value)
+        raw_items = [item.strip() for item in re.split(r"\s*;\s*", raw) if item.strip()]
+    items: list[str] = []
+    for item in raw_items:
+        normalized = business_risk_note(item)
+        if normalized and normalized not in items:
+            items.append(normalized)
+    return items or ["Belirgin skor düşüren risk uyarısı yok."]
+
+
+def strategy_business_description(label: str, fallback: str) -> str:
+    if "Agresif" in label:
+        return "Bu senaryo, fiyatı emsal koridora yakın tutarak daha rekabetçi bir teklif oluşturmayı hedefler. Marjı düşürebilir; bu nedenle maliyet varsayımı ve minimum karlılık eşiği kontrol edilmelidir."
+    if "Dengeli" in label:
+        return "Bu senaryo, fiyat bandı uyumu, karlılık ve risk seviyesini dengede tutmaya çalışır. Genellikle teklif komitesi için ana karşılaştırma senaryosu olarak kullanılabilir."
+    if "Marj" in label:
+        return "Bu senaryo, karlılığı korumaya daha fazla ağırlık verir. Fiyat geçmiş emsal bandından uzaklaşırsa rekabet riski artabilir; profil uyumu ve fiyat bandı birlikte değerlendirilmelidir."
+    return fallback
+
+
+def render_scenario_score_explanation(weights: dict[str, float]) -> None:
+    risk_weight = abs(float(weights.get("risk_penalty_score", -0.10))) * 100
+    components = [
+        (
+            f"%{weights.get('won_profile_fit_score', 0) * 100:.0f} Profil Uyumu",
+            "Bu teklifin seçili ihalenin geçmiş kazanılmış profile ne kadar uyduğunu gösterir.",
+        ),
+        (
+            f"%{weights.get('price_band_fit_score', 0) * 100:.0f} Fiyat Bandı Uyumu",
+            "Önerilen fiyatın tarihsel emsal fiyat aralığına ne kadar yakın olduğunu gösterir.",
+        ),
+        (
+            f"%{weights.get('margin_score', 0) * 100:.0f} Karlılık Skoru",
+            "Tahmini maliyet ve beklenen marj açısından teklifin sağlıklı olup olmadığını gösterir.",
+        ),
+        (
+            f"%{weights.get('model_confidence_score', 0) * 100:.0f} Model Güveni",
+            "Emsal sayısı, benzerlik gücü ve veri kalitesine göre sistemin çıktıya ne kadar güvendiğini gösterir.",
+        ),
+        (
+            f"-%{risk_weight:.0f} Risk Cezası",
+            "Teslimat, maliyet belirsizliği, geniş fiyat bandı veya model uyuşmazlığı gibi riskler varsa skoru düşürür.",
+        ),
+    ]
+    component_html = "".join(
+        "<div class='sc-score-component'>"
+        f"<b>{escape(title)}</b>"
+        f"<span>{escape(body)}</span>"
+        "</div>"
+        for title, body in components
+    )
+    st.markdown(
+        "<div class='sc-score-card'>"
+        "<div class='sc-score-title'>Senaryo skoru nasıl okunur?</div>"
+        "<div class='sc-score-copy'>Senaryo skoru, teklif seçeneğinin geçmiş kazanılmış ihale profiline, fiyat bandına, beklenen karlılığa, model güvenine ve risk uyarılarına göre hesaplanan karar destek skorudur. Bu skor gerçek kazanma olasılığı değildir. Yüksek skor daha dengeli karar destek sinyali anlamına gelir; kesin kazanır anlamına gelmez.</div>"
+        f"<div class='sc-score-components'>{component_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_scenario_cards(selected_cards: list[tuple[str, str, pd.Series]], tender: dict[str, Any]) -> None:
+    cards = []
+    for idx, (label, description, scenario) in enumerate(selected_cards):
+        invalid_reason = clean_user_facing_note(scenario.get("invalid_reason", ""))
+        is_valid = bool(scenario["hard_constraints_valid"])
+        status_label = "Temel kurallar uygun" if is_valid else f"Geçersiz: {invalid_reason or 'Kural ihlali var'}"
+        status_class = "sc-pill-good" if is_valid else "sc-pill-bad"
+        total_offer = float(scenario["proposed_unit_price"]) * float(tender.get("quantity", 0))
+        contribution = total_offer * float(scenario["computed_margin_pct"]) / 100
+        risk_value = max(0.0, 100 - float(scenario["risk_penalty_score"]))
+        risk_label = "Düşük" if risk_value >= 75 else "Orta" if risk_value >= 55 else "Yüksek"
+        risks = scenario_risk_items(scenario.get("soft_penalty_explanations", ""))
+        if not is_valid and invalid_reason:
+            risks = [business_risk_note(invalid_reason)] + [item for item in risks if item != business_risk_note(invalid_reason)]
+        risk_html = "".join(f"<li>{escape(item)}</li>" for item in risks)
+        primary_metrics = [
+            ("Toplam teklif", format_try(total_offer)),
+            ("Karlılık oranı", format_pct(scenario["computed_margin_pct"])),
+            ("Katkı kârı", format_try(contribution)),
+            ("Senaryo skoru", f"{float(scenario['scenario_score']):.0f}/100"),
+        ]
+        secondary_metrics = [
+            ("Profil uyumu", format_score(scenario.get("won_profile_fit_score"))),
+            ("Fiyat bandı uyumu", format_score(scenario.get("price_band_fit_score"))),
+            ("Model güveni", format_score(scenario.get("model_confidence_score"))),
+            ("Risk seviyesi", risk_label),
+        ]
+        primary_html = "".join(
+            "<div class='sc-mini-metric'>"
+            f"<span>{escape(metric_label)}</span>"
+            f"<b>{escape(metric_value)}</b>"
+            "</div>"
+            for metric_label, metric_value in primary_metrics
+        )
+        secondary_html = "".join(
+            "<div class='sc-mini-metric'>"
+            f"<span>{escape(metric_label)}</span>"
+            f"<b>{escape(metric_value)}</b>"
+            "</div>"
+            for metric_label, metric_value in secondary_metrics
+        )
+        cards.append(
+            "<div class='sc-strategy-card'>"
+            "<div class='sc-card-top'>"
+            "<div style='display:flex; gap:12px; align-items:flex-start;'>"
+            f"<div class='sc-card-number'>0{idx + 1}</div>"
+            f"<div class='sc-card-title'>{escape(label)}</div>"
+            "</div>"
+            f"<span class='sc-pill {status_class}'>{escape(status_label)}</span>"
+            "</div>"
+            "<div>"
+            "<div class='sc-price-label'>Ana fiyat</div>"
+            f"<div class='sc-price'>{escape(format_try(scenario['proposed_unit_price']))}</div>"
+            "</div>"
+            f"<div class='sc-summary'>{escape(strategy_business_description(label, description))}</div>"
+            "<div>"
+            "<div class='sc-metric-group-title'>Key metrics</div>"
+            f"<div class='sc-primary-metrics'>{primary_html}</div>"
+            "</div>"
+            "<div>"
+            "<div class='sc-metric-group-title'>Secondary metrics</div>"
+            f"<div class='sc-secondary-metrics'>{secondary_html}</div>"
+            "</div>"
+            "<div class='sc-risk-box'>"
+            "<div class='sc-risk-title'>Skoru düşüren riskler</div>"
+            f"<ul class='sc-risk-list'>{risk_html}</ul>"
+            "</div>"
+            "<div class='sc-rule-row'>"
+            "<div class='sc-rule-label'>Kural kontrolü</div>"
+            f"<span class='sc-pill {status_class}'>{escape(status_label)}</span>"
+            "</div>"
+            "</div>"
+        )
+    if cards:
+        st.markdown(f"<div class='sc-grid sc-card-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def scenario_table_interpretation(row: pd.Series) -> str:
+    valid = bool(row.get("Kural Durumu", False))
+    invalid_reason = business_risk_note(row.get("Geçersiz Senaryo Açıklaması", ""))
+    risks = scenario_risk_items(row.get("Risk Uyarıları / Skor Cezaları", ""))
+    has_risk = risks != ["Belirgin skor düşüren risk uyarısı yok."]
+    if not valid:
+        return f"Senaryo kesin kural nedeniyle ana öneri olmamalıdır. {invalid_reason or 'Teklif komitesi kural ihlalini incelemelidir.'}"
+    if has_risk:
+        return "Senaryo geçerli; teklif komitesi şu noktaları kontrol etmeli: " + " ".join(risks[:2])
+    return "Senaryo geçerli; belirgin ek risk uyarısı yok."
+
+
+def scenario_progress_cell(value: Any) -> str:
+    try:
+        score = max(0.0, min(100.0, float(value)))
+    except (TypeError, ValueError):
+        return escape(str(value))
+    return (
+        "<div class='sc-progress'>"
+        "<div class='sc-progress-track'>"
+        f"<div class='sc-progress-fill' style='width:{score:.1f}%'></div>"
+        "</div>"
+        f"<span class='sc-progress-value'>{score:.1f}</span>"
+        "</div>"
+    )
+
+
+def render_scenario_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    text_columns = {
+        "Geçersiz Senaryo Açıklaması",
+        "Risk Uyarıları / Skor Cezaları",
+        "Nasıl Yorumlanmalı?",
+        "Kural / Risk Notları",
+        "Benzer ihalelerden kanıt",
+        "Not / uyarı",
+    }
+    for _, row in df.iterrows():
+        cells = []
+        for column in df.columns:
+            value = row[column]
+            if column == "Senaryo Skoru":
+                cells.append(f"<td>{scenario_progress_cell(value)}</td>")
+            elif column == "Senaryo ID":
+                cells.append(f"<td class='sc-id'>{escape(str(value))}</td>")
+            elif column in text_columns:
+                cells.append(f"<td class='sc-text-cell'>{escape(str(value))}</td>")
+            else:
+                cells.append(f"<td>{escape(str(value))}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    st.markdown(
+        "<div class='sc-table-card'><div class='sc-table-scroll'>"
+        f"<table class='sc-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_scenario_decision_note() -> None:
+    st.markdown(
+        "<div class='sc-note-card'><b>Karar notu:</b> "
+        "Bu sayfa tek bir doğru fiyat seçmek için değil, farklı teklif stratejilerinin fiyat, karlılık, risk ve kural uygunluğu açısından karşılaştırılması için kullanılır. Nihai karar teklif komitesi tarafından maliyet, stok, teslimat ve ticari öncelikler dikkate alınarak verilmelidir."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def inject_reveal_compare_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .rc-section {
+                margin-top: 50px;
+            }
+            .rc-section .section-title {
+                font-size: 1.24rem;
+                line-height: 1.25;
+                margin-bottom: 0.18rem;
+            }
+            .rc-section .section-subtitle {
+                max-width: 900px;
+                color: rgba(245, 247, 250, 0.68);
+                line-height: 1.55;
+                margin-bottom: 18px;
+            }
+            .rc-grid {
+                display: grid;
+                gap: 20px;
+                align-items: stretch;
+            }
+            .rc-grid-3 {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .rc-grid-4 {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+            .rc-card,
+            .rc-summary-card,
+            .rc-story-card,
+            .rc-table-card,
+            .rc-export-card {
+                border: 1px solid rgba(248, 113, 113, 0.16);
+                background:
+                    linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022)),
+                    rgba(16, 18, 22, 0.92);
+                box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+                border-radius: 20px;
+            }
+            .rc-card {
+                min-height: 134px;
+                padding: 21px 22px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+            }
+            .rc-label {
+                color: rgba(245, 247, 250, 0.62);
+                font-size: 0.76rem;
+                font-weight: 820;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+            .rc-value {
+                color: #fff7ed;
+                font-size: 1.52rem;
+                line-height: 1.12;
+                font-weight: 860;
+                margin-top: 10px;
+                overflow-wrap: anywhere;
+            }
+            .rc-note {
+                color: rgba(245, 247, 250, 0.65);
+                font-size: 0.86rem;
+                line-height: 1.42;
+                margin-top: 12px;
+            }
+            .rc-summary-card {
+                padding: 24px;
+                border-color: rgba(251, 146, 60, 0.24);
+                background:
+                    linear-gradient(135deg, rgba(251, 146, 60, 0.10), rgba(239, 68, 68, 0.045)),
+                    rgba(16, 18, 22, 0.92);
+                margin-top: 28px;
+            }
+            .rc-summary-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 18px;
+                margin-bottom: 18px;
+            }
+            .rc-summary-title {
+                color: #fff7ed;
+                font-size: 1.18rem;
+                font-weight: 860;
+                line-height: 1.25;
+            }
+            .rc-summary-copy {
+                color: rgba(245, 247, 250, 0.73);
+                line-height: 1.58;
+                max-width: 980px;
+            }
+            .rc-pill {
+                flex: 0 0 auto;
+                border: 1px solid rgba(251, 146, 60, 0.34);
+                background: rgba(251, 146, 60, 0.12);
+                color: #fed7aa;
+                border-radius: 999px;
+                padding: 6px 10px;
+                font-size: 0.74rem;
+                font-weight: 820;
+                white-space: nowrap;
+            }
+            .rc-pill-good {
+                border-color: rgba(34, 197, 94, 0.30);
+                background: rgba(34, 197, 94, 0.10);
+                color: #bbf7d0;
+            }
+            .rc-pill-warn {
+                border-color: rgba(251, 146, 60, 0.34);
+                background: rgba(251, 146, 60, 0.12);
+                color: #fed7aa;
+            }
+            .rc-pill-bad {
+                border-color: rgba(248, 113, 113, 0.34);
+                background: rgba(248, 113, 113, 0.12);
+                color: #fecaca;
+            }
+            .rc-summary-metrics {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 12px;
+            }
+            .rc-summary-metric {
+                border: 1px solid rgba(255, 255, 255, 0.075);
+                background: rgba(255, 255, 255, 0.035);
+                border-radius: 14px;
+                padding: 13px;
+            }
+            .rc-summary-metric span {
+                display: block;
+                color: rgba(245, 247, 250, 0.55);
+                font-size: 0.72rem;
+                font-weight: 780;
+                margin-bottom: 6px;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+            }
+            .rc-summary-metric b {
+                display: block;
+                color: #fff7ed;
+                font-size: 1.08rem;
+                line-height: 1.2;
+            }
+            .rc-price-strip {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 14px;
+            }
+            .rc-price-point {
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                background: rgba(255, 255, 255, 0.035);
+                border-radius: 16px;
+                padding: 16px;
+            }
+            .rc-price-point.actual {
+                border-color: rgba(251, 146, 60, 0.30);
+                background: rgba(251, 146, 60, 0.08);
+            }
+            .rc-story-card {
+                padding: 22px;
+                display: grid;
+                grid-template-columns: 0.35fr 1fr;
+                gap: 20px;
+                align-items: center;
+            }
+            .rc-rank-value {
+                color: #fff7ed;
+                font-size: 2.2rem;
+                font-weight: 880;
+                line-height: 1;
+            }
+            .rc-story-copy {
+                color: rgba(245, 247, 250, 0.72);
+                line-height: 1.56;
+            }
+            .rc-table-card {
+                padding: 18px;
+            }
+            .rc-table-scroll {
+                overflow-x: auto;
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+            .rc-table {
+                width: 100%;
+                border-collapse: collapse;
+                min-width: 980px;
+                background: rgba(12, 14, 18, 0.88);
+            }
+            .rc-table th {
+                text-align: left;
+                color: rgba(255, 247, 237, 0.84);
+                background: rgba(26, 29, 36, 0.98);
+                border-bottom: 1px solid rgba(248, 113, 113, 0.18);
+                padding: 13px 14px;
+                font-size: 0.74rem;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+            .rc-table td {
+                color: rgba(245, 247, 250, 0.82);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+                padding: 13px 14px;
+                font-size: 0.87rem;
+                vertical-align: top;
+                line-height: 1.42;
+            }
+            .rc-table tr:nth-child(even) td {
+                background: rgba(255, 255, 255, 0.025);
+            }
+            .rc-table tr:last-child td {
+                border-bottom: 0;
+            }
+            .rc-table .rc-strong {
+                color: #fff7ed;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+            .rc-export-card {
+                margin-top: 28px;
+                padding: 18px 20px;
+                border-color: rgba(251, 146, 60, 0.22);
+                background:
+                    linear-gradient(135deg, rgba(251, 146, 60, 0.09), rgba(239, 68, 68, 0.045)),
+                    rgba(16, 18, 22, 0.92);
+                color: rgba(245, 247, 250, 0.74);
+                line-height: 1.55;
+            }
+            .rc-export-card b {
+                color: #fed7aa;
+            }
+            @media (max-width: 1180px) {
+                .rc-grid-3,
+                .rc-grid-4,
+                .rc-summary-metrics,
+                .rc-price-strip {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .rc-story-card {
+                    grid-template-columns: 1fr;
+                }
+            }
+            @media (max-width: 720px) {
+                .rc-grid-3,
+                .rc-grid-4,
+                .rc-summary-metrics,
+                .rc-price-strip {
+                    grid-template-columns: 1fr;
+                }
+                .rc-summary-top {
+                    flex-direction: column;
+                }
+                .rc-card,
+                .rc-summary-card,
+                .rc-story-card {
+                    border-radius: 18px;
+                    padding: 18px;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def reveal_rank_level(rank_pct: float) -> tuple[str, str]:
+    if rank_pct >= 75:
+        return "Güçlü uyum", "good"
+    if rank_pct >= 50:
+        return "Orta / kabul edilebilir uyum", "warn"
+    if rank_pct >= 25:
+        return "Zayıf / dikkat gerektiren uyum", "warn"
+    return "Düşük uyum, manuel inceleme gerekli", "bad"
+
+
+def reveal_overall_level(inside: bool, pct_error: float, rank_pct: float) -> tuple[str, str]:
+    if inside and pct_error <= 15 and rank_pct >= 50:
+        return "İyi uyum", "good"
+    if inside or rank_pct >= 50:
+        return "Orta uyum", "warn"
+    return "Zayıf uyum", "bad"
+
+
+def reveal_price_gap_comment(actual_price: float, mid_price: float) -> str:
+    diff = actual_price - mid_price
+    if abs(diff) < 0.01:
+        return "Gerçek fiyat, dengeli öneriyle neredeyse aynı çıktı."
+    direction = "yüksek" if diff > 0 else "düşük"
+    implication = "orta senaryonun daha ihtiyatlı kaldığını" if diff > 0 else "orta senaryonun gerçek sonuca göre yüksek kaldığını"
+    return f"Gerçek fiyat, dengeli öneriden {format_try(abs(diff))} {direction} çıktı. Bu, sistemin {implication} gösterir."
+
+
+def reveal_inside_comment(inside: bool) -> str:
+    if inside:
+        return "Gerçek kazanılmış fiyat, sistemin önerdiği düşük-yüksek koridor içinde kaldı. Bu, koridorun bu ihale için tarihsel fiyat davranışını makul yakaladığını gösterir."
+    return "Gerçek kazanılmış fiyat, önerilen koridorun dışında kaldı. Bu ihale için fiyat davranışı geçmiş emsallerden farklı olabilir; manuel analiz gerekir."
+
+
+def reveal_rank_comment_business(rank_pct: float) -> str:
+    label, _ = reveal_rank_level(rank_pct)
+    return (
+        "Bu metrik, gerçek kazanılmış senaryonun sistemin ürettiği aday senaryolar içinde ne kadar üst sıralarda kaldığını gösterir. "
+        f"Bu ihale için sonuç: {label}. Değer yükseldikçe sistemin gerçek sonuca yakın senaryoları daha iyi öne çıkardığı anlaşılır."
+    )
+
+
+def render_reveal_metric_grid(items: list[tuple[str, str, str]], columns: int = 4) -> None:
+    cards = []
+    for label, value, note in items:
+        cards.append(
+            "<div class='rc-card'>"
+            "<div>"
+            f"<div class='rc-label'>{escape(label)}</div>"
+            f"<div class='rc-value'>{escape(value)}</div>"
+            "</div>"
+            f"<div class='rc-note'>{escape(note)}</div>"
+            "</div>"
+        )
+    grid_class = "rc-grid-4" if columns == 4 else "rc-grid-3"
+    st.markdown(f"<div class='rc-grid {grid_class}'>{''.join(cards)}</div>", unsafe_allow_html=True)
+
+
+def render_reveal_summary(inside: bool, abs_error: float, pct_error: float, rank_pct: float, actual_price: float, mid_price: float) -> None:
+    overall_label, status = reveal_overall_level(inside, pct_error, rank_pct)
+    badge_class = {"good": "rc-pill-good", "warn": "rc-pill-warn", "bad": "rc-pill-bad"}[status]
+    summary = (
+        f"{reveal_inside_comment(inside)} "
+        f"{reveal_price_gap_comment(actual_price, mid_price)} "
+        f"Gerçek kazanılmış senaryo, sistem senaryolarının üst {format_pct(rank_pct)} bölümünde yer aldı."
+    )
+    metrics = [
+        ("Koridor durumu", "İçinde" if inside else "Dışında"),
+        ("Dengeli fiyattan fark", f"{format_try(abs_error)} ({format_pct(pct_error)})"),
+        ("Gerçek senaryo sırası", format_pct(rank_pct)),
+    ]
+    metric_html = "".join(
+        "<div class='rc-summary-metric'>"
+        f"<span>{escape(label)}</span>"
+        f"<b>{escape(value)}</b>"
+        "</div>"
+        for label, value in metrics
+    )
+    st.markdown(
+        "<div class='rc-summary-card'>"
+        "<div class='rc-summary-top'>"
+        "<div>"
+        "<div class='rc-summary-title'>Sonuç Özeti</div>"
+        f"<div class='rc-summary-copy'>{escape(summary)}</div>"
+        "</div>"
+        f"<span class='rc-pill {badge_class}'>Genel yorum: {escape(overall_label)}</span>"
+        "</div>"
+        f"<div class='rc-summary-metrics'>{metric_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_price_strip(corridor: dict[str, Any], actual_price: float) -> None:
+    points = [
+        ("Düşük öneri", format_try(corridor["predicted_low_price"]), "Daha rekabetçi seviye", ""),
+        ("Dengeli öneri", format_try(corridor["predicted_mid_price"]), "Emsal orta fiyat", ""),
+        ("Yüksek öneri", format_try(corridor["predicted_high_price"]), "Daha karlı seviye", ""),
+        ("Gerçek kazanılmış fiyat", format_try(actual_price), "Reveal sonrası gerçek sonuç", " actual"),
+    ]
+    html = "".join(
+        f"<div class='rc-price-point{css}'>"
+        f"<div class='rc-label'>{escape(label)}</div>"
+        f"<div class='rc-value'>{escape(value)}</div>"
+        f"<div class='rc-note'>{escape(note)}</div>"
+        "</div>"
+        for label, value, note, css in points
+    )
+    st.markdown(f"<div class='rc-price-strip'>{html}</div>", unsafe_allow_html=True)
+
+
+def render_reveal_rank_card(rank_pct: float) -> None:
+    label, status = reveal_rank_level(rank_pct)
+    badge_class = {"good": "rc-pill-good", "warn": "rc-pill-warn", "bad": "rc-pill-bad"}[status]
+    st.markdown(
+        "<div class='rc-story-card'>"
+        "<div>"
+        "<div class='rc-label'>Gerçek senaryo sırası</div>"
+        f"<div class='rc-rank-value'>{escape(format_pct(rank_pct))}</div>"
+        f"<span class='rc-pill {badge_class}'>{escape(label)}</span>"
+        "</div>"
+        f"<div class='rc-story-copy'>{escape(reveal_rank_comment_business(rank_pct))}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_reveal_table(df: pd.DataFrame) -> None:
+    headers = "".join(f"<th>{escape(str(column))}</th>" for column in df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        for column in df.columns:
+            value = escape(str(row[column]))
+            if column in {"İhale ID", "Fiyat noktası", "Metrik"}:
+                cells.append(f"<td class='rc-strong'>{value}</td>")
+            else:
+                cells.append(f"<td>{value}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+    st.markdown(
+        "<div class='rc-table-card'><div class='rc-table-scroll'>"
+        f"<table class='rc-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_reveal_export_note() -> None:
+    st.markdown(
+        "<div class='rc-export-card'><b>Karar notu:</b> "
+        "Bu sonuç tek seçili ihale için reveal sonrası kontrol raporudur. Nihai karar; maliyet, stok, teslimat, ticari öncelikler ve teklif komitesi değerlendirmesiyle verilmelidir."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def backtest_summary_comment(metrics: dict[str, float], leakage_pass: bool) -> tuple[str, str]:
+    coverage = float(metrics.get("band_coverage", 0.0))
+    mape = float(metrics.get("mape", 0.0))
+    band_score = float(metrics.get("coverage_adjusted_band_score", 0.0))
+    if not leakage_pass:
+        return (
+            "Sızıntı uyarısı",
+            "Leakage audit pass olmadığı için bu backtest sonucu güvenli performans karnesi olarak okunmamalıdır.",
+        )
+    if coverage >= 0.65 and mape <= 30 and band_score >= 0.35:
+        return (
+            "Güçlü karar desteği",
+            "Sistem fiyat koridorunu test döneminde görece tutarlı yakalamış görünüyor. Yine de sonuçlar gerçek kazanma olasılığı değil, karar destek sinyalidir.",
+        )
+    if coverage >= 0.45:
+        return (
+            "Dikkatli okunmalı",
+            "Sistem fiyat koridorunu bazı ihalelerde yakalıyor; ancak band genişliği ve hata oranları nedeniyle fiyat çıktısı karar desteği olarak dikkatli yorumlanmalıdır. Profil ve sıra dışılık sinyalleri ayrı değerlendirilmelidir.",
+        )
+    return (
+        "Zayıf fiyat uyumu",
+        "Fiyat koridoru test döneminde gerçek sonuçları sınırlı yakalamış görünüyor. Fiyat varsayımları, emsal havuzu ve segment kırılımları manuel incelenmelidir.",
+    )
+
+
+def render_backtest_summary(results: pd.DataFrame, metrics: dict[str, float], leakage_pass: bool) -> None:
+    label, comment = backtest_summary_comment(metrics, leakage_pass)
+    status = "rc-pill-good" if label == "Güçlü karar desteği" else "rc-pill-bad" if label in {"Sızıntı uyarısı", "Zayıf fiyat uyumu"} else "rc-pill-warn"
+    metric_html = "".join(
+        "<div class='rc-summary-metric'>"
+        f"<span>{escape(metric_label)}</span>"
+        f"<b>{escape(metric_value)}</b>"
+        "</div>"
+        for metric_label, metric_value in [
+            ("Test ihalesi sayısı", format_int(len(results))),
+            ("Band coverage", format_pct(float(metrics.get("band_coverage", 0.0)) * 100)),
+            ("MAE", format_try(metrics.get("mae", 0.0))),
+            ("MAPE", format_pct(metrics.get("mape", 0.0))),
+            ("Leakage", "Sızıntı yok" if leakage_pass else "Uyarı var"),
+            ("Band kalite skoru", f"{float(metrics.get('coverage_adjusted_band_score', 0.0)):.2f}"),
+        ]
+    )
+    st.markdown(
+        "<div class='rc-summary-card'>"
+        "<div class='rc-summary-top'>"
+        "<div>"
+        "<div class='rc-summary-title'>Backtest Genel Özeti</div>"
+        "<div class='rc-summary-copy'>Backtest, geçmişte kazanılmış ihaleleri canlı ihale gibi test eder. Her ihalede gerçek sonuç önce gizlenir, sistem emsal/profil/fiyat/senaryo çıktısı üretir, sonra gerçek sonuç açılarak genel tutarlılık ölçülür. Bu sayfa tek bir ihale değil, tüm test döneminin performansını gösterir.</div>"
+        f"<div class='rc-summary-copy' style='margin-top:10px;'>{escape(comment)}</div>"
+        "</div>"
+        f"<span class='rc-pill {status}'>Genel yorum: {escape(label)}</span>"
+        "</div>"
+        f"<div class='rc-summary-metrics'>{metric_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def format_backtest_table(df: pd.DataFrame, price_columns: set[str] | None = None, pct_columns: set[str] | None = None, score_columns: set[str] | None = None) -> pd.DataFrame:
+    display = df.copy()
+    price_columns = price_columns or set()
+    pct_columns = pct_columns or set()
+    score_columns = score_columns or set()
+
+    def is_missing_value(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, float) and pd.isna(value):
+            return True
+        return False
+
+    def display_value(value: Any) -> str:
+        if is_missing_value(value):
+            return "-"
+        if isinstance(value, (list, tuple, set)):
+            return ", ".join(str(item) for item in value)
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False)
+        return str(value)
+
+    def pct_value(value: Any) -> str:
+        if value == "" or is_missing_value(value):
+            return "-"
+        number = float(value)
+        return format_pct(number * 100 if abs(number) <= 1 else number)
+
+    for column in display.columns:
+        if column in price_columns:
+            display[column] = display[column].apply(format_try)
+        elif column in pct_columns:
+            display[column] = display[column].apply(pct_value)
+        elif column in score_columns:
+            display[column] = display[column].apply(format_score)
+        else:
+            display[column] = display[column].apply(display_value)
+    return display
+
+
+def render_backtest_export_panel(
+    metrics: dict[str, float],
+    results: pd.DataFrame,
+    leakage_report: pd.DataFrame,
+    segment_display: pd.DataFrame,
+    stress_results: pd.DataFrame,
+) -> None:
+    e1, e2, e3 = st.columns(3, gap="medium")
+    with e1:
+        audited_download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([metrics])), "backtest_raporu.csv", width="stretch")
+    with e2:
+        audited_download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "tender_level_sonuclar.csv", width="stretch")
+    with e3:
+        audited_download_button("Gerçek Sonuç Sızıntısı Kontrolü", dataframe_to_csv_bytes(leakage_report), "leakage_audit.csv", width="stretch")
+    e4, e5, e6 = st.columns(3, gap="medium")
+    with e4:
+        audited_download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment_display), "segment_metrikleri.csv", width="stretch")
+    with e5:
+        audited_download_button("Expert Review Export", dataframe_to_csv_bytes(expert_review_template(results)), "expert_review_export.csv", width="stretch")
+    with e6:
+        audited_download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv", width="stretch")
+
+
+def inject_reports_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .report-section {
+                margin-top: 48px;
+            }
+            .report-section-title {
+                color: #fff7ed;
+                font-size: 1.18rem;
+                font-weight: 780;
+                line-height: 1.25;
+                margin-bottom: 0.22rem;
+            }
+            .report-section-subtitle {
+                color: rgba(245, 247, 250, 0.66);
+                line-height: 1.55;
+                max-width: 900px;
+                margin-bottom: 18px;
+            }
+            .report-control-grid {
+                display: grid;
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 20px;
+            }
+            .report-control-card {
+                grid-column: span 2;
+                min-height: 156px;
+                border: 1px solid rgba(248, 113, 113, 0.16);
+                background:
+                    linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018)),
+                    rgba(16, 17, 20, 0.94);
+                border-radius: 20px;
+                padding: 20px;
+                box-shadow: 0 18px 44px rgba(0,0,0,0.24);
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 16px;
+            }
+            .report-control-card.center-left { grid-column: 2 / span 2; }
+            .report-control-card.center-right { grid-column: 4 / span 2; }
+            .report-control-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .report-control-kicker {
+                color: rgba(245,247,250,0.56);
+                font-size: .72rem;
+                font-weight: 780;
+                letter-spacing: .06em;
+                text-transform: uppercase;
+            }
+            .report-control-title {
+                color: #fff7ed;
+                font-size: 1.03rem;
+                font-weight: 820;
+                line-height: 1.25;
+                margin-top: 6px;
+            }
+            .report-control-body {
+                color: rgba(245,247,250,0.66);
+                font-size: .88rem;
+                line-height: 1.44;
+            }
+            .report-badge {
+                display: inline-flex;
+                align-items: center;
+                min-height: 26px;
+                padding: 4px 9px;
+                border-radius: 999px;
+                border: 1px solid rgba(255,255,255,0.10);
+                background: rgba(255,255,255,0.055);
+                color: #fff7ed;
+                font-size: .73rem;
+                font-weight: 760;
+                white-space: nowrap;
+            }
+            .report-badge-success {
+                border-color: rgba(34,197,94,0.28);
+                background: rgba(34,197,94,0.12);
+                color: #bbf7d0;
+            }
+            .report-badge-warning {
+                border-color: rgba(251,146,60,0.32);
+                background: rgba(251,146,60,0.12);
+                color: #fed7aa;
+            }
+            .report-badge-danger {
+                border-color: rgba(248,113,113,0.32);
+                background: rgba(248,113,113,0.13);
+                color: #fecaca;
+            }
+            .report-export-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 20px;
+                align-items: stretch;
+            }
+            .st-key-report_export_backtest,
+            .st-key-report_export_scenario,
+            .st-key-report_export_audit,
+            .st-key-report_export_review {
+                border: 1px solid rgba(248, 113, 113, 0.16);
+                background:
+                    radial-gradient(ellipse at 16% 0%, rgba(255,79,31,0.12), transparent 34%),
+                    linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.018)),
+                    rgba(14, 15, 18, 0.94);
+                border-radius: 20px;
+                padding: 20px;
+                box-shadow: 0 18px 44px rgba(0,0,0,0.24);
+                min-height: 292px;
+            }
+            .st-key-report_export_backtest [data-testid='stVerticalBlock'],
+            .st-key-report_export_scenario [data-testid='stVerticalBlock'],
+            .st-key-report_export_audit [data-testid='stVerticalBlock'],
+            .st-key-report_export_review [data-testid='stVerticalBlock'] {
+                gap: .62rem;
+            }
+            .report-export-title {
+                color: #fff7ed;
+                font-size: 1rem;
+                font-weight: 820;
+                line-height: 1.25;
+            }
+            .report-export-copy {
+                color: rgba(245,247,250,0.62);
+                font-size: .86rem;
+                line-height: 1.42;
+                min-height: 42px;
+                margin: 7px 0 12px;
+            }
+            .report-export-action {
+                border-radius: 14px;
+                padding: 10px 11px;
+                border: 1px solid rgba(255,255,255,0.08);
+                background: rgba(255,255,255,0.035);
+            }
+            .report-export-action-title {
+                color: #fff7ed;
+                font-size: .86rem;
+                font-weight: 760;
+                line-height: 1.2;
+            }
+            .report-export-action-note {
+                color: rgba(245,247,250,0.56);
+                font-size: .76rem;
+                line-height: 1.34;
+                margin-top: 3px;
+            }
+            .st-key-report_export_backtest div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_scenario div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_audit div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_review div[data-testid='stDownloadButton'] button {
+                width: 100% !important;
+                min-height: 38px !important;
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,184,117,0.28) !important;
+                background: linear-gradient(180deg, rgba(255,93,36,0.92), rgba(181,40,13,0.92)) !important;
+                color: #ffffff !important;
+                box-shadow: 0 10px 24px rgba(255,79,31,0.16) !important;
+            }
+            .report-detail-card {
+                border: 1px solid rgba(248,113,113,0.16);
+                border-radius: 20px;
+                background: rgba(14,15,18,0.92);
+                padding: 18px;
+                box-shadow: 0 18px 44px rgba(0,0,0,0.22);
+            }
+            @media (max-width: 1180px) {
+                .report-export-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .report-control-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .report-control-card,
+                .report-control-card.center-left,
+                .report-control-card.center-right { grid-column: auto; }
+            }
+            @media (max-width: 760px) {
+                .report-export-grid,
+                .report-control-grid { grid-template-columns: 1fr; }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_report_section(title: str, subtitle: str) -> None:
+    st.markdown(
+        f"<div class='report-section'><div class='report-section-title'>{escape(title)}</div>"
+        f"<div class='report-section-subtitle'>{escape(subtitle)}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_report_control_cards(cards: list[dict[str, str]]) -> None:
+    html = []
+    for idx, card in enumerate(cards):
+        extra_class = " center-left" if idx == 3 else " center-right" if idx == 4 else ""
+        status = card.get("status", "success")
+        html.append(
+            f"<div class='report-control-card{extra_class}'>"
+            "<div class='report-control-top'>"
+            "<div>"
+            f"<div class='report-control-kicker'>{escape(card['kicker'])}</div>"
+            f"<div class='report-control-title'>{escape(card['title'])}</div>"
+            "</div>"
+            f"<span class='report-badge report-badge-{escape(status)}'>{escape(card['badge'])}</span>"
+            "</div>"
+            f"<div class='report-control-body'>{escape(card['body'])}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='report-control-grid'>{''.join(html)}</div>", unsafe_allow_html=True)
+
+
+def render_export_action(label: str, note: str, data: Any, file_name: str, mime: str | None = None) -> None:
+    st.markdown(
+        "<div class='report-export-action'>"
+        f"<div class='report-export-action-title'>{escape(label)}</div>"
+        f"<div class='report-export-action-note'>{escape(note)}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    audited_download_button(label, data, file_name, mime=mime, width="stretch")
+
+
+def render_report_export_group(key: str, title: str, description: str, actions: list[dict[str, Any]]) -> None:
+    with st.container(key=key):
+        st.markdown(
+            f"<div class='report-export-title'>{escape(title)}</div>"
+            f"<div class='report-export-copy'>{escape(description)}</div>",
+            unsafe_allow_html=True,
+        )
+        for action in actions:
+            render_export_action(
+                action["label"],
+                action["note"],
+                action["data"],
+                action["file_name"],
+                action.get("mime"),
+            )
+
+
 def build_gauge(score: float, title: str = "Skor") -> go.Figure:
     fig = go.Figure(
         go.Indicator(
@@ -4155,6 +6054,7 @@ def render_profile_fit_analysis() -> None:
 
 
 def render_price_corridor_models() -> None:
+    inject_price_corridor_css()
     page_header(
         "Fiyat Koridoru ve Model Karşılaştırması",
         "Bu sayfa, seçili ihale için farklı yöntemlerin ürettiği fiyat tahminlerini ve benzer ihalelerden oluşan fiyat koridorunu gösterir.",
@@ -4205,7 +6105,6 @@ def render_price_corridor_models() -> None:
         "Linear Regression Baseline",
         "Random Forest / Ağaç Tabanlı Baseline",
         "Product Group Median",
-        "Top-K Median",
         "Cost Plus Margin",
     ]:
         item = baseline_map.get(method)
@@ -4239,64 +6138,47 @@ def render_price_corridor_models() -> None:
     avg_low = float(numeric_rows["Düşük fiyat / low"].mean())
     avg_mid = float(numeric_rows["Orta fiyat / mid"].mean())
     avg_high = float(numeric_rows["Yüksek fiyat / high"].mean())
+    confidence_label = "Yüksek" if result["model_confidence_score"] >= 70 else "Orta" if result["model_confidence_score"] >= 45 else "Düşük"
     price_display = price_table.copy()
     for column in ["Düşük fiyat / low", "Orta fiyat / mid", "Yüksek fiyat / high"]:
         price_display[column] = price_display[column].apply(lambda value: format_optional_try(value, "Henüz aktif değil"))
     price_display["Tahmin fiyatı"] = price_display["Tahmin fiyatı"].apply(lambda value: format_optional_try(value, "Henüz aktif değil"))
 
-    c1, c2, c3, c4 = st.columns(4, gap="medium")
-    with c1:
-        metric_card("Ortalama alt fiyat", format_try(avg_low), "Tüm aktif yöntemlerin düşük fiyat ortalaması", "blue")
-    with c2:
-        metric_card("Ortalama orta fiyat", format_try(avg_mid), "Tüm aktif yöntemlerin dengeli fiyat ortalaması", "green")
-    with c3:
-        metric_card("Ortalama üst fiyat", format_try(avg_high), "Tüm aktif yöntemlerin yüksek fiyat ortalaması", "amber")
-    with c4:
-        metric_card("Model güveni", format_score(result["model_confidence_score"]), "Benzer ihale sayısı ve benzerlik gücü", "purple")
+    render_price_kpi_grid(
+        [
+            ("Ortalama alt fiyat", format_try(avg_low), "Görünen aktif yöntemlerin düşük fiyat ortalaması."),
+            ("Ortalama orta fiyat", format_try(avg_mid), "Ana koridor ve baseline orta fiyatlarının ortalaması."),
+            ("Ortalama üst fiyat", format_try(avg_high), "Görünen aktif yöntemlerin yüksek fiyat ortalaması."),
+            ("Model güveni", format_score(result["model_confidence_score"]), "Benzer ihale sayısı ve benzerlik gücü."),
+        ]
+    )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header(
-        "Fiyat modeli karşılaştırması",
-        "Her yöntem için düşük, orta ve yüksek fiyat gösterilir. Product Group Median, Top-K Median, Cost Plus Margin, Linear Regression Baseline ve Random Forest / Ağaç Tabanlı Baseline tek fiyat referansı üretir; düşük/yüksek aralık bu tahminin etrafında emsal koridor genişliğiyle türetilir.",
+    st.markdown(
+        "<div class='pc-section'><div class='section-title'>Ana fiyat koridoru</div>"
+        "<div class='section-subtitle'>Benzerlik tabanlı yöntem bu sayfanın ana fiyat bandıdır; Top-K Median ayrı bir kart olarak tekrar edilmez, orta fiyatın medyan/p50 dayanağı olarak açıklanır.</div></div>",
+        unsafe_allow_html=True,
     )
-    model_cards = []
-    model_labels = {
-        "Benzerlik Tabanlı Fiyat Koridoru": "Benzerlik Tabanlı Koridor",
-        "Random Forest / Ağaç Tabanlı Baseline": "Random Forest / Ağaç Tabanlı Baseline",
-        "Product Group Median": "Product Group Median",
-        "Top-K Median": "Top-K Median",
-        "Cost Plus Margin": "Cost Plus Margin",
-    }
-    colors = ["blue", "purple", "mint", "amber", "cyan"]
-    for idx, row in price_table.iterrows():
-        model_cards.append(
-            {
-                "icon": f"0{idx + 1}",
-                "title": model_labels.get(str(row["Yöntem"]), str(row["Yöntem"])),
-                "body": str(row["Açıklama"]),
-                "pill": str(row["Güven seviyesi"]),
-                "color": colors[idx % len(colors)],
-                "lines": [
-                    ("Düşük", format_optional_try(row["Düşük fiyat / low"], "Aktif değil")),
-                    ("Orta", format_optional_try(row["Orta fiyat / mid"], "Aktif değil")),
-                    ("Yüksek", format_optional_try(row["Yüksek fiyat / high"], "Aktif değil")),
-                ],
-            }
-        )
-    render_premium_grid(model_cards, columns=3, size="large-size")
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    st.dataframe(
-        price_display,
-        hide_index=True,
-        width="stretch",
+    render_primary_corridor_card(corridor, confidence_label)
+
+    baseline_rows = [row for row in rows if row["Yöntem"] != "Benzerlik Tabanlı Fiyat Koridoru"]
+    st.markdown(
+        "<div class='pc-section'><div class='section-title'>Baseline karşılaştırması</div>"
+        "<div class='section-subtitle'>Linear Regression, Random Forest / Ağaç Tabanlı Baseline, Product Group Median ve Cost Plus Margin tek fiyat referansı üretir; düşük/yüksek aralıklar bu referansın etrafında emsal koridor genişliğiyle türetilir.</div></div>",
+        unsafe_allow_html=True,
     )
-    info_callout(
-        "Fiyat koridoru tek başına karar değildir. Bu fiyatlar; emsal ihale analizi, profil uyumu, karlılık beklentisi ve risk göstergeleriyle birlikte değerlendirilmelidir.",
-        "Karar notu:",
+    render_price_baseline_grid(baseline_rows)
+
+    st.markdown(
+        "<div class='pc-section'><div class='section-title'>Model comparison table</div>"
+        "<div class='section-subtitle'>Ana koridor ve ayrı baseline yöntemleri aynı tabloda karşılaştırılır. Top-K Median tekrarı görünür listeden çıkarılmıştır.</div></div>",
+        unsafe_allow_html=True,
     )
+    render_price_comparison_table(price_display)
+    render_price_decision_note()
 
 
 def render_scenario_analysis() -> None:
+    inject_scenario_css()
     page_header(
         "Teklif Senaryoları",
         "Bu sayfa fiyat koridorundan türetilen agresif, dengeli ve muhafazakâr teklif stratejilerini karşılaştırır. Amaç tek bir doğru fiyat vermek değil; fiyat, karlılık, katkı kârı ve risk etkisini yan yana göstermektir.",
@@ -4313,27 +6195,21 @@ def render_scenario_analysis() -> None:
     weights = load_scenario_weights()
     valid_scenarios = scenarios[scenarios["hard_constraints_valid"].astype(bool)].copy()
 
-    c1, c2, c3 = st.columns(3, gap="medium")
-    with c1:
-        metric_card("Model Güven Skoru", f"{result['model_confidence_score']:.1f}/100", "Benzer ihale sayısı ve uyumu", "blue")
-    with c2:
-        metric_card("Orta Fiyat", format_try(result["corridor"]["predicted_mid_price"]), "Fiyat koridoru merkezi", "green")
-    with c3:
-        metric_card("Temel kurala uygun senaryo", format_int(scenarios["hard_constraints_valid"].sum()), "Minimum karlılık eşiğini ve temel fiyat kurallarını geçen seçenek sayısı", "amber")
-
-    info_callout(
-        (
-            "Senaryo skoru gerçek kazanma olasılığı değildir. Aktif ağırlıklar: "
-            f"%{weights.get('won_profile_fit_score', 0) * 100:.0f} profil uyumu, "
-            f"%{weights.get('price_band_fit_score', 0) * 100:.0f} fiyat bandı uyumu, "
-            f"%{weights.get('margin_score', 0) * 100:.0f} beklenen karlılık, "
-            f"%{weights.get('model_confidence_score', 0) * 100:.0f} model güveni ve "
-            f"-%{abs(weights.get('risk_penalty_score', 0)) * 100:.0f} risk cezası. "
-            "Skor, teklif seçeneğinin geçmiş kazanılmış veriyle ne kadar uyumlu olduğunu gösterir."
-        ),
-        "Senaryo skoru nasıl okunur?",
+    render_scenario_kpi_grid(
+        [
+            ("Model Güven Skoru", f"{result['model_confidence_score']:.1f}/100", "Benzer ihale sayısı ve emsal uyumuna göre çıktı güveni."),
+            ("Orta Fiyat", format_try(result["corridor"]["predicted_mid_price"]), "Fiyat koridorunun dengeli merkezi."),
+            ("Temel kurala uygun senaryo", format_int(scenarios["hard_constraints_valid"].sum()), "Minimum karlılık eşiğini ve temel fiyat kurallarını geçen seçenek sayısı."),
+        ]
     )
-    render_formula_card()
+
+    st.markdown(
+        "<div class='sc-section'><div class='section-title'>Senaryo skoru açıklaması</div>"
+        "<div class='section-subtitle'>Skor, teklif stratejilerini karşılaştırmak için kullanılır; gerçek kazanma olasılığı değildir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_scenario_score_explanation(weights)
+
     with st.expander("Senaryo kuralları nasıl çalışır?", expanded=False):
         info_callout(
             "Kesin kurallar ihlal edilirse senaryo önerilmez. Risk uyarıları ise senaryoyu engellemez; ancak skorunu düşürür ve manuel kontrol ihtiyacını artırır.",
@@ -4351,17 +6227,17 @@ def render_scenario_analysis() -> None:
             colors=["blue", "purple", "green", "amber", "cyan", "blue"],
         )
 
-    section_header(
-        "Öne Çıkan Fiyat Senaryoları",
-        "Bu kartlar fiyat ve karlılık stratejilerini gösterir. Mixed-type clustering ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir.",
-        "Senaryo kartları",
+    st.markdown(
+        "<div class='sc-section'><div class='section-title'>Öne Çıkan Fiyat Senaryoları</div>"
+        "<div class='section-subtitle'>Bu kartlar Agresif Uyum, Dengeli ve Marj Koruma stratejilerini fiyat, karlılık, risk ve kural uygunluğu açısından karşılaştırır. Mixed-type clustering ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir.</div></div>",
+        unsafe_allow_html=True,
     )
     if valid_scenarios.empty:
         st.warning(result.get("failure_reason") or "Geçerli öneri üretilemedi. Manuel teklif komitesi incelemesi önerilir.")
     strategy_targets = [
-        ("aggressive_fit", "Agresif Uyum Senaryosu", "Bu senaryo, geçmiş kazanılmış ihale profiline ve fiyat bandına daha yakın kalmaya çalışır. Daha rekabetçi olabilir ancak marjı düşürebilir."),
-        ("balanced", "Dengeli Senaryo", "Bu senaryo, fiyat rekabeti ile marjı dengede tutmaya çalışır. Genellikle ana karşılaştırma senaryosu olarak kullanılabilir."),
-        ("margin_protect", "Marj Koruma Senaryosu", "Bu senaryo, karlılığı korumaya daha fazla önem verir. Ancak fiyat geçmiş emsal bandından uzaklaşabilir ve rekabet riski artabilir."),
+        ("aggressive_fit", "Agresif Uyum Senaryosu", "Bu senaryo, fiyatı emsal koridora yakın tutarak daha rekabetçi bir teklif oluşturmayı hedefler."),
+        ("balanced", "Dengeli Senaryo", "Bu senaryo, fiyat bandı uyumu, karlılık ve risk seviyesini dengede tutmaya çalışır."),
+        ("margin_protect", "Marj Koruma Senaryosu", "Bu senaryo, karlılığı korumaya daha fazla ağırlık verir."),
     ]
     selected_cards = []
     selected_indices: set[int] = set()
@@ -4374,40 +6250,7 @@ def render_scenario_analysis() -> None:
         idx = candidates["scenario_score"].astype(float).idxmax()
         selected_indices.add(int(idx))
         selected_cards.append((label, description, scenarios.loc[idx]))
-    scenario_cards_html = ""
-    card_colors = ["blue", "green", "amber"]
-    for idx, (label, description, scenario) in enumerate(selected_cards):
-        status = "good" if bool(scenario["hard_constraints_valid"]) else "bad"
-        invalid_reason = clean_user_facing_note(scenario.get("invalid_reason", ""))
-        status_label = "Temel kurallar uygun" if bool(scenario["hard_constraints_valid"]) else f"Geçersiz: {invalid_reason}"
-        total_offer = float(scenario["proposed_unit_price"]) * float(tender.get("quantity", 0))
-        contribution = total_offer * float(scenario["computed_margin_pct"]) / 100
-        risk_value = max(0.0, 100 - float(scenario["risk_penalty_score"]))
-        risk_label = "Düşük" if risk_value >= 75 else "Orta" if risk_value >= 55 else "Yüksek"
-        soft_text = clean_user_facing_note(scenario.get("soft_penalty_explanations", ""), 180) or "Belirgin risk uyarısı yok"
-        scenario_cards_html += premium_card_html(
-            title=label,
-            value=format_try(scenario["proposed_unit_price"]),
-            body=description,
-            icon=f"0{idx + 1}",
-            pill=status_label,
-            color=card_colors[idx % len(card_colors)],
-            size="scenario-size",
-            lines=[
-                ("Toplam teklif", format_try(total_offer)),
-                ("Karlılık oranı", format_pct(scenario["computed_margin_pct"])),
-                ("Katkı kârı", format_try(contribution)),
-                ("Profil uyumu", format_score(scenario.get("won_profile_fit_score"))),
-                ("Fiyat bandı uyumu", format_score(scenario.get("price_band_fit_score"))),
-                ("Model güveni", format_score(scenario.get("model_confidence_score"))),
-                ("Risk seviyesi", risk_label),
-                ("Senaryo skoru", f"{scenario['scenario_score']:.0f}/100"),
-                ("Kural kontrolü", "Temel kurallar uygun" if bool(scenario["hard_constraints_valid"]) else invalid_reason),
-                ("Skor düşüş nedeni", soft_text),
-            ],
-        )
-    if scenario_cards_html:
-        st.markdown(f"<div class='card-grid three-col'>{scenario_cards_html}</div>", unsafe_allow_html=True)
+    render_scenario_cards(selected_cards, tender)
 
     table = scenarios[
         [
@@ -4449,20 +6292,35 @@ def render_scenario_analysis() -> None:
         "Nasıl Yorumlanmalı?",
         "Kural / Risk Notları",
     ]
-    for column in ["Geçersiz Senaryo Açıklaması", "Risk Uyarıları / Skor Cezaları", "Kural / Risk Notları"]:
+    for column in ["Geçersiz Senaryo Açıklaması"]:
         if column in table:
             table[column] = table[column].apply(clean_user_facing_note)
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    st.dataframe(
-        table,
-        hide_index=True,
-        width="stretch",
-        column_config={
-            "Önerilen Birim Fiyat": st.column_config.NumberColumn(format="%.2f TL"),
-            "Beklenen Karlılık Oranı": st.column_config.NumberColumn(format="%.2f"),
-            "Senaryo Skoru": st.column_config.ProgressColumn(format="%.1f", min_value=0, max_value=100),
-        },
+    if "Nasıl Yorumlanmalı?" in table:
+        table["Nasıl Yorumlanmalı?"] = table.apply(scenario_table_interpretation, axis=1)
+    if "Kural / Risk Notları" in table:
+        table["Kural / Risk Notları"] = table["Kural / Risk Notları"].apply(lambda value: " • ".join(scenario_risk_items(value)))
+    if "Risk Uyarıları / Skor Cezaları" in table:
+        table["Risk Uyarıları / Skor Cezaları"] = table["Risk Uyarıları / Skor Cezaları"].apply(lambda value: " • ".join(scenario_risk_items(value)))
+    table_display = table.copy()
+    for column in ["Önerilen Birim Fiyat", "Referans Fiyat"]:
+        if column in table_display:
+            table_display[column] = table_display[column].apply(format_try)
+    if "Beklenen Karlılık Oranı" in table_display:
+        table_display["Beklenen Karlılık Oranı"] = table_display["Beklenen Karlılık Oranı"].apply(format_pct)
+    for column in ["Profil Uyumu", "Fiyat Bandı Uyumu", "Karlılık Skoru", "Risk Cezası", "Güven Skoru"]:
+        if column in table_display:
+            table_display[column] = table_display[column].apply(format_score)
+    if "Kural Durumu" in table_display:
+        table_display["Kural Durumu"] = table_display["Kural Durumu"].apply(lambda value: "Temel kurallar uygun" if bool(value) else "Geçersiz")
+    if "Dengeli Seçenek Havuzunda mı?" in table_display:
+        table_display["Dengeli Seçenek Havuzunda mı?"] = table_display["Dengeli Seçenek Havuzunda mı?"].apply(lambda value: "Evet" if bool(value) else "Hayır")
+    st.markdown(
+        "<div class='sc-section'><div class='section-title'>Scenario comparison table</div>"
+        "<div class='section-subtitle'>Tüm senaryolar aynı metriklerle karşılaştırılır. Uzun risk açıklamaları kesilmeden, tablo içinde satır kırarak gösterilir.</div></div>",
+        unsafe_allow_html=True,
     )
+    render_scenario_table(table_display)
+    render_scenario_decision_note()
     recommendation_columns = [
         "strategy_label",
         "changed_parameter",
@@ -4493,10 +6351,14 @@ def render_scenario_analysis() -> None:
                 "caveat": "Not / uyarı",
             }
         )
-        st.dataframe(recommendation_display, hide_index=True, width="stretch")
+        for text_column in ["Benzer ihalelerden kanıt", "Not / uyarı"]:
+            if text_column in recommendation_display:
+                recommendation_display[text_column] = recommendation_display[text_column].apply(clean_user_facing_note)
+        render_scenario_table(recommendation_display)
 
 
 def render_reveal_compare() -> None:
+    inject_reveal_compare_css()
     page_header(
         "Gerçek Sonuçla Karşılaştır",
         "Bu sayfa tek seçili test ihalesinde sonuç açıldıktan sonra fiyat koridoru ve profil tanılama çıktılarının gerçek kazanılmış sonuçla nasıl hizalandığını gösterir. Mixed-type clustering ve Isolation Forest burada fiyat tahmini olarak kullanılmaz; profil ve sıra dışılık sinyali olarak okunur.",
@@ -4559,125 +6421,99 @@ def render_reveal_compare() -> None:
     top50_avg_similarity = float(result.get("top50_avg_similarity", quality.get("topk_avg_similarity", 0.0)))
     isolation_status = "Geçmiş profile uygun" if bool(best.get("is_inlier", best.get("won_profile_fit_score", 0) >= 55)) else "Sıra dışı / manuel inceleme önerilir"
 
-    info_callout(
-        "Bu ekran tek bir ihaleyi inceler. Backtest Sonuçları sayfası ise aynı mantığı test yılındaki tüm ihalelere uygular ve toplu performans oranlarını gösterir.",
-        "Bu sayfa Backtest’ten nasıl farklı?",
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Tek ihale sonuç raporu</div>"
+        "<div class='section-subtitle'>Bu ekran tek seçili ihaleyi inceler. Backtest Sonuçları sayfası ise aynı reveal mantığını test yılındaki tüm ihalelere uygular ve toplu performans oranlarını gösterir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_reveal_summary(inside, abs_error, pct_error, rank_pct, actual_price, corridor["predicted_mid_price"])
+
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Profil Özeti</div>"
+        "<div class='section-subtitle'>Profil tanılama bu ihalenin geçmiş kazanılmış profillere uygun görünüp görünmediğini gösterir. K-Means / mixed-type clustering ve Isolation Forest fiyat önermez; profil ve sıra dışılık sinyali verir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_reveal_metric_grid(
+        [
+            ("Profil uyum skoru", format_score(best.get("won_profile_fit_score")), "Seçili ihalenin geçmiş kazanılmış profile yakınlığı."),
+            ("Uyum yorumu", fit_level(best.get("won_profile_fit_score")), "Düşükse manuel inceleme ihtiyacı artar."),
+            ("Veri güveni", format_score(best.get("model_confidence_score")), "Benzer ihale sayısı ve emsal gücüne göre okuma kalitesi."),
+            ("Profil grubu", str(best.get("cluster_name", "Hesaplanamadı")), f"Grup ID: {best.get('cluster_id', 'Hesaplanamadı')} · n={format_int(best.get('cluster_count'))}"),
+            ("Isolation Forest durumu", isolation_status, "Geçmiş kazanılmış dağılım içindeki tipiklik sinyali."),
+            ("Atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin profil grubuna ne kadar net yakın olduğu."),
+        ],
+        columns=3,
     )
 
-    section_header("Profil Uyumu Değerlendirmesi", "Seçili ihale geçmiş kazanılmış profile ne kadar yakın görünüyor?")
-    c1, c2, c3 = st.columns(3, gap="medium")
-    with c1:
-        metric_card("Profil uyum skoru", format_score(best.get("won_profile_fit_score")), "Seçili ihalenin geçmiş kazanılmış profile yakınlığı")
-    with c2:
-        metric_card("Uyum yorumu", fit_level(best.get("won_profile_fit_score")), "Düşükse manuel inceleme ihtiyacı artar")
-    with c3:
-        metric_card("Veri güveni", format_score(best.get("model_confidence_score")), "Benzer ihale sayısı ve emsal gücüne göre okuma kalitesi")
-
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    left, right = st.columns(2, gap="medium")
-    with left:
-        render_kv_card(
-            "Profil Grubu",
-            [
-                ("Atandığı profil grubu", str(best.get("cluster_name", "Hesaplanamadı"))),
-                ("Profil grup ID", str(best.get("cluster_id", "Hesaplanamadı"))),
-                ("Geçmiş ihale sayısı", format_int(best.get("cluster_count"))),
-                ("Baskın ürün grubu", str(best.get("cluster_dominant_product_group", "Hesaplanamadı"))),
-                ("Atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0))),
-                ("Cluster merkezine uzaklık", format_decimal(best.get("cluster_distance"))),
-                ("İkinci en yakın cluster uzaklığı", format_decimal(best.get("cluster_second_distance"))),
-            ],
-            "Bu grup, test ihalesinin geçmişte kazanılmış hangi başarı profiline yakın konumlandığını gösterir.",
-        )
-    with right:
-        render_kv_card(
-            "Profil ve Sıra Dışılık Yorumu",
-            [
-                ("Durum", isolation_status),
-                ("Profile uygunluk skoru", format_score(best.get("inlier_score"))),
-                ("Yorum", "Model bu kazanılmış test ihalesini geçmiş profile uygun tanımış." if isolation_status == "Geçmiş profile uygun" else "Bu ihale kazanılmış olsa bile geçmiş profilden sıra dışı olabilir; bu kayıp tahmini değildir, manuel inceleme sinyalidir."),
-            ],
-            "Bu sonuç kazanma olasılığı değildir; geçmiş kazanılmış veri dağılımına uygunluk kontrolüdür.",
-        )
-
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header(
-        "Profil Tanılama Metrikleri",
-        "Bu bölüm mixed-type clustering ve Isolation Forest çıktılarını ayrı okur. Bunlar fiyat doğruluğu metriği değildir; profil grubu ve sıra dışılık kontrolüdür.",
-        "Mixed-Type / Isolation Forest",
+    st.markdown(
+        "<div class='rc-section'><div class='section-kicker'>Mixed-Type / Isolation Forest</div>"
+        "<div class='section-title'>Profil Tanılama Metrikleri</div>"
+        "<div class='section-subtitle'>Bu compact özet, profil grubu atamasını ve sıra dışılık sinyalini gösterir; fiyat doğruluğu metriği değildir.</div></div>",
+        unsafe_allow_html=True,
     )
-    d1, d2, d3, d4 = st.columns(4, gap="medium")
-    with d1:
-        metric_card("Mixed-type atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin atandığı profil grubuna ne kadar net yakın olduğunu gösterir.", "purple")
-    with d2:
-        metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Profil grupları ayrışıyor mu? 1'e yakın değer daha net ayrım demektir.", "blue")
-    with d3:
-        metric_card("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Pozitif değer daha tipik profil; eşik altı değer manuel inceleme sinyalidir.", "amber")
-    with d4:
-        metric_card("Manual review", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise geçmiş kazanılmış profile göre sıra dışılık kontrolü gerekir.", "green" if bool(best.get("is_inlier", True)) else "amber")
-    d5, d6, d7 = st.columns(3, gap="medium")
-    with d5:
-        metric_card("Isolation threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Anomaly score bu sınırın altındaysa sıra dışı kabul edilir.", "cyan")
-    with d6:
-        metric_card("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0) or 0) * 100), "Modelin beklediği yaklaşık manuel inceleme oranı.", "purple")
-    with d7:
-        metric_card("Ürün grubu anomaly oranı", format_pct(float(best.get("segment_anomaly_rate", 0) or 0) * 100), "Aynı ürün grubundaki daha az tipik geçmiş kayıt oranı.", "amber")
+    render_reveal_metric_grid(
+        [
+            ("Mixed-type atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Profil grubuna yakınlık netliği."),
+            ("Manual review", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise manuel kontrol sinyali vardır."),
+            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Eşik altı değer daha sıra dışı kabul edilir."),
+            ("Ürün grubu anomaly oranı", format_pct(float(best.get("segment_anomaly_rate", 0) or 0) * 100), "Aynı ürün grubunda daha az tipik kayıt oranı."),
+        ],
+        columns=4,
+    )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Emsal İhale Kalitesi", "Sistemin gerçek sonucu açmadan önce seçtiği emsal havuzunun ne kadar tutarlı olduğunu gösterir.")
-    e1, e2, e3, e4 = st.columns(4, gap="medium")
-    with e1:
-        metric_card("En yakın 10 emsalin benzerliği", f"{top10_avg_similarity:.2f}", "1'e yaklaştıkça emsaller daha güçlü")
-    with e2:
-        metric_card("İlk 50 emsalin benzerliği", f"{top50_avg_similarity:.2f}", "Geniş emsal havuzunun ortalama yakınlığı")
-    with e3:
-        metric_card("Ürün Grubu Eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Emsal havuzunda aynı ürün grubu")
-    with e4:
-        metric_card("Bölge Eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Emsal havuzunda aynı bölge")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Emsal Kalitesi</div>"
+        "<div class='section-subtitle'>Sistemin gerçek sonucu açmadan önce seçtiği emsal havuzunun ne kadar tutarlı olduğunu gösterir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_reveal_metric_grid(
+        [
+            ("En yakın 10 emsalin benzerliği", f"{top10_avg_similarity:.2f}", "1'e yaklaştıkça emsaller daha güçlü."),
+            ("İlk 50 emsalin benzerliği", f"{top50_avg_similarity:.2f}", "Geniş emsal havuzunun ortalama yakınlığı."),
+            ("Ürün Grubu Eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Emsal havuzunda aynı ürün grubu."),
+            ("Bölge Eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Emsal havuzunda aynı bölge."),
+        ],
+        columns=4,
+    )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Fiyat Karşılaştırması", "Gerçek kazanılmış fiyat düşük, orta ve yüksek koridorla karşılaştırılır.")
-    c1, c2, c3, c4 = st.columns(4, gap="medium")
-    with c1:
-        metric_card("Düşük öneri", format_try(corridor["predicted_low_price"]), "Daha rekabetçi fiyat seviyesi")
-    with c2:
-        metric_card("Dengeli öneri", format_try(corridor["predicted_mid_price"]), "Emsallerin orta fiyat seviyesi")
-    with c3:
-        metric_card("Yüksek öneri", format_try(corridor["predicted_high_price"]), "Daha karlı ama rekabet riski yüksek seviye")
-    with c4:
-        metric_card("Gerçek kazanılmış fiyat", format_try(actual_price), "Sonuç açıldıktan sonra")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Fiyat Karşılaştırması</div>"
+        "<div class='section-subtitle'>Reveal sonrası gerçek kazanılmış fiyat, sistemin düşük-dengeli-yüksek fiyat koridoruyla karşılaştırılır.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_price_strip(corridor, actual_price)
 
-    c5, c6, c7 = st.columns(3, gap="medium")
-    with c5:
-        metric_card("Gerçek fiyat aralıkta mı?", "Evet" if inside else "Hayır", "Gerçek kazanılmış fiyat düşük-yüksek aralığında mı?")
-    with c6:
-        metric_card("Dengeli fiyattan fark", format_try(abs_error), "Gerçek fiyat ile orta öneri arasındaki TL farkı")
-    with c7:
-        metric_card("Dengeli fiyattan yüzde fark", format_pct(pct_error), "Gerçek fiyat ile orta öneri arasındaki yüzde fark")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Fiyat Farkı</div>"
+        "<div class='section-subtitle'>Bu bölüm fiyat koridorunun gerçek sonucu ne kadar yakaladığını business-wise özetler.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_reveal_metric_grid(
+        [
+            ("Gerçek fiyat aralıkta mı?", "Evet" if inside else "Hayır", reveal_inside_comment(inside)),
+            ("Dengeli fiyattan TL fark", format_try(abs_error), reveal_price_gap_comment(actual_price, corridor["predicted_mid_price"])),
+            ("Dengeli fiyattan yüzde fark", format_pct(pct_error), "Gerçek fiyat ile orta öneri arasındaki göreli fark."),
+        ],
+        columns=3,
+    )
 
     price_compare = pd.DataFrame(
         [
-            {"Sıra": 1, "Fiyat noktası": "Düşük öneri", "Birim fiyat": corridor["predicted_low_price"], "Ne anlatır?": "Daha rekabetçi teklif seviyesi"},
-            {"Sıra": 2, "Fiyat noktası": "Gerçek kazanılmış fiyat", "Birim fiyat": actual_price, "Ne anlatır?": "Sonuç açıldıktan sonra görülen tarihsel gerçek fiyat"},
-            {"Sıra": 3, "Fiyat noktası": "Dengeli öneri", "Birim fiyat": corridor["predicted_mid_price"], "Ne anlatır?": "Emsallerin orta fiyat seviyesi"},
-            {"Sıra": 4, "Fiyat noktası": "Seçilen en iyi senaryo", "Birim fiyat": float(best["proposed_unit_price"]), "Ne anlatır?": "Sistemin en yüksek skorlu teklif seçeneği"},
-            {"Sıra": 5, "Fiyat noktası": "Yüksek öneri", "Birim fiyat": corridor["predicted_high_price"], "Ne anlatır?": "Daha yüksek karlılık hedefleyen fiyat seviyesi"},
+            {"Fiyat noktası": "Düşük öneri", "Birim fiyat": format_try(corridor["predicted_low_price"]), "Ne anlatır?": "Daha rekabetçi teklif seviyesi"},
+            {"Fiyat noktası": "Gerçek kazanılmış fiyat", "Birim fiyat": format_try(actual_price), "Ne anlatır?": "Sonuç açıldıktan sonra görülen tarihsel gerçek fiyat"},
+            {"Fiyat noktası": "Dengeli öneri", "Birim fiyat": format_try(corridor["predicted_mid_price"]), "Ne anlatır?": "Emsallerin orta fiyat seviyesi"},
+            {"Fiyat noktası": "Seçilen en iyi senaryo", "Birim fiyat": format_try(float(best["proposed_unit_price"])), "Ne anlatır?": "Sistemin en yüksek skorlu teklif seçeneği"},
+            {"Fiyat noktası": "Yüksek öneri", "Birim fiyat": format_try(corridor["predicted_high_price"]), "Ne anlatır?": "Daha yüksek karlılık hedefleyen fiyat seviyesi"},
         ]
     )
-    st.dataframe(
-        price_compare.drop(columns=["Sıra"]),
-        hide_index=True,
-        width="stretch",
-        column_config={"Birim fiyat": st.column_config.NumberColumn(format="%.2f TL")},
-    )
+    render_reveal_table(price_compare)
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Senaryo Sıralaması", "Gerçek kazanılmış senaryonun sistem önerileri içinde ne kadar üstte kaldığını gösterir.")
-    r1, r2 = st.columns(2, gap="medium")
-    with r1:
-        metric_card("Gerçek senaryo sırası", format_pct(rank_pct), "Gerçek fiyat aday senaryoların ne kadar üstünde kaldı? Yüksek değer daha iyi.")
-    with r2:
-        render_small_card("Yorum", scenario_rank_comment(rank_pct))
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Senaryo Sıralaması</div>"
+        "<div class='section-subtitle'>Gerçek kazanılmış senaryonun sistemin aday senaryo listesinde ne kadar üstte kaldığını gösterir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_reveal_rank_card(rank_pct)
 
     comparison = pd.DataFrame(
         [
@@ -4715,18 +6551,29 @@ def render_reveal_compare() -> None:
             }
         )
         st.session_state[comparison_key] = True
-    st.dataframe(comparison, hide_index=True, width="stretch")
-    message = (
-        "Gerçek kazanılmış fiyat, sistemin önerdiği fiyat koridorunun içinde kaldı. "
-        "Bu, fiyat koridorunun bu ihale tipi için geçmiş kazanım davranışını makul şekilde yakaladığını gösterir."
-        if inside
-        else "Gerçek kazanılmış fiyat koridorun dışında kaldı. Bu ihale tipi için manuel fiyat incelemesi önerilir."
+
+    comparison_display = comparison.copy()
+    for column in ["Gerçek Kazanılmış Birim Fiyat", "Tahmin Düşük", "Tahmin Orta", "Tahmin Yüksek", "Mutlak Hata"]:
+        if column in comparison_display:
+            comparison_display[column] = comparison_display[column].apply(format_try)
+    for column in ["Yüzde Hata", "Gerçek Karlılık Oranı", "Gerçek Senaryo Sıralaması"]:
+        if column in comparison_display:
+            comparison_display[column] = comparison_display[column].apply(format_pct)
+    for column in ["Senaryo Skoru", "Profil Uyum Skoru"]:
+        if column in comparison_display:
+            comparison_display[column] = comparison_display[column].apply(format_score)
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Detay Tablosu</div>"
+        "<div class='section-subtitle'>Reveal sonrası tek ihale karşılaştırmasının denetlenebilir özet tablosu.</div></div>",
+        unsafe_allow_html=True,
     )
-    st.markdown(f"<div class='info-box'>{escape(message)}</div>", unsafe_allow_html=True)
+    render_reveal_table(comparison_display)
+    render_reveal_export_note()
     audited_download_button("Karşılaştırma CSV indir", dataframe_to_csv_bytes(comparison), "senaryo_karsilastirma.csv")
 
 
 def render_backtest() -> None:
+    inject_reveal_compare_css()
     page_header(
         "Backtest Sonuçları",
         "Bu sayfa tek bir ihaleyi değil, test yılındaki tüm ihaleleri topluca ölçer. Her ihale önce gerçek sonucu gizlenmiş gibi analiz edilir; sonra gerçek kazanılmış sonuç açılarak sistemin genel tutarlılığı hesaplanır.",
@@ -4773,39 +6620,33 @@ def render_backtest() -> None:
     anomaly_rate = 1 - inlier_recall
     app_config = load_app_config()
     anomaly_warning_threshold = float(app_config.get("profile_fit", {}).get("aggressive_anomaly_rate_threshold", 0.25))
+    leakage_pass = bool(not results.empty and (results["leakage_audit_status"] == "pass").all())
 
-    info_callout(
-        "Backtest geriye dönük canlı testtir: test yılındaki her ihalenin gerçek kazanılmış fiyatı ve karlılığı model girdisinden gizlenir, sistem önce emsal/profil/fiyat/senaryo çıktısı üretir, sonra gerçek sonuç açılarak karşılaştırılır. Gerçek Sonuçla Karşılaştır sayfası tek seçili ihaleyi gösterir; Backtest bu kontrolü tüm test yılına yayar. Amaç kazanma/kaybetme tahmini değil, fiyat aralığı ve profil uyumu yaklaşımının geçmiş kazanılmış ihalelerde ne kadar tutarlı çalıştığını ölçmektir.",
-        "Backtest neyi anlatır?",
-    )
+    render_backtest_summary(results, metrics, leakage_pass)
     selected_row = selected_test_tender()
     selected_result = pd.DataFrame()
     if selected_row is not None and "tender_id" in results:
         selected_result = results[results["tender_id"].astype(str) == str(selected_row.get("tender_id"))]
     if not selected_result.empty:
         selected = selected_result.iloc[0]
-        st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-        section_header(
-            "Seçili İhale Backtest Detayı",
-            "Bu bölüm yalnızca seçili ihalenin reveal sonrası tekil kontrolüdür. Aşağıdaki Backtest Geneli bölümleri tüm test yılı ortalamalarını gösterir.",
-            "Seçili İhale",
-        )
-        si1, si2, si3, si4 = st.columns(4, gap="medium")
-        with si1:
-            metric_card("Orta koridor", format_try(selected["predicted_mid_price"]), "Seçili ihale için Top-K medyan fiyatı", "blue")
-        with si2:
-            metric_card("Gerçek fiyat", format_try(selected["actual_won_unit_price"]), "Reveal sonrası gerçek kazanılmış fiyat", "green")
-        with si3:
-            metric_card("Tekil mutlak hata", format_try(selected["absolute_error_mid"]), "Seçili ihale orta koridoru ile gerçek fiyat farkı", "amber")
-        with si4:
-            metric_card("Tekil yüzde hata", format_pct(float(selected["percentage_error_mid"])), "Bu oran toplu MAPE değildir", "purple")
-        si5, si6, si7 = st.columns(3, gap="medium")
-        with si5:
-            metric_card("Seçili band", f"{format_try(selected['predicted_low_price'])} - {format_try(selected['predicted_high_price'])}", "Seçili ihale düşük-yüksek koridoru", "cyan")
-        with si6:
-            metric_card("Band içinde mi?", "Evet" if bool(selected["actual_inside_band"]) else "Hayır", "Yalnızca seçili ihale için kapsama kontrolü", "green" if bool(selected["actual_inside_band"]) else "red")
-        with si7:
-            metric_card("Seçili band genişliği", format_try(selected["band_width"]), "Seçili ihale düşük-yüksek farkı", "amber")
+        with st.expander("Seçili ihale detayını göster", expanded=False):
+            st.markdown(
+                "<div class='rc-section' style='margin-top:0;'><div class='section-title'>Seçili İhale Backtest Detayı</div>"
+                "<div class='section-subtitle'>Bu bölüm yalnızca seçili ihale için reveal sonrası tekil kontroldür. Aşağıdaki Backtest Geneli bölümleri tüm test yılı ortalamalarını gösterir.</div></div>",
+                unsafe_allow_html=True,
+            )
+            render_reveal_metric_grid(
+                [
+                    ("Orta koridor", format_try(selected["predicted_mid_price"]), "Seçili ihale için Top-K medyan fiyatı."),
+                    ("Gerçek fiyat", format_try(selected["actual_won_unit_price"]), "Reveal sonrası gerçek kazanılmış fiyat."),
+                    ("Tekil mutlak hata", format_try(selected["absolute_error_mid"]), "Orta koridor ile gerçek fiyat farkı."),
+                    ("Tekil yüzde hata", format_pct(float(selected["percentage_error_mid"])), "Bu oran toplu MAPE değildir."),
+                    ("Seçili band", f"{format_try(selected['predicted_low_price'])} - {format_try(selected['predicted_high_price'])}", "Seçili ihale düşük-yüksek koridoru."),
+                    ("Band içinde mi?", "Evet" if bool(selected["actual_inside_band"]) else "Hayır", "Yalnızca seçili ihale için kapsama kontrolü."),
+                    ("Seçili band genişliği", format_try(selected["band_width"]), "Seçili ihale düşük-yüksek farkı."),
+                ],
+                columns=4,
+            )
     with st.expander("Test modu adımları", expanded=False):
         render_method_grid(
             [
@@ -4818,23 +6659,26 @@ def render_backtest() -> None:
             ],
             colors=["blue", "purple", "green", "amber", "cyan", "blue"],
         )
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
-    section_header("Backtest Geneli: Emsal ve Profil Metrikleri", f"Bu bölüm test yılındaki tüm ihalelerin ortalamasıdır; n={len(results)}.", "Emsal / Profil")
+    st.markdown(
+        f"<div class='rc-section'><div class='section-title'>Backtest Geneli: Emsal ve Profil Metrikleri</div>"
+        f"<div class='section-subtitle'>Bu metrikler, sistemin gerçek sonucu açmadan önce seçtiği emsal ihale havuzunun test ihalelerine ne kadar benzediğini gösterir; n={len(results)}.</div></div>",
+        unsafe_allow_html=True,
+    )
     retrieval_quantity = (
         float(results["retrieval_quantity_band_match_rate"].mean())
         if "retrieval_quantity_band_match_rate" in results and not results.empty
         else 0.0
     )
-    p1, p2, p3, p4 = st.columns(4, gap="medium")
-    with p1:
-        metric_card("İlk 10 emsal benzerliği", f"{float(results['top10_avg_similarity'].mean()):.2f}", "Test yılı ortalaması", "blue")
-    with p2:
-        metric_card("Ürün grubu eşleşmesi", format_pct(float(results["retrieval_product_group_match_rate"].mean()) * 100), "Emsal havuzunda aynı ürün grubu", "green")
-    with p3:
-        metric_card("Bölge eşleşmesi", format_pct(float(results["retrieval_region_match_rate"].mean()) * 100), "Emsal havuzunda aynı bölge", "purple")
-    with p4:
-        metric_card("Miktar bandı eşleşmesi", format_pct(retrieval_quantity * 100), "Emsal havuzunda yakın ölçek", "amber")
+    render_reveal_metric_grid(
+        [
+            ("İlk 10 emsal benzerliği", f"{float(results['top10_avg_similarity'].mean()):.2f}", "Test yılı ortalaması."),
+            ("Ürün grubu eşleşmesi", format_pct(float(results["retrieval_product_group_match_rate"].mean()) * 100), "Emsal havuzunda aynı ürün grubu."),
+            ("Bölge eşleşmesi", format_pct(float(results["retrieval_region_match_rate"].mean()) * 100), "Emsal havuzunda aynı bölge."),
+            ("Miktar bandı eşleşmesi", format_pct(retrieval_quantity * 100), "Emsal havuzunda yakın ölçek."),
+        ],
+        columns=4,
+    )
     profile_distribution = pd.DataFrame(
         [
             ["Ortalama profil uyumu", format_score(results["won_profile_fit_score"].mean())],
@@ -4844,21 +6688,24 @@ def render_backtest() -> None:
         ],
         columns=["Metrik", "Değer"],
     )
-    st.dataframe(profile_distribution, hide_index=True, width="stretch")
+    render_reveal_table(profile_distribution)
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Backtest Geneli: Mixed-Type Cluster Metrikleri", f"Test ihalelerinin Gower tabanlı geçmiş profil gruplarına dağılımını gösterir; n={len(results)}.", "Profil grupları")
-    km1, km2, km3, km4 = st.columns(4, gap="medium")
-    with km1:
-        metric_card("Silhouette Score", format_decimal(pd.to_numeric(results["cluster_silhouette_score"], errors="coerce").mean()), "Profil grupları birbirinden ne kadar net ayrılıyor? 1'e yakın değer daha iyi ayrışma demektir.", "purple")
-    with km2:
-        metric_card("Cluster sıkılığı", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Test kayıtlarının kendi profil gruplarındaki Gower uzaklığına dayalı sıkılık göstergesi. Daha düşük değer daha sıkı grupları anlatır.", "blue")
-    with km3:
-        metric_card("Min / max cluster boyutu", f"{format_int(pd.to_numeric(results['cluster_min_size'], errors='coerce').min())} - {format_int(pd.to_numeric(results['cluster_max_size'], errors='coerce').max())}", "Profil grupları çok küçük veya aşırı büyük mü? Dengesizlik yorum güvenini düşürür.", "green")
-    with km4:
-        assignment_confidence = pd.to_numeric(results["cluster_assignment_confidence"], errors="coerce").fillna(0)
-        low_conf_rate = float((assignment_confidence < 25).mean()) if not results.empty else 0.0
-        metric_card("Düşük atama güveni", format_pct(low_conf_rate * 100), "Atandığı profil grubuna net yakın olmayan test ihalelerinin oranı", "amber")
+    st.markdown(
+        f"<div class='rc-section'><div class='section-title'>Backtest Geneli: Mixed-Type Cluster Metrikleri</div>"
+        f"<div class='section-subtitle'>Bu metrikler geçmiş kazanılmış ihalelerin profil gruplarına ne kadar anlamlı ayrıldığını ve test ihalelerinin bu gruplara ne kadar net atandığını gösterir; fiyat önermez. n={len(results)}.</div></div>",
+        unsafe_allow_html=True,
+    )
+    assignment_confidence = pd.to_numeric(results["cluster_assignment_confidence"], errors="coerce").fillna(0)
+    low_conf_rate = float((assignment_confidence < 25).mean()) if not results.empty else 0.0
+    render_reveal_metric_grid(
+        [
+            ("Silhouette Score", format_decimal(pd.to_numeric(results["cluster_silhouette_score"], errors="coerce").mean()), "1'e yakın değer daha net profil ayrımı demektir."),
+            ("Cluster sıkılığı", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Daha düşük değer daha sıkı profil gruplarını anlatır."),
+            ("Min / max cluster boyutu", f"{format_int(pd.to_numeric(results['cluster_min_size'], errors='coerce').min())} - {format_int(pd.to_numeric(results['cluster_max_size'], errors='coerce').max())}", "Profil grupları dengeli mi?"),
+            ("Düşük atama güveni", format_pct(low_conf_rate * 100), "Profil grubuna net yakın olmayan test ihalelerinin oranı."),
+        ],
+        columns=4,
+    )
     cluster_summary = (
         results.groupby(["cluster_id", "cluster_name"], dropna=False)
         .agg(
@@ -4881,23 +6728,28 @@ def render_backtest() -> None:
             }
         )
     )
-    st.dataframe(cluster_summary, hide_index=True, width="stretch")
+    cluster_summary_display = format_backtest_table(cluster_summary, score_columns={"Ortalama profil uyumu"})
+    render_reveal_table(cluster_summary_display)
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Backtest Geneli: Sıra Dışılık Kontrolü", f"Isolation Forest kazanılmış test ihalelerini geçmiş profile göre normal mi daha az tipik mi görüyor? n={len(results)}.", "Isolation Forest")
-    i1, i2, i3, i4 = st.columns(4, gap="medium")
-    with i1:
-        metric_card("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin geçmiş başarı profiline tipik görünme oranı", "green")
-    with i2:
-        metric_card("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Geçmiş profile göre daha az tipik görülen ve kontrol önerilen test oranı", "amber")
-    with i3:
-        metric_card("Hassasiyet ayarı", format_pct(float(pd.to_numeric(results["isolation_contamination"], errors="coerce").mean()) * 100), "Modelin beklediği yaklaşık sıra dışı kayıt oranı", "purple")
-    with i4:
-        max_segment_anomaly = float(pd.to_numeric(results["segment_anomaly_rate"], errors="coerce").max())
-        metric_card("En yüksek segment oranı", format_pct(max_segment_anomaly * 100), "Bir ürün grubunda görülen en yüksek manuel inceleme sinyali oranı", "red" if max_segment_anomaly >= anomaly_warning_threshold else "blue")
-    info_callout(
-        "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle sıra dışı sonucu kayıp tahmini değildir; geçmiş kazanılmış profilden farklılık ve manuel inceleme sinyalidir.",
-        "Sıra dışılık nasıl okunmalı?",
+    st.markdown(
+        f"<div class='rc-section'><div class='section-title'>Backtest Geneli: Sıra Dışılık Kontrolü</div>"
+        f"<div class='section-subtitle'>Isolation Forest kazanılmış test ihalelerini geçmiş profile göre normal mi daha az tipik mi görüyor? Bu bölüm fiyat tahmini değil, manuel inceleme sinyalidir; n={len(results)}.</div></div>",
+        unsafe_allow_html=True,
+    )
+    max_segment_anomaly = float(pd.to_numeric(results["segment_anomaly_rate"], errors="coerce").max())
+    render_reveal_metric_grid(
+        [
+            ("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin geçmiş başarı profiline tipik görünme oranı."),
+            ("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Geçmiş profile göre daha az tipik görülen test oranı."),
+            ("Hassasiyet ayarı", format_pct(float(pd.to_numeric(results["isolation_contamination"], errors="coerce").mean()) * 100), "Modelin beklediği yaklaşık sıra dışı kayıt oranı."),
+            ("En yüksek segment oranı", format_pct(max_segment_anomaly * 100), "Bir ürün grubunda görülen en yüksek manuel inceleme sinyali oranı."),
+        ],
+        columns=4,
+    )
+    st.markdown(
+        "<div class='rc-export-card'><b>Sıra dışılık nasıl okunmalı?</b> "
+        "Bu veri setindeki tüm kayıtlar kazanılmış ihalelerden oluşur. Bu nedenle sıra dışı sonucu kayıp tahmini değildir; geçmiş kazanılmış profilden farklılık ve manuel inceleme sinyalidir.</div>",
+        unsafe_allow_html=True,
     )
     if anomaly_rate >= anomaly_warning_threshold:
         st.warning("Kazanılmış test ihalelerinde sıra dışı oranı yüksek. Isolation Forest ayarı fazla agresif olabilir; contamination değeri veya kullanılan özellikler gözden geçirilmeli.")
@@ -4907,47 +6759,51 @@ def render_backtest() -> None:
         .reset_index()
         .rename(columns={"product_group": "Ürün grubu", "test_ihale_sayisi": "Test ihalesi", "anomaly_orani": "Manuel inceleme oranı"})
     )
-    st.dataframe(segment_anomaly, hide_index=True, width="stretch")
+    render_reveal_table(format_backtest_table(segment_anomaly, pct_columns={"Manuel inceleme oranı"}))
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Backtest Geneli: Fiyat Koridoru Metrikleri", f"Bu metrikler seçili ihale için değil, test yılındaki tüm ihalelerin ortalamasıdır; n={len(results)}.", "Fiyat")
-    f1, f2, f3, f4 = st.columns(4, gap="medium")
-    with f1:
-        metric_card("Band coverage", format_pct(metrics["band_coverage"] * 100), "Tüm test ihalelerinde gerçek fiyatların düşük-yüksek aralığında kalma oranı", "green")
-    with f2:
-        metric_card("MAE", format_try(metrics["mae"]), "Tüm test ihalelerinde Top-K medyan fiyat ile gerçek fiyat arasındaki ortalama TL farkı", "blue")
-    with f3:
-        metric_card("MAPE", format_pct(metrics["mape"]), "Tüm test ihalelerinin ortalama yüzde fiyat hatası; seçili ihalenin tekil hatası değildir", "amber")
-    with f4:
-        metric_card("Band kalite skoru", f"{metrics['coverage_adjusted_band_score']:.2f}", "Kapsama ve band genişliği birlikte okunur", "purple")
-    f5, f6, f7 = st.columns(3, gap="medium")
-    with f5:
-        metric_card("SMAPE", format_pct(metrics["smape"]), "Simetrik yüzde hata", "cyan")
-    with f6:
-        metric_card("WAPE", format_pct(metrics["wape"]), "Ağırlıklı yüzde hata", "cyan")
-    with f7:
-        metric_card("Ortalama band genişliği", format_try(metrics["average_band_width"]), "Düşük ve yüksek öneri arasındaki ortalama fark", "amber")
-    info_callout(
-        "Bu kartlardaki MAE, MAPE, SMAPE, WAPE, band coverage ve ortalama band genişliği tüm backtest test seti üzerinden hesaplanır. Benzerlik Tabanlı Koridor için tahmin noktası predicted_mid_price, yani Top-K benzer kazanılmış ihalelerin medyan fiyatıdır.",
-        "Backtest geneli metrikler nasıl okunur?",
+    st.markdown(
+        f"<div class='rc-section'><div class='section-title'>Backtest Geneli: Fiyat Koridoru Metrikleri</div>"
+        f"<div class='section-subtitle'>Bu metrikler seçili ihale için değil, test yılındaki tüm ihalelerin ortalamasıdır. Coverage tek başına yeterli değildir; çok geniş band gerçek fiyatı kapsasa bile karar desteği zayıflar. n={len(results)}.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_reveal_metric_grid(
+        [
+            ("Band coverage", format_pct(metrics["band_coverage"] * 100), "Gerçek fiyatların önerilen düşük-yüksek koridor içinde kalma oranı."),
+            ("MAE", format_try(metrics["mae"]), "Gerçek fiyat ile tahmini orta fiyat arasındaki ortalama TL farkı."),
+            ("MAPE", format_pct(metrics["mape"]), "Ortalama yüzde fiyat hatası; yüksekse dikkatli yorumlanır."),
+            ("Band kalite skoru", f"{metrics['coverage_adjusted_band_score']:.2f}", "Kapsama başarısını ve band genişliğini birlikte okur."),
+            ("SMAPE", format_pct(metrics["smape"]), "Simetrik yüzde hata."),
+            ("WAPE", format_pct(metrics["wape"]), "Ağırlıklı yüzde hata."),
+            ("Ortalama band genişliği", format_try(metrics["average_band_width"]), "Düşük ve yüksek öneri arasındaki ortalama fark."),
+        ],
+        columns=4,
+    )
+    st.markdown(
+        "<div class='rc-export-card'><b>Backtest geneli metrikler nasıl okunur?</b> "
+        "MAE, MAPE, SMAPE, WAPE, band coverage ve ortalama band genişliği tüm backtest test seti üzerinden hesaplanır. Benzerlik Tabanlı Koridor için tahmin noktası predicted_mid_price, yani Top-K benzer kazanılmış ihalelerin medyan fiyatıdır.</div>",
+        unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Senaryo Metrikleri", "Tarihsel gerçek fiyat aday senaryolar içinde ne kadar iyi konumlandı?", "Senaryo")
-    s1, s2, s3, s4 = st.columns(4, gap="medium")
-    with s1:
-        metric_card("Gerçek senaryo sıra ortalaması", format_pct(opt["actual_won_scenario_rank_percentile_mean"]), "Yüksek değer daha iyi", "blue")
-    with s2:
-        metric_card("Top %30 hit rate", format_pct(opt["top30_hit_rate"] * 100), "Gerçek senaryo üst grupta mı?", "green")
-    with s3:
-        metric_card("Sert kural ihlal oranı", format_pct(opt["hard_constraint_violation_rate"] * 100), "Kuralı geçemeyen en iyi senaryo oranı", "amber")
-    with s4:
-        soft_penalty_mean = float(results["soft_penalty_score"].mean()) if "soft_penalty_score" in results else 0.0
-        metric_card("Risk uyarısı ortalaması", f"{soft_penalty_mean:.1f}/100", "Risk ve skor cezası", "purple")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Senaryo Metrikleri</div>"
+        "<div class='section-subtitle'>Bu metrikler, gerçek tarihsel senaryonun sistemin aday senaryoları içinde ne kadar üstte kaldığını ve önerilerin temel kurallara ne kadar uyduğunu gösterir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    soft_penalty_mean = float(results["soft_penalty_score"].mean()) if "soft_penalty_score" in results else 0.0
+    render_reveal_metric_grid(
+        [
+            ("Gerçek senaryo sıra ortalaması", format_pct(opt["actual_won_scenario_rank_percentile_mean"]), "Yüksek değer daha iyi senaryo konumlandırmasıdır."),
+            ("Top %30 hit rate", format_pct(opt["top30_hit_rate"] * 100), "Gerçek senaryo üst grupta mı?"),
+            ("Sert kural ihlal oranı", format_pct(opt["hard_constraint_violation_rate"] * 100), "Kuralı geçemeyen en iyi senaryo oranı."),
+            ("Risk uyarısı ortalaması", f"{soft_penalty_mean:.1f}/100", "Soft penalty ve risk uyarılarının ortalaması."),
+            ("Yasak İddia Üretme Oranı", format_pct(forbidden_rate * 100), "AI Danışman güvenlik kontrolü. Hedef sıfırdır."),
+        ],
+        columns=4,
+    )
     if "soft_penalty_score" in results:
         penalty_distribution = results["soft_penalty_score"].describe().reset_index()
         penalty_distribution.columns = ["Özet", "Risk uyarısı skoru"]
-        st.dataframe(penalty_distribution, hide_index=True, width="stretch")
+        render_reveal_table(format_backtest_table(penalty_distribution, score_columns={"Risk uyarısı skoru"}))
     rank_summary = results[["tender_id", "actual_won_scenario_rank_percentile"]].copy()
     rank_summary["Yorum"] = rank_summary["actual_won_scenario_rank_percentile"].apply(scenario_rank_comment)
     rank_summary = rank_summary.rename(
@@ -4957,15 +6813,18 @@ def render_backtest() -> None:
         }
     )
     with st.expander("Gerçek kazanılmış senaryo sıra detayı", expanded=False):
-        info_callout(
-            "Gerçek kazanılmış senaryonun, sistemin önerdiği aday senaryolar içinde ne kadar üstte yer aldığını gösterir.",
-            "Gerçek Kazanılmış Senaryonun Sıralamadaki Yeri",
+        st.markdown(
+            "<div class='rc-export-card'><b>Gerçek Kazanılmış Senaryonun Sıralamadaki Yeri:</b> "
+            "Gerçek kazanılmış senaryonun, sistemin önerdiği aday senaryolar içinde ne kadar üstte yer aldığını gösterir.</div>",
+            unsafe_allow_html=True,
         )
-        st.dataframe(rank_summary, hide_index=True, width="stretch")
-    metric_card("Yasak İddia Üretme Oranı", format_pct(forbidden_rate * 100), "AI Danışman güvenlik kontrolü. Hedef sıfırdır.", "red")
+        render_reveal_table(format_backtest_table(rank_summary, pct_columns={"Gerçek Kazanılmış Senaryo Sıra Percentile"}))
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Basit Yöntemlerle Karşılaştırma", "Tender IQ fiyat aralığı yaklaşımı; ürün grubu medyanı, Top-K medyanı, maliyet üstü fiyat ve regresyon gibi basit referanslarla kıyaslanır.", "Kıyas")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Basit Yöntemlerle Karşılaştırma</div>"
+        "<div class='section-subtitle'>Tender IQ fiyat aralığı yaklaşımı; ürün grubu medyanı, Top-K medyanı, maliyet üstü fiyat ve regresyon gibi basit referanslarla kıyaslanır.</div></div>",
+        unsafe_allow_html=True,
+    )
     baseline = baseline_predictions(pd.concat([split["train"], split["validation"]]), split["test"])
     baseline = baseline.rename(
         columns={
@@ -4989,17 +6848,32 @@ def render_backtest() -> None:
             }
         ]
     )
-    st.dataframe(pd.concat([baseline, current_row], ignore_index=True), hide_index=True, width="stretch")
+    baseline_display = pd.concat([baseline, current_row], ignore_index=True)
+    render_reveal_table(
+        format_backtest_table(
+            baseline_display,
+            price_columns={"Ortalama Mutlak Hata", "Ortalama Aralık Genişliği"},
+            pct_columns={"Ortalama Yüzde Hata", "Aralıkta Kalma Oranı"},
+        )
+    )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Kırılım Bazlı Performans", "Genel sonuç iyi görünse bile bazı ürün gruplarında, bölgelerde veya kurum tiplerinde performans daha zayıf olabilir. Segment metrikleri bu farkları görmeyi sağlar.", "Segment")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Kırılım Bazlı Performans</div>"
+        "<div class='section-subtitle'>Genel sonuç iyi görünse bile bazı ürün gruplarında, bölgelerde veya kurum tiplerinde performans daha zayıf olabilir. Segment metrikleri bu farkları görmeyi sağlar.</div></div>",
+        unsafe_allow_html=True,
+    )
     segment_display = segment_level_metrics(results)
     if "segment_value" in segment_display.columns:
         segment_display["segment_value"] = segment_display["segment_value"].astype(str)
-    st.dataframe(segment_display, hide_index=True, width="stretch")
+    segment_price_cols = {"mae", "average_band_width", "Ortalama Mutlak Hata", "Ortalama Aralık Genişliği"}
+    segment_pct_cols = {"mape", "band_coverage", "coverage", "Aralıkta Kalma Oranı", "Ortalama Yüzde Hata"}
+    render_reveal_table(format_backtest_table(segment_display, price_columns=segment_price_cols, pct_columns=segment_pct_cols))
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Sentetik Aykırı Senaryo Testi", "Kaybedilmiş ihale verisi olmadığı için sistemin riskli durumları nasıl yakaladığını görmek amacıyla yapay uç örnekler denenir.", "Stres testi")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Sentetik Aykırı Senaryo Testi</div>"
+        "<div class='section-subtitle'>Kaybedilmiş ihale verisi olmadığı için sistemin uç/riskli yapay örneklere nasıl tepki verdiğini test eder. Beklenen davranış: güveni düşürmek, risk bayrağı üretmek veya manuel inceleme sinyali vermek.</div></div>",
+        unsafe_allow_html=True,
+    )
     base_stress_tender = mask_actual_result_fields(split["test"].iloc[0].to_dict())
     stress_results = evaluate_synthetic_outliers(pd.concat([split["train"], split["validation"]]), base_stress_tender)
     stress_pass_rate = float((stress_results["Beklenen davranış"] == "Geçti").mean()) if not stress_results.empty else 0.0
@@ -5020,35 +6894,36 @@ def render_backtest() -> None:
             },
         },
     )
-    c_stress_1, c_stress_2 = st.columns(2, gap="medium")
-    with c_stress_1:
-        metric_card("Aykırı test geçme oranı", format_pct(stress_pass_rate * 100), "Riskli yapay örneklerde güven düşüşü, risk bayrağı veya manuel inceleme beklenir.", "purple")
-    with c_stress_2:
-        metric_card("Test edilen uç durum", format_int(len(stress_results)), "Miktar, ürün/kurum uyumsuzluğu, teslim süresi, fiyat ve düşük emsal senaryoları", "amber")
+    render_reveal_metric_grid(
+        [
+            ("Aykırı test geçme oranı", format_pct(stress_pass_rate * 100), "Riskli yapay örneklerde güven düşüşü, risk bayrağı veya manuel inceleme beklenir."),
+            ("Test edilen uç durum", format_int(len(stress_results)), "Miktar, ürün/kurum uyumsuzluğu, teslim süresi, fiyat ve düşük emsal senaryoları."),
+        ],
+        columns=3,
+    )
     with st.expander("Sentetik aykırı senaryo test detayı", expanded=False):
-        info_callout(
-            "Bu test gerçek kayıp tahmini değildir. Amaç, uç örneklerde sistemin daha temkinli davranıp davranmadığını kontrol etmektir.",
-            "Nasıl okunur?",
+        st.markdown(
+            "<div class='rc-export-card'><b>Nasıl okunur?</b> "
+            "Bu test gerçek kayıp tahmini değildir. Amaç, uç örneklerde sistemin daha temkinli davranıp davranmadığını kontrol etmektir.</div>",
+            unsafe_allow_html=True,
         )
-        st.dataframe(stress_results, hide_index=True, width="stretch")
+        render_reveal_table(format_backtest_table(stress_results))
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Sızıntı Kontrolü", "Sonuç açılmadan önce gerçek sonuç alanlarının modele girmediği doğrulanır.", "Audit")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Sızıntı Kontrolü</div>"
+        "<div class='section-subtitle'>Sonuç açılmadan önce gerçek sonuç alanlarının modele girmediği doğrulanır. Audit pass ise backtest sonuçları leakage açısından güvenli okunabilir.</div></div>",
+        unsafe_allow_html=True,
+    )
     leak_status = results["leakage_audit_status"].value_counts().reset_index()
     leak_status.columns = ["Audit durumu", "İhale sayısı"]
     status = "success" if (results["leakage_audit_status"] == "pass").all() else "danger"
     st.markdown(
-        premium_card_html(
-            "Sızıntı kontrolü",
-            "Sonuç açılmadan önce gerçek sonuç alanlarının modele girmediği doğrulanır.",
-            icon="SK",
-            color="mint" if status == "success" else "amber",
-            size="metric-size",
-            footer_html=badge("Sızıntı yok" if status == "success" else "Sızıntı uyarısı", status),
-        ),
+        "<div class='rc-export-card'><b>Sızıntı kontrolü:</b> "
+        f"{'Backtest sonuçları leakage açısından güvenli okunabilir.' if status == 'success' else 'Bu backtest sonucu güvenilir değildir; sızıntı uyarıları incelenmelidir.'} "
+        f"<span class='rc-pill {'rc-pill-good' if status == 'success' else 'rc-pill-bad'}'>{'Sızıntı yok' if status == 'success' else 'Sızıntı uyarısı'}</span></div>",
         unsafe_allow_html=True,
     )
-    st.dataframe(leak_status, hide_index=True, width="stretch")
+    render_reveal_table(format_backtest_table(leak_status))
     leakage_report = results[
         [
             "tender_id",
@@ -5067,23 +6942,15 @@ def render_backtest() -> None:
     ).fillna("Kontrol edilemedi")
 
     with st.expander("İhale bazlı sonuç detayı", expanded=False):
-        st.dataframe(results, hide_index=True, width="stretch")
+        detail_display = results.head(50).copy()
+        render_reveal_table(format_backtest_table(detail_display))
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Export", "Backtest çıktıları dışa aktarılabilir.", "Rapor")
-    e1, e2, e3 = st.columns(3, gap="medium")
-    with e1:
-        audited_download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([metrics])), "backtest_raporu.csv")
-    with e2:
-        audited_download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "tender_level_sonuclar.csv")
-    with e3:
-        audited_download_button("Gerçek Sonuç Sızıntısı Kontrolü", dataframe_to_csv_bytes(leakage_report), "leakage_audit.csv")
-    e4, e5 = st.columns(2, gap="medium")
-    with e4:
-        audited_download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment_display), "segment_metrikleri.csv")
-    with e5:
-        audited_download_button("Expert Review Export", dataframe_to_csv_bytes(expert_review_template(results)), "expert_review_export.csv")
-    audited_download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Export</div>"
+        "<div class='section-subtitle'>Backtest çıktıları dışa aktarılabilir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_backtest_export_panel(metrics, results, leakage_report, segment_display, stress_results)
 
 
 def render_similar_tenders() -> None:
@@ -5173,7 +7040,7 @@ def render_advisor() -> None:
     init_session_state_defaults()
     page_header(
         "AI Danışman",
-        "Sistem çıktısını Türkçe ve güvenli şekilde yorumlar. Soru sorabilir, gerekirse deterministik sistem yorumu alabilirsiniz.",
+        "Sistem çıktısını Türkçe ve güvenli şekilde yorumlar. Sorularınızı seçili ihale bağlamı ve doğrulanmış model çıktıları üzerinden yanıtlar.",
         "AI Danışman",
     )
     result = ensure_scenario_result()
@@ -5240,54 +7107,12 @@ def render_advisor() -> None:
         "Sıra dışılık sonucu ne demek?",
     ]
 
-    info_callout(
-        "AI Danışman karar vermez. Sadece model çıktılarını açıklar. Bu skor gerçek kazanma olasılığı değildir.",
-        "Güvenli kullanım notu",
-    )
-    section_header("OpenRouter Model Seçimi", "AI Danışman yanıtı için kullanılacak LLM burada seçilir ve anında güncellenir.", "LLM")
     model_options = [model["model_id"] for model in OPENROUTER_MODELS]
     previous_model_id = selected_openrouter_model_id()
     selected_index = next(
         (idx for idx, model_id in enumerate(model_options) if model_id == previous_model_id),
         0,
     )
-    selected_model_id = st.selectbox(
-        "Aktif LLM modeli",
-        model_options,
-        index=selected_index,
-        key="selected_openrouter_model",
-        format_func=lambda model_id: openrouter_model_option_label(next(model for model in OPENROUTER_MODELS if model["model_id"] == model_id)),
-    )
-    selected_model = next(model for model in OPENROUTER_MODELS if model["model_id"] == selected_model_id)
-    st.session_state.llm_primary_label = selected_model_id
-    if selected_model_id != previous_model_id:
-        st.session_state.advisor_chat_messages = [
-            {
-                "role": "assistant",
-                "content": (
-                    f"Model {selected_model['number']} seçildi: {selected_model['label']}. "
-                    "Yeni sorular bu OpenRouter modeliyle yanıtlanacak."
-                ),
-                "source": "Sistem",
-            }
-        ]
-        audit_event(
-            {
-                "event_type": "advisor_model_selected",
-                "user_action": "select_llm_model",
-                "tender_id": context.get("tender_id"),
-                "module": "advisor",
-                "input_summary": "openrouter_model_selectbox",
-                "output_summary": selected_model_id,
-                "validation_status": "pass",
-                "details": {
-                    "llm_provider": "openrouter",
-                    "llm_model": selected_model_id,
-                    "llm_model_number": selected_model["number"],
-                },
-            }
-        )
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
     risk_status = "Uyarı var" if risk_flags else "Düşük"
@@ -5301,54 +7126,7 @@ def render_advisor() -> None:
         ("Model güveni", f"{context.get('model_confidence_score', 0):.1f}/100"),
         ("Profil grubu", str(context.get("cluster_name", "Kazanılmış profil grubu"))),
     ]
-    st.markdown(
-        premium_card_html(
-            "Seçili ihale bağlamı",
-            "Bu panel dışındaki bilgi danışman yanıtına dayanak yapılmaz.",
-            icon="AI",
-            color="blue",
-            size="large-size",
-            lines=context_rows,
-            pill="Sızıntı yok" if leak.get("audit_status") == "pass" else "Sızıntı uyarısı",
-        ),
-        unsafe_allow_html=True,
-    )
     current_validation = st.session_state.get("advisor_validation", validation)
-    validation_cards = [
-        {
-            "icon": "OK",
-            "title": "Yanıt doğrulama",
-            "value": "Yanıt doğrulandı" if current_validation.get("advisor_validation_status") == "pass" else "Kontrol gerekiyor",
-            "body": "Schema, yasak iddia ve grounding kontrolleri izlenir.",
-            "pill": str(current_validation.get("advisor_validation_status", "-")),
-            "color": "green" if current_validation.get("advisor_validation_status") == "pass" else "amber",
-        },
-        {
-            "icon": "ID",
-            "title": "Yasak iddia kontrolü",
-            "value": "Bulunmadı" if not current_validation.get("forbidden_claims_detected") else "Tespit edildi",
-            "body": "Kesin sonuç, garanti veya rakip davranışı iddiaları engellenir.",
-            "pill": "Guardrail",
-            "color": "green" if not current_validation.get("forbidden_claims_detected") else "red",
-        },
-        {
-            "icon": "FB",
-            "title": "Fallback durumu",
-            "value": "Kullanıldı" if current_validation.get("fallback_used") else "Kullanılmadı",
-            "body": "LLM yoksa veya doğrulama geçmezse güvenli deterministik yanıt döner.",
-            "pill": "Fallback",
-            "color": "purple" if current_validation.get("fallback_used") else "blue",
-        },
-        {
-            "icon": "LLM",
-            "title": "Aktif model",
-            "value": selected_openrouter_model_id(),
-            "body": "Sohbet yanıtı için OpenRouter request body içinde bu model ID'si kullanılır.",
-            "pill": "OpenRouter",
-            "color": "cyan",
-        },
-    ]
-    render_premium_grid(validation_cards, columns=4, size="metric-size")
     safe_context = sanitize_advisor_context(context)
     context_status = validate_advisor_context(safe_context)
     status_pills_html = "".join(
@@ -5362,23 +7140,11 @@ def render_advisor() -> None:
         ]
     )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
-        st.markdown(advisor_payload_to_chat_text(advisor))
-        validation_rows = pd.DataFrame(
-            [
-                ["Yanıt doğrulama", st.session_state.get("advisor_validation", validation).get("advisor_validation_status", "-")],
-                ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
-                ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
-                ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
-                ["OpenRouter modeli", selected_openrouter_model_id()],
-            ],
-            columns=["Kontrol", "Durum"],
-        )
-        st.dataframe(validation_rows, hide_index=True, width="stretch")
-
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Sohbet", "Sorular, seçili ihale bağlamı ve model çıktıları üzerinden yanıtlanır.", "AI Danışman")
+    st.markdown(
+        "<div class='advisor-safe-banner'><b>Güvenli kullanım notu:</b> "
+        "AI Danışman karar vermez. Model çıktılarını açıklar, riskleri yorumlar ve iş odaklı açıklama üretir. Bu skor gerçek kazanma olasılığı değildir.</div>",
+        unsafe_allow_html=True,
+    )
     selected_question = None
     typed_question = ""
     user_question = None
@@ -5390,7 +7156,7 @@ def render_advisor() -> None:
                     <div class='chat-orb'>AI</div>
                     <div>
                         <div class='chat-header-title'>AI Danışman</div>
-                        <div class='chat-header-subtitle'>Model çıktıları üzerinden güvenli, detaylı ve iş odaklı açıklama üretir.</div>
+                        <div class='chat-header-subtitle'>Sorularınızı seçili ihale bağlamı ve doğrulanmış model çıktıları üzerinden yanıtlar.</div>
                     </div>
                 </div>
                 <div class='advisor-status-pills'>{status_pills_html}</div>
@@ -5453,6 +7219,118 @@ def render_advisor() -> None:
         if typed_question:
             st.session_state.advisor_chat_messages.append({"role": "user", "content": typed_question})
         user_question = selected_question or typed_question
+
+    st.markdown(
+        "<div class='advisor-secondary-section'><div class='advisor-secondary-title'>Seçili ihale bağlamı</div>"
+        "<div class='advisor-secondary-subtitle'>Bu panel, danışman yanıtının dayandığı seçili ihale ve model çıktılarını kompakt biçimde gösterir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    context_rows_html = "".join(
+        f"<div class='advisor-kv-row'><span>{escape(label)}</span><b>{escape(value)}</b></div>"
+        for label, value in context_rows
+    )
+    leak_pill = "Sızıntı yok" if leak.get("audit_status") == "pass" else "Sızıntı uyarısı"
+    st.markdown(
+        "<div class='advisor-context-card'>"
+        "<div class='advisor-chat-title-row' style='justify-content:space-between;align-items:flex-start;'>"
+        "<div><div class='chat-header-title'>Bağlam özeti</div>"
+        "<div class='chat-header-subtitle'>Bu panel dışındaki bilgi danışman yanıtına dayanak yapılmaz.</div></div>"
+        f"<span class='advisor-status-pill'>{escape(leak_pill)}</span>"
+        "</div>"
+        f"<div style='margin-top:.85rem;'>{context_rows_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    validation_cards = [
+        ("Yanıt doğrulama", "Yanıt doğrulandı" if current_validation.get("advisor_validation_status") == "pass" else "Kontrol gerekiyor", "Schema, yasak iddia ve grounding kontrolleri izlenir."),
+        ("Yasak iddia kontrolü", "Bulunmadı" if not current_validation.get("forbidden_claims_detected") else "Tespit edildi", "Kesin sonuç, garanti veya rakip davranışı iddiaları engellenir."),
+        ("Fallback durumu", "Kullanıldı" if current_validation.get("fallback_used") else "Kullanılmadı", "LLM yoksa veya doğrulama geçmezse güvenli deterministik yanıt döner."),
+        ("Aktif model", selected_openrouter_model_id(), "Sohbet yanıtı için OpenRouter request body içinde bu model ID'si kullanılır."),
+    ]
+    status_cards_html = "".join(
+        "<div class='advisor-status-card'>"
+        f"<div><div class='advisor-status-label'>{escape(label)}</div><div class='advisor-status-value'>{escape(value)}</div></div>"
+        f"<div class='advisor-status-note'>{escape(note)}</div>"
+        "</div>"
+        for label, value, note in validation_cards
+    )
+    st.markdown(
+        "<div class='advisor-secondary-section'><div class='advisor-secondary-title'>Doğrulama ve güvenlik durumu</div>"
+        "<div class='advisor-secondary-subtitle'>Guardrail ve fallback bilgileri sohbeti gölgelemeyecek şekilde özetlenir.</div></div>"
+        f"<div class='advisor-status-grid'>{status_cards_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        "<div class='advisor-secondary-section'><div class='advisor-secondary-title'>Model ve Çalışma Ayarları</div>"
+        "<div class='advisor-secondary-subtitle'>OpenRouter Model Seçimi burada yapılır. Seçim değiştiğinde yeni sorular bu modelle yanıtlanır.</div></div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div class='advisor-setup-card'>", unsafe_allow_html=True)
+    selected_model_id = st.selectbox(
+        "Aktif LLM modeli",
+        model_options,
+        index=selected_index,
+        key="selected_openrouter_model",
+        format_func=lambda model_id: openrouter_model_option_label(next(model for model in OPENROUTER_MODELS if model["model_id"] == model_id)),
+    )
+    st.markdown(
+        "<div class='chat-header-subtitle'>AI Danışman, seçili modeli sadece doğrulanmış ve maskelenmiş bağlam üzerinden çağırır. Fallback davranışı korunur.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+    selected_model = next(model for model in OPENROUTER_MODELS if model["model_id"] == selected_model_id)
+    st.session_state.llm_primary_label = selected_model_id
+    if selected_model_id != previous_model_id:
+        st.session_state.advisor_chat_messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    f"Model {selected_model['number']} seçildi: {selected_model['label']}. "
+                    "Yeni sorular bu OpenRouter modeliyle yanıtlanacak."
+                ),
+                "source": "Sistem",
+            }
+        ]
+        audit_event(
+            {
+                "event_type": "advisor_model_selected",
+                "user_action": "select_llm_model",
+                "tender_id": context.get("tender_id"),
+                "module": "advisor",
+                "input_summary": "openrouter_model_selectbox",
+                "output_summary": selected_model_id,
+                "validation_status": "pass",
+                "details": {
+                    "llm_provider": "openrouter",
+                    "llm_model": selected_model_id,
+                    "llm_model_number": selected_model["number"],
+                },
+            }
+        )
+
+    with st.expander("Sistem yorumu, doğrulama ve bağlam", expanded=False):
+        st.markdown(advisor_payload_to_chat_text(advisor))
+        validation_rows = pd.DataFrame(
+            [
+                ["Yanıt doğrulama", st.session_state.get("advisor_validation", validation).get("advisor_validation_status", "-")],
+                ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
+                ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
+                ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
+                ["OpenRouter modeli", selected_openrouter_model_id()],
+            ],
+            columns=["Kontrol", "Durum"],
+        )
+        rows = "".join(
+            f"<tr><td>{escape(str(row['Kontrol']))}</td><td>{escape(str(row['Durum']))}</td></tr>"
+            for _, row in validation_rows.iterrows()
+        )
+        st.markdown(
+            "<table class='advisor-advanced-table'><thead><tr><th>Kontrol</th><th>Durum</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>",
+            unsafe_allow_html=True,
+        )
 
     # Compatibility marker for existing UI smoke tests only: st.chat_input, st.chat_message
 
@@ -5539,9 +7417,11 @@ def render_advisor() -> None:
 
 
 def render_reports() -> None:
+    inject_reveal_compare_css()
+    inject_reports_css()
     page_header(
         "Raporlar ve Kontroller",
-        "Backtest, senaryo, sızıntı kontrolü, segment metrikleri, expert review ve model card çıktıları.",
+        "Backtest, senaryo, sızıntı kontrolü, segment metrikleri, expert review ve model çıktılarının tek merkezden izlenmesi ve dışa aktarımı.",
         "Rapor",
     )
     results = st.session_state.get("backtest_results")
@@ -5574,80 +7454,156 @@ def render_reports() -> None:
         "training_data_range",
     ]
     audit_cards = [
-        (
-            "Gerçek Sonuç Sızıntısı Kontrolü",
-            "Sızıntı kontrolü",
-            "Sonuç açılmadan önce gerçek kazanılmış fiyat, final tutar ve gerçek karlılık oranı alanlarının modele girmediğini kontrol eder.",
-            "Sızıntı yok" if leakage_ok else "Uyarı",
-            "success" if leakage_ok else "danger",
-        ),
-        (
-            "Forbidden Claim Detector",
-            "Yasak iddia kontrolü",
-            "AI Danışman çıktısında kesin sonuç veya veri dışı başarı iddiası olup olmadığını denetler.",
-            "Geçti" if advisor_ok else "Uyarı",
-            "success" if advisor_ok else "danger",
-        ),
-        (
-            "Advisor Validation",
-            "Danışman doğrulama",
-            "Yanıtların yapılandırılmış bağlama ve guardrail kurallarına uyduğunu izler.",
-            str(advisor_validation.get("advisor_validation_status", "henüz çalışmadı")),
-            "success" if advisor_ok else "warning",
-        ),
-        (
-            "Hard Constraint Check",
-            "Sert kural kontrolü",
-            "Minimum karlılık oranı ve kural ihlali gibi geçersiz senaryo durumlarını raporlar.",
-            format_pct(hard_violation_rate),
-            "success" if hard_violation_rate == 0 else "warning",
-        ),
-        (
-            "Export Status",
-            "Dışa aktarım",
-            "Backtest, tender-level sonuç, senaryo, audit, model card ve expert review çıktıları hazırlanır.",
-            "Hazır",
-            "success",
-        ),
+        {
+            "kicker": "Kontrol 01",
+            "title": "Sızıntı kontrolü",
+            "body": "Gerçek sonuç alanlarının sonuç açılmadan önce modele girmediğini doğrular.",
+            "badge": "Sızıntı yok" if leakage_ok else "Uyarı",
+            "status": "success" if leakage_ok else "danger",
+        },
+        {
+            "kicker": "Kontrol 02",
+            "title": "Yasak iddia kontrolü",
+            "body": "AI Danışman çıktısında kesin kazanma veya gerçek olasılık iddiası bulunmadığını denetler.",
+            "badge": "Geçti" if advisor_ok else "Uyarı",
+            "status": "success" if advisor_ok else "danger",
+        },
+        {
+            "kicker": "Kontrol 03",
+            "title": "Danışman doğrulama",
+            "body": "Danışman cevabının şema, bağlam ve guardrail kurallarına uyduğunu kontrol eder.",
+            "badge": str(advisor_validation.get("advisor_validation_status", "henüz çalışmadı")),
+            "status": "success" if advisor_ok else "warning",
+        },
+        {
+            "kicker": "Kontrol 04",
+            "title": "Sert kural kontrolü",
+            "body": "Minimum karlılık ve kural ihlali gibi senaryoyu geçersiz kılan durumları raporlar.",
+            "badge": format_pct(hard_violation_rate),
+            "status": "success" if hard_violation_rate == 0 else "warning",
+        },
+        {
+            "kicker": "Kontrol 05",
+            "title": "Dışa aktarım",
+            "body": "Backtest, audit, model ve review çıktılarının indirilmeye hazır olduğunu gösterir.",
+            "badge": "Hazır",
+            "status": "success",
+        },
     ]
-    render_premium_grid(
-        [
+    render_report_section(
+        "Kontrol özeti",
+        "Uygulamanın auditability, guardrail, senaryo kuralı ve export hazırlık durumunu tek bakışta gösterir.",
+    )
+    render_report_control_cards(audit_cards)
+
+    scenario_result = st.session_state.get("scenario_result", {}).get("scenarios", pd.DataFrame())
+    leakage_export = results[["tender_id", "leakage_audit_status", *[c for c in version_columns if c in results.columns]]]
+    scenario_actions = []
+    if isinstance(scenario_result, pd.DataFrame) and not scenario_result.empty:
+        scenario_actions.append(
             {
-                "icon": f"{idx + 1:02d}",
-                "title": tr_title,
-                "body": body,
-                "pill": f"{status_text} · {title}",
-                "color": ["blue", "green", "purple", "amber", "cyan"][idx % 5],
+                "label": "Senaryo Karşılaştırması",
+                "note": "Seçili ihale için teklif senaryo çıktıları.",
+                "data": dataframe_to_csv_bytes(scenario_result),
+                "file_name": "senaryo_karsilastirma.csv",
             }
-            for idx, (title, tr_title, body, status_text, status) in enumerate(audit_cards)
-        ],
-        columns=3,
-        size="large-size",
+        )
+    scenario_actions.append(
+        {
+            "label": "Sentetik Aykırı Senaryo Testi",
+            "note": "Uç örneklerde güven/risk davranışı.",
+            "data": dataframe_to_csv_bytes(stress_results),
+            "file_name": "sentetik_aykiri_senaryo_testi.csv",
+        }
     )
 
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Export Grupları", "Rapor ve denetim çıktıları.", "Dışa aktar")
-    c1, c2, c3 = st.columns(3, gap="medium")
-    with c1:
-        audited_download_button("Backtest Raporu", dataframe_to_csv_bytes(pd.DataFrame([price_corridor_metrics(results)])), "backtest_ozeti.csv")
-        audited_download_button("Tender-Level Sonuçlar", dataframe_to_csv_bytes(results), "ihale_bazli_sonuclar.csv")
-    with c2:
-        scenario_result = st.session_state.get("scenario_result", {}).get("scenarios", pd.DataFrame())
-        if isinstance(scenario_result, pd.DataFrame) and not scenario_result.empty:
-            audited_download_button("Senaryo Karşılaştırması", dataframe_to_csv_bytes(scenario_result), "senaryo_karsilastirma.csv")
-        audited_download_button(
-            "Gerçek Sonuç Sızıntısı Kontrolü",
-            dataframe_to_csv_bytes(results[["tender_id", "leakage_audit_status", *[c for c in version_columns if c in results.columns]]]),
-            "leakage_audit.csv",
-        )
-        audited_download_button("Segment Metrikleri", dataframe_to_csv_bytes(segment), "segment_metrikleri.csv")
-    with c3:
-        audited_download_button("Model Card", model_card, "model_karti.md")
-        audited_download_button("Expert Review Template", dataframe_to_csv_bytes(expert_review_template(results)), "uzman_inceleme_sablonu.csv")
-        audited_download_button("Sentetik Aykırı Senaryo Testi", dataframe_to_csv_bytes(stress_results), "sentetik_aykiri_senaryo_testi.csv")
-    with st.expander("Segment metrikleri ve sentetik test detayı", expanded=False):
-        st.dataframe(segment, hide_index=True, width="stretch")
-        st.dataframe(stress_results, hide_index=True, width="stretch")
+    export_groups = [
+        (
+            "report_export_backtest",
+            "Backtest & Performance",
+            "Toplu performans, ihale bazlı sonuçlar ve segment kırılımları.",
+            [
+                {
+                    "label": "Backtest Raporu",
+                    "note": "Özet performans ve fiyat koridoru metrikleri.",
+                    "data": dataframe_to_csv_bytes(pd.DataFrame([price_corridor_metrics(results)])),
+                    "file_name": "backtest_ozeti.csv",
+                },
+                {
+                    "label": "Tender-Level Sonuçlar",
+                    "note": "İhale bazlı backtest ve denetim satırları.",
+                    "data": dataframe_to_csv_bytes(results),
+                    "file_name": "ihale_bazli_sonuclar.csv",
+                },
+                {
+                    "label": "Segment Metrikleri",
+                    "note": "Ürün, bölge ve kurum kırılımları.",
+                    "data": dataframe_to_csv_bytes(segment),
+                    "file_name": "segment_metrikleri.csv",
+                },
+            ],
+        ),
+        (
+            "report_export_scenario",
+            "Scenario & Pricing",
+            "Senaryo karşılaştırmaları ve riskli sentetik örnek testleri.",
+            scenario_actions,
+        ),
+        (
+            "report_export_audit",
+            "Audit & Governance",
+            "Sızıntı, guardrail ve model dokümantasyonu çıktıları.",
+            [
+                {
+                    "label": "Gerçek Sonuç Sızıntısı Kontrolü",
+                    "note": "Leakage audit ve model versiyon bilgileri.",
+                    "data": dataframe_to_csv_bytes(leakage_export),
+                    "file_name": "leakage_audit.csv",
+                },
+                {
+                    "label": "Model Card",
+                    "note": "Model kapsamı, sınırlar ve metrik özeti.",
+                    "data": model_card,
+                    "file_name": "model_karti.md",
+                    "mime": "text/markdown",
+                },
+            ],
+        ),
+        (
+            "report_export_review",
+            "Review & Expert Support",
+            "Manuel kontrol ve uzman değerlendirme süreçleri için çıktılar.",
+            [
+                {
+                    "label": "Expert Review Template",
+                    "note": "Uzman inceleme ve manuel kontrol şablonu.",
+                    "data": dataframe_to_csv_bytes(expert_review_template(results)),
+                    "file_name": "uzman_inceleme_sablonu.csv",
+                },
+            ],
+        ),
+    ]
+
+    render_report_section(
+        "Export Center",
+        "Rapor çıktıları iş amacına göre gruplanır; her çıktı denetim, performans, senaryo veya uzman inceleme sürecine hizmet eder.",
+    )
+    export_cols = st.columns(4, gap="medium")
+    for column, group in zip(export_cols, export_groups):
+        with column:
+            render_report_export_group(*group)
+
+    render_report_section(
+        "Detaylı tablo ve test çıktıları",
+        "Segment metrikleri ve sentetik test detayları export merkezinin altında ikincil denetim alanı olarak tutulur.",
+    )
+    with st.expander("Segment metrikleri ve sentetik test detayları", expanded=False):
+        st.markdown("<div class='report-detail-card'>", unsafe_allow_html=True)
+        st.markdown("**Segment metrikleri**")
+        render_reveal_table(format_backtest_table(segment))
+        st.markdown("**Sentetik aykırı senaryo testi**")
+        render_reveal_table(format_backtest_table(stress_results))
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_page(page_name: str) -> None:
