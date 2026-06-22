@@ -72,6 +72,18 @@ OPENROUTER_MODELS = [
         "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
         "description": "Üçüncü OpenRouter backup modeli; önceki modeller yanıt vermezse otomatik denenir.",
     },
+    {
+        "number": "4",
+        "label": "Cohere North Mini Code",
+        "model_id": "cohere/north-mini-code:free",
+        "description": "Ek OpenRouter free backup modeli; structured output destekli agentic/code odaklı seçenek.",
+    },
+    {
+        "number": "5",
+        "label": "Poolside Laguna M.1",
+        "model_id": "poolside/laguna-m.1:free",
+        "description": "Ek OpenRouter free backup modeli; uzun bağlamlı agentic/code odaklı seçenek.",
+    },
 ]
 DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[0]["model_id"]
 
