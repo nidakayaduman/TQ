@@ -3522,6 +3522,8 @@ def inject_scenario_css() -> None:
                 font-size: 0.74rem;
                 font-weight: 800;
                 white-space: nowrap;
+                max-width: 100%;
+                overflow-wrap: anywhere;
             }
             .sc-pill-good {
                 border-color: rgba(34, 197, 94, 0.30);
@@ -3608,6 +3610,7 @@ def inject_scenario_css() -> None:
                 color: rgba(245, 247, 250, 0.70);
                 font-size: 0.86rem;
                 line-height: 1.5;
+                overflow-wrap: anywhere;
             }
             .sc-risk-list li {
                 margin: 4px 0;
@@ -3619,6 +3622,7 @@ def inject_scenario_css() -> None:
                 gap: 12px;
                 border-top: 1px solid rgba(255, 255, 255, 0.08);
                 padding-top: 14px;
+                min-width: 0;
             }
             .sc-rule-label {
                 color: rgba(245, 247, 250, 0.58);
@@ -3626,6 +3630,10 @@ def inject_scenario_css() -> None:
                 font-weight: 800;
                 text-transform: uppercase;
                 letter-spacing: 0.04em;
+            }
+            .sc-rule-row .sc-pill {
+                flex: 0 1 auto;
+                text-align: right;
             }
             .sc-table-card {
                 padding: 18px;
@@ -3766,6 +3774,10 @@ def render_scenario_kpi_grid(items: list[tuple[str, str, str]]) -> None:
 def business_risk_note(text: Any) -> str:
     note = clean_user_facing_note(text)
     replacements = [
+        ("Önerilen fiyat, tahmini maliyet ve minimum marj eşiğinin altında", "Önerilen fiyat tahmini maliyet ve minimum marj eşiğinin altında kaldığı için bu senaryo önerilemez."),
+        ("Önerilen fiyat, tahmini maliyetin altında", "Önerilen fiyat tahmini maliyetin altında kaldığı için maliyet varsayımı kontrol edilmeli."),
+        ("Minimum marj eşiğinin altında kaldı", "Minimum marj eşiği sağlanmadığı için bu senaryo geçerli öneri değildir."),
+        ("Negatif marj oluştu", "Negatif marj oluştuğu için bu senaryo manuel inceleme gerektirir."),
         ("Fiyat koridoru geniş", "Fiyat koridoru geniş olduğu için önerinin belirsizliği artıyor."),
         ("Farklı fiyat modelleri arasında belirgin fark var", "Farklı fiyat modelleri birbirinden uzak sonuç verdiği için fiyat varsayımı manuel kontrol edilmeli."),
         ("Teslimat süresi baskılı", "Teslimat süresi baskılı göründüğü için operasyonel uygulanabilirlik ayrıca kontrol edilmeli."),
@@ -3848,7 +3860,7 @@ def render_scenario_cards(selected_cards: list[tuple[str, str, pd.Series]], tend
     for idx, (label, description, scenario) in enumerate(selected_cards):
         invalid_reason = clean_user_facing_note(scenario.get("invalid_reason", ""))
         is_valid = bool(scenario["hard_constraints_valid"])
-        status_label = "Temel kurallar uygun" if is_valid else f"Geçersiz: {invalid_reason or 'Kural ihlali var'}"
+        status_label = "Temel kurallar uygun" if is_valid else "Geçersiz"
         status_class = "sc-pill-good" if is_valid else "sc-pill-bad"
         total_offer = float(scenario["proposed_unit_price"]) * float(tender.get("quantity", 0))
         contribution = total_offer * float(scenario["computed_margin_pct"]) / 100
@@ -6412,7 +6424,7 @@ def render_price_corridor_models() -> None:
 
     st.markdown(
         "<div class='pc-section'><div class='section-title'>Ana fiyat koridoru</div>"
-        "<div class='section-subtitle'>Benzerlik tabanlı yöntem bu sayfanın ana fiyat bandıdır; Top-K Median ayrı bir kart olarak tekrar edilmez, orta fiyatın medyan/p50 dayanağı olarak açıklanır.</div></div>",
+        "<div class='section-subtitle'>Benzerlik tabanlı yöntem bu sayfanın ana fiyat bandıdır; düşük, orta ve yüksek fiyatı Top-K emsal havuzu üzerinden üretir.</div></div>",
         unsafe_allow_html=True,
     )
     render_primary_corridor_card(corridor, confidence_label)
@@ -6557,7 +6569,7 @@ def render_scenario_analysis() -> None:
         table_display["Dengeli Seçenek Havuzunda mı?"] = table_display["Dengeli Seçenek Havuzunda mı?"].apply(lambda value: "Evet" if bool(value) else "Hayır")
     st.markdown(
         "<div class='sc-section'><div class='section-title'>Scenario comparison table</div>"
-        "<div class='section-subtitle'>Tüm senaryolar aynı metriklerle karşılaştırılır. Uzun risk açıklamaları kesilmeden, tablo içinde satır kırarak gösterilir.</div></div>",
+        "<div class='section-subtitle'>Tüm senaryolar aynı metriklerle karşılaştırılır.</div></div>",
         unsafe_allow_html=True,
     )
     render_scenario_table(table_display)
