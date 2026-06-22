@@ -5386,6 +5386,25 @@ def current_tender() -> dict[str, Any] | None:
     return st.session_state.get("adjusted_tender") or st.session_state.get("masked_tender")
 
 
+def editable_tender_defaults(masked: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "quantity": int(float(masked.get("quantity", 1) or 1)),
+        "delivery_months": int(float(masked.get("delivery_months", 6) or 6)),
+        "competitor_count_estimate": int(float(masked.get("competitor_count_estimate", 3) or 3)),
+        "estimated_unit_cost": float(masked.get("estimated_unit_cost", masked.get("estimated_unit_cost_try", 1.0)) or 1.0),
+    }
+
+
+def apply_editable_tender_values(masked: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+    adjusted = dict(masked)
+    adjusted["quantity"] = int(values.get("quantity", adjusted.get("quantity", 1)) or 1)
+    adjusted["delivery_months"] = int(values.get("delivery_months", adjusted.get("delivery_months", 6)) or 6)
+    adjusted["competitor_count_estimate"] = int(values.get("competitor_count_estimate", adjusted.get("competitor_count_estimate", 3)) or 0)
+    adjusted["estimated_unit_cost"] = float(values.get("estimated_unit_cost", adjusted.get("estimated_unit_cost", 1.0)) or 1.0)
+    adjusted["estimated_unit_cost_try"] = adjusted["estimated_unit_cost"]
+    return adjusted
+
+
 def scenario_input_signature(tender: dict[str, Any]) -> tuple[Any, ...]:
     signature_fields = [
         "tender_id",
@@ -6013,13 +6032,24 @@ def render_test_simulator() -> None:
             }
         )
         st.session_state.last_audited_selected_tender = selected
-    st.session_state.revealed = False if st.session_state.get("last_selected_tender") != selected else st.session_state.get("revealed", False)
+    selected_changed = st.session_state.get("last_selected_tender") != selected
+    if selected_changed:
+        st.session_state.revealed = False
+        st.session_state.pop("adjusted_tender", None)
+        st.session_state.pop("scenario_result", None)
+        st.session_state.pop("best_scenario", None)
+    else:
+        st.session_state.revealed = st.session_state.get("revealed", False)
     st.session_state.last_selected_tender = selected
 
     row = test[test["tender_id"].astype(str) == selected].iloc[0]
     masked = mask_actual_result_fields(row.to_dict())
+    override_store = st.session_state.setdefault("manual_tender_overrides", {})
+    tender_override = override_store.setdefault(str(selected), editable_tender_defaults(masked))
+    adjusted = apply_editable_tender_values(masked, tender_override)
     audit = audit_pre_reveal_input(selected, masked)
     st.session_state.masked_tender = masked
+    st.session_state.adjusted_tender = adjusted
     st.session_state.leakage_audit = audit
     audit_event_once(
         f"actual_result_masked_{selected}",
@@ -6076,7 +6106,7 @@ def render_test_simulator() -> None:
         "<div class='section-subtitle'>Bu bilgiler canlı ihale girdisi gibi kullanılır; gerçek sonuç alanları maskelidir.</div></div>",
         unsafe_allow_html=True,
     )
-    render_test_tender_summary(selected, masked, audit)
+    render_test_tender_summary(selected, adjusted, audit)
 
     st.markdown(
         "<div class='ts-section'><div class='section-title'>3. Bu test akışı ne üretir?</div>"
@@ -6101,15 +6131,18 @@ def render_test_simulator() -> None:
     with st.container(key="ts_inputs_card"):
         st.markdown(
             "<div class='ts-control-title'>Canlı ihale girdileri</div>"
-            "<div class='ts-control-copy'>Miktar, teslim süresi, rekabet ve tahmini maliyet simülasyon bağlamını günceller.</div>",
+            "<div class='ts-control-copy'>Bu alanlar manuel override olarak saklanır ve simülasyon sonrası emsal, profil, fiyat ve senaryo sayfalarına taşınır. Ürün grubu, kurum ve bölge seçili test ihalesinden gelir; gerçek sonuç alanları gizli kalır.</div>",
             unsafe_allow_html=True,
         )
         c1, c2, c3, c4 = st.columns(4, gap="medium")
-        masked["quantity"] = int(c1.number_input("Miktar", min_value=1, value=int(masked.get("quantity", 1))))
-        masked["delivery_months"] = int(c2.number_input("Teslim Süresi (Ay)", min_value=1, value=int(masked.get("delivery_months", 6))))
-        masked["competitor_count_estimate"] = int(c3.number_input("Tahmini Rakip Sayısı", min_value=0, value=int(masked.get("competitor_count_estimate", 3))))
-        masked["estimated_unit_cost"] = float(c4.number_input("Tahmini Birim Maliyet", min_value=0.01, value=float(masked.get("estimated_unit_cost", 1.0))))
-        st.session_state.adjusted_tender = masked
+        tender_override["quantity"] = int(c1.number_input("Miktar", min_value=1, value=int(tender_override.get("quantity", 1)), key=f"ts_quantity_{selected}"))
+        tender_override["delivery_months"] = int(c2.number_input("Teslim Süresi (Ay)", min_value=1, value=int(tender_override.get("delivery_months", 6)), key=f"ts_delivery_{selected}"))
+        tender_override["competitor_count_estimate"] = int(c3.number_input("Tahmini Rakip Sayısı", min_value=0, value=int(tender_override.get("competitor_count_estimate", 3)), key=f"ts_competitors_{selected}"))
+        tender_override["estimated_unit_cost"] = float(c4.number_input("Tahmini Birim Maliyet", min_value=0.01, value=float(tender_override.get("estimated_unit_cost", 1.0)), key=f"ts_cost_{selected}"))
+        override_store[str(selected)] = tender_override
+        adjusted = apply_editable_tender_values(masked, tender_override)
+        st.session_state.manual_tender_overrides = override_store
+        st.session_state.adjusted_tender = adjusted
 
         if st.button("Simülasyonu çalıştır", type="primary"):
             st.session_state.pop("scenario_result", None)
@@ -6120,11 +6153,14 @@ def render_test_simulator() -> None:
                     "user_action": "run_simulation",
                     "tender_id": selected,
                     "module": "simulation",
-                    "input_summary": "masked_tender",
+                    "input_summary": "manual_adjusted_tender",
                     "output_summary": "scenario_result_created" if result else "scenario_result_empty",
                     "validation_status": "pass" if result else "fail",
                     "leakage_status": audit.get("audit_status", "unknown"),
                     "leakage_audit": audit,
+                    "details": {
+                        "manual_overrides": tender_override,
+                    },
                 }
             )
             if result:
@@ -6133,7 +6169,7 @@ def render_test_simulator() -> None:
     with st.container(key="ts_masked_expander"):
         with st.expander("Maskelenmiş girdi alanları", expanded=False):
             st.markdown("Gerçek fiyat, gerçek marj ve final sonuç alanları karşılaştırma adımına kadar gizli tutulur.")
-            safe_preview = pd.DataFrame([masked]).T.reset_index()
+            safe_preview = pd.DataFrame([adjusted]).T.reset_index()
             safe_preview.columns = ["Alan", "Değer"]
             safe_preview["Değer"] = safe_preview["Değer"].astype(str)
             render_test_masked_table(safe_preview)

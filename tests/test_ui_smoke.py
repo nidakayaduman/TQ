@@ -213,6 +213,19 @@ def test_scenario_page_labels_price_strategy_scope():
     assert "valid_candidates if not valid_candidates.empty else candidates" in APP_TEXT
 
 
+def test_test_tender_manual_inputs_persist_as_adjusted_context():
+    for text in [
+        "manual_tender_overrides",
+        "editable_tender_defaults",
+        "apply_editable_tender_values",
+        "manual_adjusted_tender",
+        "Bu alanlar manuel override olarak saklanır",
+        "simülasyon sonrası emsal, profil, fiyat ve senaryo sayfalarına taşınır",
+        "estimated_unit_cost_try",
+    ]:
+        assert text in APP_TEXT
+
+
 def test_removed_reports_and_openrouter_noise_are_absent():
     for text in [
         "Sistem Kontrolleri",
