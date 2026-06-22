@@ -97,9 +97,10 @@ def test_openrouter_models_are_explicit_and_selectable():
 def test_advisor_answer_source_is_visible():
     for text in [
         "chat-source",
-        "Hazır bağlam mesajı",
+        "Bağlam hazır",
         "OpenRouter LLM",
-        "Güvenli fallback -",
+        "Güvenli sistem yanıtı",
+        "fallback_reason",
         "answer_source",
         "advisor_llm_status",
         "set_advisor_llm_status",
@@ -122,7 +123,11 @@ def test_methodology_terms_are_present():
 
 def test_profile_page_contains_mixed_type_and_isolation_diagnostics():
     for text in [
-        "KNN emsal arama, mixed-type clustering ve Isolation Forest fiyat önermez",
+        "Bu sayfa üç farklı profil sinyalini ayrı okur",
+        "Profil skoru bileşenleri",
+        "KNN emsal benzerliği",
+        "Isolation tipiklik skoru",
+        "Mixed-type cluster skoru",
         "Mixed-Type Cluster Analizi",
         "Mixed-Type Cluster Kalitesi",
         "Silhouette Score",
@@ -209,9 +214,12 @@ def test_reveal_and_backtest_include_profile_diagnostics():
 def test_backtest_distinguishes_selected_tender_from_full_test_set():
     for text in [
         "Seçili İhale Backtest Detayı",
+        "Bu oran toplu MAPE değildir",
+    ]:
+        assert text not in APP_TEXT
+    for text in [
         "Backtest Geneli: Fiyat Koridoru Metrikleri",
         "Bu metrikler seçili ihale için değil, test yılındaki tüm ihalelerin ortalamasıdır",
-        "Bu oran toplu MAPE değildir",
         "01 Benzerlik Tabanlı Koridor: düşük=p25, orta=predicted_mid_price/Top-K medyan, yüksek=p75",
     ]:
         assert text in APP_TEXT

@@ -2904,8 +2904,8 @@ def render_profile_callout() -> None:
         <div class='pf-callout'>
             <div class='pf-callout-title'>Profil modelleri ne yapar?</div>
             <div class='pf-callout-body'>
-                KNN emsal arama, mixed-type clustering ve Isolation Forest fiyat önermez; seçili ihalenin geçmiş kazanılmış ihale profillerine yapısal olarak ne kadar benzediğini ve sıra dışı olup olmadığını analiz eder.
-                Fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.
+                Bu sayfa üç farklı profil sinyalini ayrı okur: KNN emsal arama benzer kazanılmış ihaleleri bulur, mixed-type clustering geçmiş başarı gruplarını tanımlar, Isolation Forest sıra dışılık / manuel inceleme sinyali verir.
+                Bu modeller fiyat önermez ve gerçek kazanma olasılığı üretmez; fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.
             </div>
         </div>
         """,
@@ -5282,16 +5282,38 @@ def current_tender() -> dict[str, Any] | None:
     return st.session_state.get("adjusted_tender") or st.session_state.get("masked_tender")
 
 
+def scenario_input_signature(tender: dict[str, Any]) -> tuple[Any, ...]:
+    signature_fields = [
+        "tender_id",
+        "quantity",
+        "delivery_months",
+        "delivery_days",
+        "competitor_count_estimate",
+        "estimated_unit_cost",
+        "estimated_unit_cost_try",
+        "product_group",
+        "region",
+        "procedure_type",
+    ]
+    return tuple(tender.get(field) for field in signature_fields)
+
+
 def ensure_scenario_result() -> dict[str, Any] | None:
     tender = current_tender()
     if not tender:
         return None
-    if st.session_state.get("scenario_result") and st.session_state.get("scenario_tender_id") == tender.get("tender_id"):
+    signature = scenario_input_signature(tender)
+    if (
+        st.session_state.get("scenario_result")
+        and st.session_state.get("scenario_tender_id") == tender.get("tender_id")
+        and st.session_state.get("scenario_input_signature") == signature
+    ):
         return st.session_state.scenario_result
     with st.spinner("Senaryolar hazırlanıyor..."):
         result = rank_scenarios(get_history_frame(), tender)
     st.session_state.scenario_result = result
     st.session_state.scenario_tender_id = tender.get("tender_id")
+    st.session_state.scenario_input_signature = signature
     st.session_state.best_scenario = result["scenarios"].iloc[0].to_dict()
     best = st.session_state.best_scenario
     audit_event(
@@ -6017,6 +6039,21 @@ def render_profile_fit_analysis() -> None:
     anomaly_rate = float(best.get("training_anomaly_rate", 0.0) or 0.0)
     inlier_rate = float(best.get("training_inlier_rate", 0.0) or 0.0)
     segment_rate = best.get("segment_anomaly_rate")
+    profile_components = best.get("profile_score_components", {})
+    if not isinstance(profile_components, dict):
+        profile_components = {}
+    component_weights = profile_components.get("weights", {})
+    if not isinstance(component_weights, dict):
+        component_weights = {}
+    knn_weight = float(component_weights.get("knn", 0.50) or 0.50)
+    isolation_weight = float(component_weights.get("isolation", 0.35) or 0.35)
+    cluster_weight = float(component_weights.get("cluster", 0.15) or 0.15)
+    cluster_name = str(best.get("cluster_name", "Geçmiş başarı grubu"))
+    cluster_body = (
+        "Karma profil: Bu cluster içinde tek bir ürün grubu ve bölge baskın değil; bu bilgi boş değil, grubun heterojen olduğunu anlatır."
+        if cluster_name == "Karma profil"
+        else f"{cluster_name}: Seçili ihale en yakın bu geçmiş kazanım grubuna atanmıştır."
+    )
     audit_event_once(
         f"profile_fit_analysis_run_{best.get('tender_id', current_tender().get('tender_id') if current_tender() else '')}",
         {
@@ -6049,37 +6086,70 @@ def render_profile_fit_analysis() -> None:
             {
                 "label": "Kazanılmış Profil Uyum Skoru",
                 "value": format_score(best.get("won_profile_fit_score")),
-                "body": "KNN emsal benzerliği ana sinyaldir; Isolation Forest ve mixed-type profil grubu destekleyici tanılama sağlar.",
+                "body": f"Toplam skor: KNN %{knn_weight * 100:.0f}, Isolation Forest %{isolation_weight * 100:.0f}, mixed-type cluster %{cluster_weight * 100:.0f} ağırlıkla birleşir.",
                 "badge": fit_level(best.get("won_profile_fit_score")),
                 "status": "good" if float(best.get("won_profile_fit_score", 0) or 0) >= 70 else "warn",
             },
             {
                 "label": "Geçmiş Başarı Grubu",
-                "value": str(best.get("cluster_id", "Hesaplanamadı")),
-                "body": str(best.get("cluster_name", "Geçmiş başarı grubu")),
-                "badge": "Mixed-type",
+                "value": f"Cluster {format_int(best.get('cluster_id'))}",
+                "body": cluster_body,
+                "badge": "Mixed-type cluster",
                 "status": "good",
             },
             {
                 "label": "Sıra Dışılık Kontrolü",
                 "value": profile_label,
-                "body": "Geçmiş kazanılmış kayıtlar içinde normal mi, yoksa manuel inceleme gerektirecek kadar farklı mı?",
+                "body": "Isolation Forest seçili ihalenin geçmiş kazanılmış dağılım içinde tipik mi, manuel inceleme gerektirecek kadar farklı mı olduğunu ölçer.",
                 "badge": "Isolation Forest",
                 "status": profile_status,
             },
             {
                 "label": "Emsal Benzerlik Gücü",
                 "value": f"{result.get('top10_avg_similarity', 0):.2f}",
-                "body": "En yakın emsallerin seçili ihaleye ortalama yakınlığını gösterir.",
-                "badge": "0-1 yakınlık",
+                "body": "0-1 aralığında Top-10 yakınlık skorudur; 0.81 yaklaşık 81/100 benzerlik gücü gibi okunur.",
+                "badge": "KNN / Top-10",
                 "status": "good",
             },
         ]
     )
     st.markdown(
         "<div class='pf-score-note'><b>Profil uyum skoru nasıl hesaplanır?</b> "
-        "Bu skor fiyat veya maliyet alanlarını kullanmadan hesaplanan yapısal profil uyumudur. KNN emsal benzerliği ana ağırlığı taşır; Isolation Forest geçmiş kazanılmış dağılıma alışıldık uyumu, mixed-type clustering ise destekleyici profil grubu yakınlığını ve saflığını gösterir. Skor fiyat kararı veya gerçek kazanma olasılığı değildir.</div>",
+        f"Bu skor fiyat, maliyet, gerçek marj veya önerilen teklif fiyatı kullanmadan hesaplanan yapısal profil uyumudur. "
+        f"KNN emsal benzerliği %{knn_weight * 100:.0f} ağırlıkla geçmişte kazanılmış benzer ihaleleri; "
+        f"Isolation Forest %{isolation_weight * 100:.0f} ağırlıkla geçmiş kazanım dağılımına tipikliği; "
+        f"mixed-type cluster %{cluster_weight * 100:.0f} ağırlıkla başarı grubu yakınlığı ve cluster saflığını temsil eder. "
+        "Skor fiyat kararı veya gerçek kazanma olasılığı değildir.</div>",
         unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='pf-section-tight'><div class='section-title'>Profil skoru bileşenleri</div>"
+        "<div class='section-subtitle'>Bu kartlar hangi sinyalin neyi ölçtüğünü ve toplam profile hangi ağırlıkla girdiğini gösterir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_profile_metric_grid(
+        [
+            (
+                f"KNN emsal benzerliği (%{knn_weight * 100:.0f})",
+                format_score(profile_components.get("knn_profile_score", best.get("knn_profile_score"))),
+                "Benzer kazanılmış ihalelerin ürün, kurum, bölge, miktar ve metin yakınlığına bakar. 0-1 benzerlik 100'lük skora çevrilir.",
+            ),
+            (
+                f"Isolation tipiklik skoru (%{isolation_weight * 100:.0f})",
+                format_score(profile_components.get("inlier_score", best.get("inlier_score"))),
+                "Seçili ihale geçmiş kazanılmış dağılımda ne kadar normal görünüyor? Düşükse manuel inceleme ihtiyacı artar.",
+            ),
+            (
+                f"Mixed-type cluster skoru (%{cluster_weight * 100:.0f})",
+                format_score(profile_components.get("cluster_component_score", best.get("mixed_cluster_score"))),
+                "Gower mesafesiyle bulunan başarı grubuna yakınlık ve cluster saflığını birlikte okur.",
+            ),
+            (
+                "Toplam profil uyumu",
+                format_score(best.get("won_profile_fit_score")),
+                "Yukarıdaki üç sinyalin ağırlıklı birleşimidir; fiyat önerisi veya kazanma olasılığı değildir.",
+            ),
+        ]
     )
 
     st.markdown(
@@ -6098,6 +6168,7 @@ def render_profile_fit_analysis() -> None:
             "Başarı grubu detayı",
             [
                 ("Başarı grubu adı", str(best.get("cluster_name", "Hesaplanamadı"))),
+                ("Bu ad ne demek?", "Karma profil, grupta tek ürün/bölge baskınlığı düşük olduğu için kullanılır; boş bilgi değildir." if cluster_name == "Karma profil" else "Cluster adı baskın ürün grubu, bölge ve hacim karakterinden türetilir."),
                 ("Bu gruptaki ihale sayısı", format_int(best.get("cluster_count"))),
                 ("Baskın ürün grubu", str(best.get("cluster_dominant_product_group", "Hesaplanamadı"))),
                 ("Baskın ürün grubu oranı", format_pct(float(best.get("cluster_dominant_product_group_ratio", 0) or 0) * 100)),
@@ -6127,15 +6198,15 @@ def render_profile_fit_analysis() -> None:
 
     st.markdown(
         "<div class='pf-section'><div class='section-title'>Mixed-Type Cluster Kalitesi</div>"
-        "<div class='section-subtitle'>Bu metrikler Gower tabanlı cluster yapısının ayrışmasını, dengesini ve seçili ihalenin atamasının ne kadar net olduğunu gösterir; fiyat metriği değildir.</div></div>",
+        "<div class='section-subtitle'>Bu bölüm yalnızca mixed-type clustering kalitesidir. KNN emsal yakınlığı ve Isolation Forest sıra dışılık metrikleri değildir; fiyat tahmini hiç değildir.</div></div>",
         unsafe_allow_html=True,
     )
     render_profile_metric_grid(
         [
-            ("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "1'e yakınsa profil grupları daha net ayrılır."),
-            ("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Daha düşük değer daha sıkı profil grubu anlamına gelir."),
-            ("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük profil grubunun kayıt sayısı."),
-            ("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Çok küçük veya boş cluster sayısı."),
+            ("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Mixed-type cluster ayrışmasıdır. 1'e yakınsa gruplar birbirinden daha net ayrılır; 0'a yakınsa sınırlar daha bulanıktır."),
+            ("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Cluster içi Gower uzaklıklarının toplamıdır. Daha düşük değer, aynı gruptaki ihalelerin birbirine daha benzer olduğunu gösterir."),
+            ("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük geçmiş başarı grubunda kaç ihale olduğunu gösterir; dengesiz aralık segmentlerin eşit dağılmadığını anlatır."),
+            ("Küçük / boş cluster", f"{format_int(best.get('small_cluster_count'))} / {format_int(best.get('empty_cluster_count'))}", "Çok küçük cluster az örnekli profil grubu demektir; boş cluster modelin beklenen grup sayısıyla veri dağılımı arasındaki farkı gösterir."),
         ]
     )
 
@@ -6169,14 +6240,14 @@ def render_profile_fit_analysis() -> None:
     )
     render_profile_metric_grid(
         [
-            ("Durum", profile_label, "Geçmiş kazanılmış dağılım içindeki tipiklik sinyali; kayıp tahmini değildir."),
-            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Eşik altı değer daha sıra dışı kabul edilir."),
-            ("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Isolation Forest karar sınırıdır."),
-            ("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise manuel kontrol sinyali vardır."),
-            ("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Kazanılmış kayıtların tipik profil oranı."),
-            ("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Daha az tipik görülen kayıt oranı."),
-            ("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Modelin beklenen sıra dışı oranı."),
-            ("Ürün grubunda manuel inceleme oranı", format_pct(float(segment_rate) * 100) if segment_rate is not None and not pd.isna(segment_rate) else "-", "Aynı ürün grubundaki manuel inceleme sinyali."),
+            ("Durum", profile_label, "Seçili ihale Isolation Forest kararına göre geçmiş kazanılmış profiller içinde tipik mi? Bu kayıp/kazanım tahmini değildir."),
+            ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Seçili ihalenin Isolation Forest ham tipiklik skorudur. Eşik olan 0'ın altına düşerse sıra dışı kabul edilir."),
+            ("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Karar sınırıdır. Anomaly score bu değerin altındaysa manuel inceleme sinyali üretir."),
+            ("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise bu ihale geçmiş kazanılmış profile göre ayrıca iş kontrolü gerektirir."),
+            ("Normal görülen kayıt oranı", format_pct(inlier_rate * 100), "Isolation Forest eğitimdeki kazanılmış kayıtların ne kadarını tipik gördüğünü gösterir."),
+            ("Manuel inceleme oranı", format_pct(anomaly_rate * 100), "Eğitimdeki kazanılmış kayıtların ne kadarını daha az tipik işaretlediğini gösterir."),
+            ("Contamination ayarı", format_pct(float(best.get("isolation_contamination", 0)) * 100), "Model kurulumunda beklenen sıra dışı oranıdır; burada %5 ayar, kayıtların yaklaşık %5'ini manuel inceleme adayı kabul eder."),
+            ("Ürün grubunda manuel inceleme oranı", format_pct(float(segment_rate) * 100) if segment_rate is not None and not pd.isna(segment_rate) else "-", "Aynı ürün grubundaki geçmiş kazanılmış kayıtların ne kadarının sıra dışı işaretlendiğini gösterir."),
         ]
     )
 
@@ -6199,15 +6270,15 @@ def render_profile_fit_analysis() -> None:
 
     st.markdown(
         "<div class='pf-section'><div class='section-title'>Emsal sinyali</div>"
-        "<div class='section-subtitle'>Profil uyumu emsal ihale kalitesiyle birlikte okunur.</div></div>",
+        "<div class='section-subtitle'>Bu bölüm KNN / retrieval kalitesidir. Emsal havuzu seçili ihaleye ne kadar benziyorsa profil uyum skoru ve fiyat koridoru o kadar güvenilir okunur.</div></div>",
         unsafe_allow_html=True,
     )
     render_profile_metric_grid(
         [
-            ("Ürün grubu eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Benzer ihalelerin aynı ürün grubunda olma oranı."),
-            ("Bölge eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Benzer ihalelerin aynı bölgede olma oranı."),
-            ("Miktar bandı eşleşmesi", format_pct(quality.get("quantity_band_match_rate", 0) * 100), "Benzer ihalelerin yakın miktar ölçeğinde olma oranı."),
-            ("Top-10 emsal benzerliği", f"{result.get('top10_avg_similarity', 0):.2f}", "En yakın emsal havuzunun ortalama yakınlığı."),
+            ("Ürün grubu eşleşmesi", format_pct(quality.get("product_group_match_rate", 0) * 100), "Top-K emsal havuzunda seçili ihale ile aynı ürün grubunda olan kazanılmış ihale oranıdır."),
+            ("Bölge eşleşmesi", format_pct(quality.get("region_match_rate", 0) * 100), "Top-K emsallerin seçili ihale ile aynı bölgede olma oranıdır; bölgesel fiyat/profil benzerliğini destekler."),
+            ("Miktar bandı eşleşmesi", format_pct(quality.get("quantity_band_match_rate", 0) * 100), "Top-K emsallerin seçili ihaleye yakın miktar ölçeğinde olma oranıdır; hacim farkı riskini anlatır."),
+            ("Top-10 emsal benzerliği", f"{result.get('top10_avg_similarity', 0):.2f}", "0-1 aralığında ortalama yakınlıktır. 0.81 yaklaşık 81/100 güçlü emsal yakınlığı demektir."),
         ]
     )
 
@@ -6399,15 +6470,11 @@ def render_scenario_analysis() -> None:
         ("margin_protect", "Marj Koruma Senaryosu", "Bu senaryo, karlılığı korumaya daha fazla ağırlık verir."),
     ]
     selected_cards = []
-    selected_indices: set[int] = set()
     for strategy_mode, label, description in strategy_targets:
-        candidates = valid_scenarios[valid_scenarios.get("strategy_mode", "") == strategy_mode].copy()
-        if candidates.empty:
-            candidates = valid_scenarios.loc[~valid_scenarios.index.isin(selected_indices)].copy()
+        candidates = scenarios[scenarios.get("strategy_mode", "") == strategy_mode].copy()
         if candidates.empty:
             continue
         idx = candidates["scenario_score"].astype(float).idxmax()
-        selected_indices.add(int(idx))
         selected_cards.append((label, description, scenarios.loc[idx]))
     render_scenario_cards(selected_cards, tender)
 
@@ -6782,30 +6849,6 @@ def render_backtest() -> None:
     leakage_pass = bool(not results.empty and (results["leakage_audit_status"] == "pass").all())
 
     render_backtest_summary(results, metrics, leakage_pass)
-    selected_row = selected_test_tender()
-    selected_result = pd.DataFrame()
-    if selected_row is not None and "tender_id" in results:
-        selected_result = results[results["tender_id"].astype(str) == str(selected_row.get("tender_id"))]
-    if not selected_result.empty:
-        selected = selected_result.iloc[0]
-        with st.expander("Seçili ihale detayını göster", expanded=False):
-            st.markdown(
-                "<div class='rc-section' style='margin-top:0;'><div class='section-title'>Seçili İhale Backtest Detayı</div>"
-                "<div class='section-subtitle'>Bu bölüm yalnızca seçili ihale için reveal sonrası tekil kontroldür. Aşağıdaki Backtest Geneli bölümleri tüm test yılı ortalamalarını gösterir.</div></div>",
-                unsafe_allow_html=True,
-            )
-            render_reveal_metric_grid(
-                [
-                    ("Orta koridor", format_try(selected["predicted_mid_price"]), "Seçili ihale için Top-K medyan fiyatı."),
-                    ("Gerçek fiyat", format_try(selected["actual_won_unit_price"]), "Reveal sonrası gerçek kazanılmış fiyat."),
-                    ("Tekil mutlak hata", format_try(selected["absolute_error_mid"]), "Orta koridor ile gerçek fiyat farkı."),
-                    ("Tekil yüzde hata", format_pct(float(selected["percentage_error_mid"])), "Bu oran toplu MAPE değildir."),
-                    ("Seçili band", f"{format_try(selected['predicted_low_price'])} - {format_try(selected['predicted_high_price'])}", "Seçili ihale düşük-yüksek koridoru."),
-                    ("Band içinde mi?", "Evet" if bool(selected["actual_inside_band"]) else "Hayır", "Yalnızca seçili ihale için kapsama kontrolü."),
-                    ("Seçili band genişliği", format_try(selected["band_width"]), "Seçili ihale düşük-yüksek farkı."),
-                ],
-                columns=4,
-            )
     with st.expander("Test modu adımları", expanded=False):
         render_method_grid(
             [
@@ -7252,7 +7295,7 @@ def render_advisor() -> None:
                     "Analiz bağlamı hazır. Bu ihalenin profil uyumunu, fiyat koridorunu, karlılığını, risklerini "
                     "ve benzer ihalelerini açıklayabilirim."
                 ),
-                "source": "Hazır bağlam mesajı",
+                "source": "Bağlam hazır",
             }
         ]
 
@@ -7342,7 +7385,7 @@ def render_advisor() -> None:
                         "Analiz bağlamı hazır. Bu ihalenin profil uyumunu, fiyat koridorunu, karlılığını, "
                         "risklerini ve benzer ihalelerini açıklayabilirim."
                     ),
-                    "source": "Hazır bağlam mesajı",
+                    "source": "Bağlam hazır",
                 }
             ]
         if selected_question:
@@ -7539,7 +7582,7 @@ def render_advisor() -> None:
                         fallback_reason = "OpenRouter API key bulunamadı; güvenli sistem yanıtı kullanıldı."
                     elif "offline" in raw_fallback_reason.casefold():
                         fallback_reason = "LLM offline modda; güvenli sistem yanıtı kullanıldı."
-                    assistant_source = f"Güvenli fallback - {fallback_reason}"
+                    assistant_source = "Güvenli sistem yanıtı"
                     fallback_validation = dict(validation)
                     fallback_validation.update(
                         {
@@ -7551,6 +7594,7 @@ def render_advisor() -> None:
                             "grounding_score": 1.0,
                             "prompt_injection_detected": False,
                             "fallback_used": True,
+                            "fallback_reason": fallback_reason,
                         }
                     )
                     st.session_state.advisor_validation = fallback_validation

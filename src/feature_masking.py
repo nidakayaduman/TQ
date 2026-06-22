@@ -30,7 +30,8 @@ def mask_actual_result_fields(record: pd.Series | dict[str, Any] | pd.DataFrame)
         return record.drop(columns=blocked_fields_present(record.columns), errors="ignore")
     if isinstance(record, pd.Series):
         return record.drop(labels=blocked_fields_present(record.index), errors="ignore")
-    return {key: value for key, value in record.items() if key not in ACTUAL_RESULT_FIELDS}
+    blocked = set(configured_actual_result_fields())
+    return {key: value for key, value in record.items() if key not in blocked}
 
 
 def select_bid_time_fields(df: pd.DataFrame) -> pd.DataFrame:
