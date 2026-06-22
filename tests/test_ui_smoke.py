@@ -86,6 +86,9 @@ def test_openrouter_models_are_explicit_and_selectable():
         '"number": "2"',
         "OpenAI gpt-oss-120b",
         "openai/gpt-oss-120b:free",
+        '"number": "3"',
+        "NVIDIA Nemotron 3 Super 120B A12B",
+        "nvidia/nemotron-3-super-120b-a12b:free",
         "openrouter_model_attempt_order",
         "openrouter_model_label",
         "advisor-model-chain",
@@ -97,6 +100,20 @@ def test_openrouter_models_are_explicit_and_selectable():
     ]:
         assert text in APP_TEXT
     assert "google/gemma-4-31b-it:free" not in APP_TEXT
+
+
+def test_advisor_prompt_explains_metrics_from_basics():
+    for text in [
+        "temelden açıkla: her önemli metrik",
+        "ne ölçer",
+        "hangi veriden/modelden gelir",
+        "değer yüksek/düşük ise nasıl okunur",
+        "iş kararı için ne anlama gelir",
+        "Mixed-type clustering",
+        "profil grubu benzerliği verir",
+        "Isolation Forest sıra dışılık/manual review sinyali verir",
+    ]:
+        assert text in APP_TEXT
 
 
 def test_advisor_answer_source_is_visible():

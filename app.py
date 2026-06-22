@@ -66,6 +66,12 @@ OPENROUTER_MODELS = [
         "model_id": "openai/gpt-oss-120b:free",
         "description": "Backup OpenRouter free model; primary model yanıt vermezse otomatik denenir.",
     },
+    {
+        "number": "3",
+        "label": "NVIDIA Nemotron 3 Super 120B A12B",
+        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+        "description": "Üçüncü OpenRouter backup modeli; önceki modeller yanıt vermezse otomatik denenir.",
+    },
 ]
 DEFAULT_OPENROUTER_MODEL = OPENROUTER_MODELS[0]["model_id"]
 
@@ -5152,15 +5158,21 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
                 "role": "system",
                 "content": (
                     "Sen Türkçe yanıt veren, yalnızca verilen MODEL_CONTEXT_JSON içeriğini yorumlayan "
-                    "ihale karar destek analistisin. Hesap yapma, sayı uydurma, eksik bilgiyi tamamlama. "
-                    "Kullanıcının sorusunu özellikle cevapla ama yanıtı mutlaka verilen emsal ihale, fiyat "
-                    "koridoru, Linear Regression Baseline, Random Forest / Ağaç Tabanlı Baseline, medyan baz, Cost Plus Margin, "
-                    "mixed-type başarı grubu, Isolation Forest sıra dışılık kontrolü, senaryo skorları, risk "
-                    "bayrakları ve sızıntı kontrolü bağlamıyla sınırla. Veri setinde sadece kazanılmış "
-                    "ihaleler olduğunu açıkla; kaybedilmiş ihale olmadığı için gerçek kazanma olasılığı, "
-                    "rakip bazlı kazanma tahmini veya kesin teklif kararı iddia etme. Kullanıcı gerçek "
-                    "sonucu açmadıysa gizli gerçek fiyat veya karlılık sonucunu kullanma. Yanıt geçerli "
-                    "JSON olmalı; markdown, tablo veya serbest metin verme."
+                    "ihale karar destek analistisin. Kullanıcının sorusunu doğrudan cevapla ve metrikleri "
+                    "temelden açıkla: her önemli metrik için 'ne ölçer', 'hangi veriden/modelden gelir', "
+                    "'değer yüksek/düşük ise nasıl okunur' ve 'iş kararı için ne anlama gelir' bilgisini ver. "
+                    "Profil uyumu, emsal benzerliği, ürün grubu/bölge/miktar eşleşmesi, fiyat koridoru, "
+                    "model güveni, senaryo skoru, marj/karlılık, risk uyarıları, mixed-type başarı grubu ve "
+                    "Isolation Forest sıra dışılık sinyalini birbirine karıştırmadan anlat. Mixed-type clustering "
+                    "profil grubu benzerliği verir; Isolation Forest sıra dışılık/manual review sinyali verir; "
+                    "ikisi de fiyat önermez ve kazanır/kaybeder tahmini yapmaz. Fiyat koridoru ve baseline modeller "
+                    "ayrı fiyat referanslarıdır; senaryo skoru gerçek kazanma olasılığı değildir. "
+                    "Hesap yapma, sayı uydurma, eksik bilgiyi tamamlama; sadece MODEL_CONTEXT_JSON içindeki sayıları "
+                    "ve kanıtları kullan. Veri setinde sadece kazanılmış ihaleler olduğunu açıkla; kaybedilmiş ihale "
+                    "olmadığı için gerçek kazanma olasılığı, rakip bazlı kazanma tahmini veya kesin teklif kararı "
+                    "iddia etme. Kullanıcı gerçek sonucu açmadıysa gizli gerçek fiyat veya karlılık sonucunu kullanma. "
+                    "Yanıt geçerli JSON olmalı; markdown, tablo veya serbest metin verme. JSON alanlarında açıklamalar "
+                    "iş kullanıcısının anlayacağı açık Türkçe cümleler olmalı."
                 ),
             },
             {"role": "user", "content": prompt},
