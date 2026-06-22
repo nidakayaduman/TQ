@@ -104,7 +104,7 @@ PWIN_PROXY_EXPLANATION = (
 )
 BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v3"
 SCENARIO_RENDER_CACHE_VERSION = "scenario-cards-v2"
-ADVISOR_CHAT_UI_VERSION = "advisor-chat-v3"
+ADVISOR_CHAT_UI_VERSION = "advisor-chat-v4"
 PROFILE_DIAGNOSTIC_COLUMNS = [
     "cluster_silhouette_score",
     "cluster_inertia",
@@ -7746,7 +7746,8 @@ def render_advisor() -> None:
                 llm_payload = call_guarded_llm(context, user_question)
                 if llm_payload:
                     assistant_text = advisor_payload_to_chat_text(llm_payload)
-                    assistant_source = "OpenRouter LLM"
+                    used_model = str(llm_payload.get("validation_result", {}).get("llm_model") or selected_openrouter_model_id())
+                    assistant_source = f"OpenRouter LLM - {openrouter_model_label(used_model)}"
                     st.session_state.advisor_output = llm_payload
                     st.session_state.advisor_validation = llm_payload.get("validation_result", {})
                 else:

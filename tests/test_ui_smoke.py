@@ -121,6 +121,7 @@ def test_advisor_answer_source_is_visible():
         "chat-source",
         "Bağlam hazır",
         "OpenRouter LLM",
+        "OpenRouter LLM -",
         "Güvenli sistem yanıtı",
         "fallback_reason",
         "answer_source",
