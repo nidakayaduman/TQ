@@ -98,16 +98,20 @@ TURKISH_WARNING = (
 
 PWIN_PROXY_EXPLANATION = (
     "Bu MVP’de gerçek kazanma olasılığı hesaplanmaz. Bunun yerine karar destek göstergesi "
-    "olarak Kazanılmış Profil Uyum Skoru kullanılır. Bu skor; emsal benzerlik, K-Means başarı profili, "
+    "olarak Kazanılmış Profil Uyum Skoru kullanılır. Bu skor; emsal benzerlik, mixed-type başarı profili, "
     "Isolation Forest uygunluğu, fiyat bandı uyumu, karlılık/risk dengesi ve model güveninden beslenir."
 )
-BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v2"
+BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v3"
 PROFILE_DIAGNOSTIC_COLUMNS = [
     "cluster_silhouette_score",
     "cluster_inertia",
     "cluster_min_size",
     "cluster_max_size",
     "cluster_assignment_confidence",
+    "knn_profile_score",
+    "mixed_cluster_score",
+    "cluster_purity_score",
+    "manual_review_reasons",
     "isolation_contamination",
     "segment_anomaly_rate",
     "is_inlier",
@@ -965,6 +969,11 @@ def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
         "anomaly_score": 0.0,
         "isolation_threshold": 0.0,
         "manual_review_flag": False,
+        "manual_review_reasons": "",
+        "knn_profile_score": 0.0,
+        "mixed_cluster_score": 0.0,
+        "cluster_purity_score": 0.0,
+        "profile_score_components": {},
         "isolation_contamination": 0.05,
         "training_inlier_rate": 0.95,
         "training_anomaly_rate": 0.05,
@@ -1542,7 +1551,7 @@ def fallback_chat_answer(question: str, context: dict[str, Any], advisor: dict[s
             f"1. Emsal havuzu: Sistem {similar_count} benzer kazanılmış ihaleyi referans aldı. "
             "Ürün grubu, bölge, kurum tipi, miktar ve metinsel benzerlik birlikte kullanılır.\n\n"
             f"2. Başarı grubu: İhale '{cluster_name}' profiline yakın konumlandı. "
-            "Bu K-Means çıktısı, ihalenin hangi geçmiş başarı segmentine benzediğini gösterir.\n\n"
+            "Bu mixed-type cluster çıktısı, ihalenin hangi geçmiş başarı segmentine benzediğini gösterir.\n\n"
             f"3. Sıra dışılık kontrolü: {isolation_status}. Isolation Forest burada kayıp tahmini yapmaz; sadece geçmiş kazanılmış dağılım içinde alışıldık mı diye bakar.\n\n"
             f"İş yorumu: Profil uyumu {profile_score:.1f}/100. Bu değer yüksekse geçmiş kazanım örneklerine benzerlik güçlüdür; düşükse fiyat ve teslim koşulları daha dikkatli incelenmelidir."
         )
@@ -1626,7 +1635,7 @@ def call_guarded_llm(context: dict[str, Any], question: str) -> dict[str, Any] |
                     "ihale karar destek analistisin. Hesap yapma, sayı uydurma, eksik bilgiyi tamamlama. "
                     "Kullanıcının sorusunu özellikle cevapla ama yanıtı mutlaka verilen emsal ihale, fiyat "
                     "koridoru, Linear Regression Baseline, Random Forest / Ağaç Tabanlı Baseline, medyan baz, Cost Plus Margin, "
-                    "K-Means başarı grubu, Isolation Forest sıra dışılık kontrolü, senaryo skorları, risk "
+                    "mixed-type başarı grubu, Isolation Forest sıra dışılık kontrolü, senaryo skorları, risk "
                     "bayrakları ve sızıntı kontrolü bağlamıyla sınırla. Veri setinde sadece kazanılmış "
                     "ihaleler olduğunu açıkla; kaybedilmiş ihale olmadığı için gerçek kazanma olasılığı, "
                     "rakip bazlı kazanma tahmini veya kesin teklif kararı iddia etme. Kullanıcı gerçek "
@@ -2187,12 +2196,12 @@ def render_methodology() -> None:
         )
 
     with tabs[1]:
-        section_header("Benzerlik nasıl hesaplanıyor?", "TF-IDF ve cosine similarity yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır.", "Retrieval")
+        section_header("Benzerlik nasıl hesaplanıyor?", "Yerel metin embedding ve yapısal KNN sinyalleri yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır.", "Retrieval")
         render_method_grid(
             [
                 ("İhale metni hazırlanır", "Ürün adı, ürün grubu, kurum, bölge, ihale tipi ve miktar bilgileri tek bir ihale profiline dönüştürülür."),
-                ("TF-IDF ile vektöre çevrilir", "Ayırt edici kelimeler daha güçlü temsil edilir; genel kelimelerin etkisi azaltılır."),
-                ("Cosine similarity hesaplanır", "Yeni ihale vektörü geçmiş ihale vektörleriyle karşılaştırılır."),
+                ("Yerel embedding ile vektöre çevrilir", "Metinsel alanlar deterministik yerel vektörlerle temsil edilir; dış servis veya secret gerekmez."),
+                ("KNN benzerliği hesaplanır", "Metin embedding yakınlığı ürün, kurum tipi, bölge, ihale tipi, miktar, teslim ve rekabet sinyalleriyle birleştirilir."),
                 ("Top-K benzer ihaleler seçilir", "En yüksek skorlu kazanılmış ihaleler emsal listeye alınır."),
                 ("Koridor ve skorlar beslenir", "Fiyat koridoru, profil uyumu ve danışman açıklamaları bu emsal setten destek alır."),
             ],
@@ -2202,13 +2211,13 @@ def render_methodology() -> None:
         c1, c2 = st.columns(2, gap="medium")
         with c1:
             glass_card(
-                "TF-IDF",
-                "Metin içindeki kelimeleri sayısal hale getirir. Sık geçen ama ayırt edici olmayan kelimelerin etkisini azaltır; ürün, kurum veya ihale tipi gibi ayırt edici kelimelerin etkisini artırır.",
+                "Yerel metin embedding",
+                "Ürün, kurum ve ihale metinlerini dış servis kullanmadan deterministik vektörlere çevirir. Bu vektörler yapısal alanlarla birlikte Top-K emsal aramasında kullanılır.",
                 "Metin temsili",
             )
         with c2:
             glass_card(
-                "Cosine similarity",
+                "Embedding yakınlığı",
                 "İki ihalenin sayısal vektörlerinin birbirine ne kadar yakın olduğunu ölçer. Skor 1'e yaklaştıkça benzerlik artar; 0'a yaklaştıkça azalır.",
                 "Yakınlık hesabı",
             )
@@ -2221,7 +2230,7 @@ def render_methodology() -> None:
                 ["Ürün Grubu Eşleşme Oranı", "İlk K benzer ihale içinde aynı ürün grubuna düşen kayıt oranı."],
                 ["Bölge Eşleşme Oranı", "Benzer ihalelerin seçili ihale ile aynı bölgede olma oranı."],
                 ["Miktar Bandı Eşleşme Oranı", "Benzer ihalelerin yakın miktar ölçeğinde olma oranı."],
-                ["İlk K Ortalama Benzerlik", "Getirilen benzer ihalelerin ortalama cosine/özellik benzerliği."],
+                ["İlk K Ortalama Benzerlik", "Getirilen benzer ihalelerin ortalama embedding ve yapısal özellik benzerliği."],
             ],
             columns=["Metrik", "Ne anlatır?"],
         )
@@ -2231,8 +2240,8 @@ def render_methodology() -> None:
         section_header("Model Bileşenleri", "Her bileşen karar destek çıktısının farklı bir parçasını açıklar.", "Model")
         render_model_grid(
             [
-                ("01", "TF-IDF + Cosine Similarity", "Ne yapar: Yeni ihaleye benzeyen kazanılmış ihaleleri bulur. Neden var: Emsal seti olmadan fiyat ve profil yorumu zayıf kalır. Katkı: Benzer ihaleler listesini ve koridor girdisini üretir.", "blue"),
-                ("02", "K-Means", "Ne yapar: Kazanılmış ihaleleri ihale anında bilinen profil özelliklerine göre gruplar. Neden var: Tek tek ihale yerine profil segmenti görmeyi sağlar. Katkı: Başarı grubu ve profil yorumunu destekler; yeni/test ihalesi atamasında gerçek fiyat veya senaryo fiyatı kullanılmaz.", "purple"),
+                ("01", "Embedding + KNN Emsal Arama", "Ne yapar: Yeni ihaleye benzeyen kazanılmış ihaleleri bulur. Neden var: Emsal seti olmadan fiyat ve profil yorumu zayıf kalır. Katkı: Benzer ihaleler listesini, profil uyumunun ana sinyalini ve koridor girdisini üretir.", "blue"),
+                ("02", "Mixed-Type Clustering", "Ne yapar: Kazanılmış ihaleleri kategorik ve sayısal profil alanlarını birlikte okuyan Gower mesafesiyle gruplar. Neden var: Tek tek ihale yerine profil segmenti görmeyi sağlar. Katkı: Profil yorumunu destekler; ana karar sinyali KNN emsalleridir.", "purple"),
                 ("03", "Isolation Forest", "Ne yapar: Yeni ihalenin geçmiş profile normal mi sıra dışı mı uyduğunu kontrol eder. Neden var: Aykırı durumları saklamaz. Katkı: Risk ve manuel inceleme sinyali üretir.", "amber"),
                 ("04", "Price Corridor Engine", "Ne yapar: Emsal kazanılmış ihalelerden düşük, orta ve yüksek fiyat bandı çıkarır. Neden var: Tek nokta fiyat yerine karar aralığı verir. Katkı: Senaryo fiyatlarını besler.", "green"),
                 ("05", "Scenario Scoring", "Ne yapar: Fiyat, karlılık, profil uyumu, güven ve risk cezasını tek karar destek skorunda birleştirir. Neden var: Alternatif teklifleri kıyaslanabilir hale getirir. Katkı: Sıralı senaryo önerisi üretir.", "cyan"),
@@ -2305,8 +2314,8 @@ def render_methodology() -> None:
                 ["Ortalama fiyat aralığı genişliği", "Düşük ve yüksek fiyat önerisi arasındaki ortalama fark."],
                 ["Band kalite skoru", "Fiyat bandının hem gerçek fiyatı kapsamasını hem de çok geniş olmamasını birlikte değerlendirir."],
                 ["Gerçek Kazanılmış Senaryo Sıralaması", "Tarihsel gerçek konfigürasyon aday senaryolar arasında ne kadar üstte kaldı?"],
-                ["K-Means Silhouette Score", "Profil clusterlarının birbirinden ne kadar ayrıştığını gösterir."],
-                ["K-Means Inertia", "Cluster içindeki kayıtların merkeze ne kadar yakın olduğunu gösterir."],
+                ["Mixed-Type Silhouette Score", "Gower mesafesiyle üretilen profil clusterlarının birbirinden ne kadar ayrıştığını gösterir."],
+                ["Mixed-Type Cluster Sıkılığı", "Cluster içindeki kayıtların birbirine ortalama yakınlığını gösterir."],
                 ["Cluster Size Distribution", "Clusterların dengeli mi, aşırı küçük veya boş mu olduğunu gösterir."],
                 ["Assignment Confidence", "Seçili ihalenin atandığı cluster’a ne kadar net yakın olduğunu gösterir."],
                 ["Isolation Forest Inlier Rate", "Geçmiş kazanılmış test kayıtlarının ne kadarının normal göründüğünü ölçer."],
@@ -2534,7 +2543,7 @@ def render_profile_fit_analysis() -> None:
     )
 
     info_callout(
-        "K-Means ve Isolation Forest fiyat önermez. Bu modeller, seçili ihalenin geçmiş kazanılmış ihale profillerine benzerliğini ve sıra dışı olup olmadığını analiz eder. Fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.",
+        "KNN emsal arama, mixed-type clustering ve Isolation Forest fiyat önermez. Bu modeller, seçili ihalenin geçmiş kazanılmış ihale profillerine yapısal olarak benzerliğini ve sıra dışı olup olmadığını analiz eder. Fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.",
         "Profil modelleri ne yapar?",
     )
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
@@ -2546,7 +2555,7 @@ def render_profile_fit_analysis() -> None:
                 "icon": "Skor",
                 "title": "Kazanılmış Profil Uyum Skoru",
                 "value": format_score(best.get("won_profile_fit_score")),
-                "body": "Isolation Forest geçmişte kazanılmış dağılıma alışıldık uyumu, K-Means başarı grubuna yakınlığı ölçer.",
+                "body": "KNN emsal benzerliği ana sinyaldir; Isolation Forest ve mixed-type profil grubu destekleyici tanılama sağlar.",
                 "pill": fit_level(best.get("won_profile_fit_score")),
                 "color": "blue",
             },
@@ -2555,7 +2564,7 @@ def render_profile_fit_analysis() -> None:
                 "title": "Geçmiş Başarı Grubu",
                 "value": str(best.get("cluster_id", "Hesaplanamadı")),
                 "body": str(best.get("cluster_name", "Geçmiş başarı grubu")),
-                "pill": "K-Means",
+                "pill": "Mixed-type",
                 "color": "purple",
             },
             {
@@ -2579,18 +2588,18 @@ def render_profile_fit_analysis() -> None:
         size="metric-size",
     )
     info_callout(
-        "Bu skor iki modelin birleşimidir. Isolation Forest, seçili ihalenin geçmişte kazanılmış işler arasında ne kadar alışıldık göründüğünü ölçer ve yaklaşık %65 ağırlık taşır. K-Means, ihalenin hangi geçmiş başarı grubuna ne kadar yakın olduğunu ölçer ve yaklaşık %35 ağırlık taşır. Skor fiyat kararı veya gerçek kazanma olasılığı değildir; profilin geçmiş başarı örneklerine ne kadar tanıdık göründüğünü anlatır.",
+        "Bu skor fiyat veya maliyet alanlarını kullanmadan hesaplanan yapısal profil uyumudur. KNN emsal benzerliği ana ağırlığı taşır; Isolation Forest geçmiş kazanılmış dağılıma alışıldık uyumu, mixed-type clustering ise destekleyici profil grubu yakınlığını ve saflığını gösterir. Skor fiyat kararı veya gerçek kazanma olasılığı değildir.",
         "Profil uyum skoru nasıl hesaplanır?",
     )
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header(
-        "K-Means Analizi",
-        "K-Means, geçmişte kazanılmış ihaleleri benzer gruplara ayırır. Seçili ihalenin hangi geçmiş kazanılmış ihale grubuna benzediğini gösterir; bu bir fiyat tahmini değildir.",
+        "Mixed-Type Cluster Analizi",
+        "Mixed-type clustering, geçmişte kazanılmış ihaleleri kategorik ve sayısal profil alanlarını birlikte okuyan Gower mesafesiyle gruplar. Seçili ihalenin hangi geçmiş kazanılmış ihale grubuna benzediğini gösterir; bu bir fiyat tahmini değildir.",
     )
     info_callout(
-        "K-Means canlı/test atamasında ürün grubu, bölge, ihale tipi, kurum tipi, miktar, teslim süresi, tahmini rakip sayısı ve tahmini maliyet gibi ihale anında bilinebilen profil alanlarını kullanır. Gerçek kazanılmış fiyat, gerçek marj veya önerilen senaryo fiyatı kullanılmaz.",
-        "K-Means hangi bilgileri kullanır?",
+        "Mixed-type profil atamasında ürün grubu, ürün adı, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rakip sayısı kullanılır. Gerçek kazanılmış fiyat, tahmini maliyet, gerçek marj veya önerilen senaryo fiyatı kullanılmaz.",
+        "Mixed-type clustering hangi bilgileri kullanır?",
     )
     left, right = st.columns([1.15, 0.85], gap="medium")
     with left:
@@ -2605,6 +2614,9 @@ def render_profile_fit_analysis() -> None:
                 ("Baskın kurum tipi oranı", format_pct(float(best.get("cluster_dominant_institution_type_ratio", 0) or 0) * 100)),
                 ("Baskın bölge", str(best.get("cluster_dominant_region", "Hesaplanamadı"))),
                 ("Baskın bölge oranı", format_pct(float(best.get("cluster_dominant_region_ratio", 0) or 0) * 100)),
+                ("Baskın ihale tipi", str(best.get("cluster_dominant_procedure_type", "Hesaplanamadı"))),
+                ("Baskın ihale tipi oranı", format_pct(float(best.get("cluster_dominant_procedure_type_ratio", 0) or 0) * 100)),
+                ("Cluster saflık skoru", format_score(best.get("cluster_purity_score"))),
                 ("Ortalama miktar", format_int(best.get("cluster_average_quantity"))),
                 ("Medyan teslim süresi", f"{format_decimal(best.get('cluster_median_delivery_months'), 1)} ay"),
                 ("Cluster merkezine uzaklık", format_decimal(best.get("cluster_distance"))),
@@ -2617,12 +2629,12 @@ def render_profile_fit_analysis() -> None:
         st.plotly_chart(build_gauge(float(best.get("won_profile_fit_score", 0)), "Profil uyum skoru"), use_container_width=True)
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("K-Means Cluster Kalitesi", "Bu metrikler cluster yapısının ayrışmasını, dengesini ve seçili ihalenin atamasının ne kadar net olduğunu gösterir.")
+    section_header("Mixed-Type Cluster Kalitesi", "Bu metrikler Gower tabanlı cluster yapısının ayrışmasını, dengesini ve seçili ihalenin atamasının ne kadar net olduğunu gösterir.")
     k1, k2, k3, k4 = st.columns(4, gap="medium")
     with k1:
         metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "1'e yakınsa profil grupları daha net ayrılır; 0'a yakınsa gruplar birbirine karışır.", "purple")
     with k2:
-        metric_card("Inertia", format_decimal(best.get("cluster_inertia"), 1), "Kayıtların kendi grup merkezine toplam uzaklığıdır. Daha düşük değer daha sıkı profil grubu anlamına gelir.", "blue")
+        metric_card("Cluster sıkılığı", format_decimal(best.get("cluster_inertia"), 1), "Kayıtların kendi profil grubundaki ortalama Gower uzaklığına dayalı sıkılık göstergesidir. Daha düşük değer daha sıkı profil grubu anlamına gelir.", "blue")
     with k3:
         metric_card("Cluster boyut aralığı", f"{format_int(best.get('cluster_min_size'))} - {format_int(best.get('cluster_max_size'))}", "En küçük ve en büyük profil grubunun kayıt sayısıdır. Çok dengesiz dağılım yorum güvenini düşürür.", "green")
     with k4:
@@ -2659,6 +2671,14 @@ def render_profile_fit_analysis() -> None:
         metric_card("Threshold", format_decimal(best.get("isolation_threshold", 0.0), 2), "Karar sınırıdır. Anomaly score bu sınırın altına inerse manuel inceleme sinyali doğar.")
     with c4:
         metric_card("Manual review flag", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise profil geçmiş kazanılmış örneklere göre farklıdır; kayıp tahmini değildir.", "amber" if bool(best.get("manual_review_flag", False)) else "green")
+
+    reasons = best.get("manual_review_reasons")
+    if isinstance(reasons, list):
+        reason_text = "; ".join(str(item) for item in reasons)
+    else:
+        reason_text = str(reasons or "")
+    if reason_text:
+        info_callout(reason_text, "Manuel inceleme gerekçeleri")
 
     i5, i6, i7 = st.columns(3, gap="medium")
     with i5:
@@ -2890,7 +2910,7 @@ def render_scenario_analysis() -> None:
 
     section_header(
         "Öne Çıkan Fiyat Senaryoları",
-        "Bu kartlar fiyat ve karlılık stratejilerini gösterir. K-Means ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir.",
+        "Bu kartlar fiyat ve karlılık stratejilerini gösterir. Mixed-type clustering ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir.",
         "Senaryo kartları",
     )
     if valid_scenarios.empty:
@@ -3036,7 +3056,7 @@ def render_scenario_analysis() -> None:
 def render_reveal_compare() -> None:
     page_header(
         "Gerçek Sonuçla Karşılaştır",
-        "Bu sayfa tek seçili test ihalesinde sonuç açıldıktan sonra fiyat koridoru ve profil tanılama çıktılarının gerçek kazanılmış sonuçla nasıl hizalandığını gösterir. K-Means ve Isolation Forest burada fiyat tahmini olarak kullanılmaz; profil ve sıra dışılık sinyali olarak okunur.",
+        "Bu sayfa tek seçili test ihalesinde sonuç açıldıktan sonra fiyat koridoru ve profil tanılama çıktılarının gerçek kazanılmış sonuçla nasıl hizalandığını gösterir. Mixed-type clustering ve Isolation Forest burada fiyat tahmini olarak kullanılmaz; profil ve sıra dışılık sinyali olarak okunur.",
         "Sonuç Açma",
     )
     row = selected_test_tender()
@@ -3047,7 +3067,7 @@ def render_reveal_compare() -> None:
 
     if not st.session_state.get("revealed", False):
         info_callout(
-            "Gerçek sonuç açıldığında fiyat bandı gerçek fiyatla; profil uyumu ve sıra dışılık sinyali ise profil tanılamasıyla karşılaştırılır. Bu ekran K-Means veya Isolation Forest için fiyat doğruluğu ölçmez.",
+            "Gerçek sonuç açıldığında fiyat bandı gerçek fiyatla; profil uyumu ve sıra dışılık sinyali ise profil tanılamasıyla karşılaştırılır. Bu ekran mixed-type clustering veya Isolation Forest için fiyat doğruluğu ölçmez.",
             "Gerçek sonuç açılınca ne değişir?",
         )
         st.info("Gerçek kazanılmış fiyat ve karlılık oranı henüz gizli. Bu bilgi model, senaryo skoru ve AI danışmana verilmedi.")
@@ -3140,12 +3160,12 @@ def render_reveal_compare() -> None:
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     section_header(
         "Profil Tanılama Metrikleri",
-        "Bu bölüm K-Means ve Isolation Forest çıktılarını ayrı okur. Bunlar fiyat doğruluğu metriği değildir; profil grubu ve sıra dışılık kontrolüdür.",
-        "K-Means / Isolation Forest",
+        "Bu bölüm mixed-type clustering ve Isolation Forest çıktılarını ayrı okur. Bunlar fiyat doğruluğu metriği değildir; profil grubu ve sıra dışılık kontrolüdür.",
+        "Mixed-Type / Isolation Forest",
     )
     d1, d2, d3, d4 = st.columns(4, gap="medium")
     with d1:
-        metric_card("K-Means atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin atandığı profil grubuna ne kadar net yakın olduğunu gösterir.", "purple")
+        metric_card("Mixed-type atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin atandığı profil grubuna ne kadar net yakın olduğunu gösterir.", "purple")
     with d2:
         metric_card("Silhouette Score", format_decimal(best.get("cluster_silhouette_score"), 2), "Profil grupları ayrışıyor mu? 1'e yakın değer daha net ayrım demektir.", "blue")
     with d3:
@@ -3315,6 +3335,34 @@ def render_backtest() -> None:
         "Backtest geriye dönük canlı testtir: test yılındaki her ihalenin gerçek kazanılmış fiyatı ve karlılığı model girdisinden gizlenir, sistem önce emsal/profil/fiyat/senaryo çıktısı üretir, sonra gerçek sonuç açılarak karşılaştırılır. Gerçek Sonuçla Karşılaştır sayfası tek seçili ihaleyi gösterir; Backtest bu kontrolü tüm test yılına yayar. Amaç kazanma/kaybetme tahmini değil, fiyat aralığı ve profil uyumu yaklaşımının geçmiş kazanılmış ihalelerde ne kadar tutarlı çalıştığını ölçmektir.",
         "Backtest neyi anlatır?",
     )
+    selected_row = selected_test_tender()
+    selected_result = pd.DataFrame()
+    if selected_row is not None and "tender_id" in results:
+        selected_result = results[results["tender_id"].astype(str) == str(selected_row.get("tender_id"))]
+    if not selected_result.empty:
+        selected = selected_result.iloc[0]
+        st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+        section_header(
+            "Seçili İhale Backtest Detayı",
+            "Bu bölüm yalnızca seçili ihalenin reveal sonrası tekil kontrolüdür. Aşağıdaki Backtest Geneli bölümleri tüm test yılı ortalamalarını gösterir.",
+            "Seçili İhale",
+        )
+        si1, si2, si3, si4 = st.columns(4, gap="medium")
+        with si1:
+            metric_card("Orta koridor", format_try(selected["predicted_mid_price"]), "Seçili ihale için Top-K medyan fiyatı", "blue")
+        with si2:
+            metric_card("Gerçek fiyat", format_try(selected["actual_won_unit_price"]), "Reveal sonrası gerçek kazanılmış fiyat", "green")
+        with si3:
+            metric_card("Tekil mutlak hata", format_try(selected["absolute_error_mid"]), "Seçili ihale orta koridoru ile gerçek fiyat farkı", "amber")
+        with si4:
+            metric_card("Tekil yüzde hata", format_pct(float(selected["percentage_error_mid"])), "Bu oran toplu MAPE değildir", "purple")
+        si5, si6, si7 = st.columns(3, gap="medium")
+        with si5:
+            metric_card("Seçili band", f"{format_try(selected['predicted_low_price'])} - {format_try(selected['predicted_high_price'])}", "Seçili ihale düşük-yüksek koridoru", "cyan")
+        with si6:
+            metric_card("Band içinde mi?", "Evet" if bool(selected["actual_inside_band"]) else "Hayır", "Yalnızca seçili ihale için kapsama kontrolü", "green" if bool(selected["actual_inside_band"]) else "red")
+        with si7:
+            metric_card("Seçili band genişliği", format_try(selected["band_width"]), "Seçili ihale düşük-yüksek farkı", "amber")
     with st.expander("Test modu adımları", expanded=False):
         render_method_grid(
             [
@@ -3329,7 +3377,7 @@ def render_backtest() -> None:
         )
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
-    section_header("Emsal ve Profil Metrikleri", "Benzer ihale kalitesi ve profil uyum dağılımı birlikte okunur.", "Emsal / Profil")
+    section_header("Backtest Geneli: Emsal ve Profil Metrikleri", f"Bu bölüm test yılındaki tüm ihalelerin ortalamasıdır; n={len(results)}.", "Emsal / Profil")
     retrieval_quantity = (
         float(results["retrieval_quantity_band_match_rate"].mean())
         if "retrieval_quantity_band_match_rate" in results and not results.empty
@@ -3356,12 +3404,12 @@ def render_backtest() -> None:
     st.dataframe(profile_distribution, hide_index=True, width="stretch")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("K-Means Metrikleri", "Test ihalelerinin hangi geçmiş başarı gruplarına dağıldığını gösterir.", "Profil grupları")
+    section_header("Backtest Geneli: Mixed-Type Cluster Metrikleri", f"Test ihalelerinin Gower tabanlı geçmiş profil gruplarına dağılımını gösterir; n={len(results)}.", "Profil grupları")
     km1, km2, km3, km4 = st.columns(4, gap="medium")
     with km1:
         metric_card("Silhouette Score", format_decimal(pd.to_numeric(results["cluster_silhouette_score"], errors="coerce").mean()), "Profil grupları birbirinden ne kadar net ayrılıyor? 1'e yakın değer daha iyi ayrışma demektir.", "purple")
     with km2:
-        metric_card("Inertia", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Test kayıtlarının kendi profil grubu merkezlerine ortalama uzaklık göstergesi. Daha düşük değer daha sıkı grupları anlatır.", "blue")
+        metric_card("Cluster sıkılığı", format_decimal(pd.to_numeric(results["cluster_inertia"], errors="coerce").mean(), 1), "Test kayıtlarının kendi profil gruplarındaki Gower uzaklığına dayalı sıkılık göstergesi. Daha düşük değer daha sıkı grupları anlatır.", "blue")
     with km3:
         metric_card("Min / max cluster boyutu", f"{format_int(pd.to_numeric(results['cluster_min_size'], errors='coerce').min())} - {format_int(pd.to_numeric(results['cluster_max_size'], errors='coerce').max())}", "Profil grupları çok küçük veya aşırı büyük mü? Dengesizlik yorum güvenini düşürür.", "green")
     with km4:
@@ -3393,7 +3441,7 @@ def render_backtest() -> None:
     st.dataframe(cluster_summary, hide_index=True, width="stretch")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Sıra Dışılık Kontrolü", "Isolation Forest kazanılmış test ihalelerini geçmiş profile göre normal mi daha az tipik mi görüyor?", "Isolation Forest")
+    section_header("Backtest Geneli: Sıra Dışılık Kontrolü", f"Isolation Forest kazanılmış test ihalelerini geçmiş profile göre normal mi daha az tipik mi görüyor? n={len(results)}.", "Isolation Forest")
     i1, i2, i3, i4 = st.columns(4, gap="medium")
     with i1:
         metric_card("Geçmiş profile uygun test oranı", format_pct(inlier_recall * 100), "Kazanılmış test ihalelerinin geçmiş başarı profiline tipik görünme oranı", "green")
@@ -3419,14 +3467,14 @@ def render_backtest() -> None:
     st.dataframe(segment_anomaly, hide_index=True, width="stretch")
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-    section_header("Fiyat Koridoru Metrikleri", "Fiyat aralığı doğruluğu, hata ve band genişliği birlikte değerlendirilir.", "Fiyat")
+    section_header("Backtest Geneli: Fiyat Koridoru Metrikleri", f"Bu metrikler seçili ihale için değil, test yılındaki tüm ihalelerin ortalamasıdır; n={len(results)}.", "Fiyat")
     f1, f2, f3, f4 = st.columns(4, gap="medium")
     with f1:
-        metric_card("Band coverage", format_pct(metrics["band_coverage"] * 100), "Gerçek fiyatların düşük-yüksek aralığında kalma oranı", "green")
+        metric_card("Band coverage", format_pct(metrics["band_coverage"] * 100), "Tüm test ihalelerinde gerçek fiyatların düşük-yüksek aralığında kalma oranı", "green")
     with f2:
-        metric_card("MAE", format_try(metrics["mae"]), "Dengeli fiyat ile gerçek fiyat arasındaki ortalama TL farkı", "blue")
+        metric_card("MAE", format_try(metrics["mae"]), "Tüm test ihalelerinde Top-K medyan fiyat ile gerçek fiyat arasındaki ortalama TL farkı", "blue")
     with f3:
-        metric_card("MAPE", format_pct(metrics["mape"]), "Ortalama yüzde fiyat hatası", "amber")
+        metric_card("MAPE", format_pct(metrics["mape"]), "Tüm test ihalelerinin ortalama yüzde fiyat hatası; seçili ihalenin tekil hatası değildir", "amber")
     with f4:
         metric_card("Band kalite skoru", f"{metrics['coverage_adjusted_band_score']:.2f}", "Kapsama ve band genişliği birlikte okunur", "purple")
     f5, f6, f7 = st.columns(3, gap="medium")
@@ -3437,8 +3485,8 @@ def render_backtest() -> None:
     with f7:
         metric_card("Ortalama band genişliği", format_try(metrics["average_band_width"]), "Düşük ve yüksek öneri arasındaki ortalama fark", "amber")
     info_callout(
-        "Fiyat bandı gerçek fiyatı yakalayabilir ama çok genişse karar desteği zayıflar. Bu skor, hem kapsama başarısını hem de bandın gereksiz geniş olup olmadığını birlikte değerlendirir.",
-        "Genişlik cezası uygulanmış fiyat bandı skoru",
+        "Bu kartlardaki MAE, MAPE, SMAPE, WAPE, band coverage ve ortalama band genişliği tüm backtest test seti üzerinden hesaplanır. Benzerlik Tabanlı Koridor için tahmin noktası predicted_mid_price, yani Top-K benzer kazanılmış ihalelerin medyan fiyatıdır.",
+        "Backtest geneli metrikler nasıl okunur?",
     )
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
@@ -3494,7 +3542,7 @@ def render_backtest() -> None:
                 "Ortalama Yüzde Hata": metrics["mape"],
                 "Aralıkta Kalma Oranı": metrics["band_coverage"],
                 "Ortalama Aralık Genişliği": metrics["average_band_width"],
-                "Açıklama": "Top-K benzer kazanılmış ihalelerden düşük, orta ve yüksek fiyat koridoru üretir.",
+                "Açıklama": "01 Benzerlik Tabanlı Koridor: düşük=p25, orta=predicted_mid_price/Top-K medyan, yüksek=p75. Hata metrikleri orta değer ile gerçek fiyat karşılaştırılarak tüm test setinde hesaplanır.",
             }
         ]
     )
@@ -3606,7 +3654,7 @@ def render_similar_tenders() -> None:
         require_test_tender_message()
         return
     info_callout(
-        "Benzerlik hesabında ürün adı, ürün grubu, kurum, bölge, ihale tipi ve miktar birlikte değerlendirilir. Metinsel alanlar TF-IDF ile sayısallaştırılır, ardından cosine similarity ile yeni ihale ve geçmiş ihaleler arasındaki yakınlık hesaplanır. Örneğin yeni ihale IV Solution ürün grubundaysa sistem geçmişteki IV Solution ihalelerini daha yüksek benzerlikte görür; aynı kurum tipi, benzer bölge ve yakın miktar varsa benzerlik daha da güçlenir.",
+        "Benzerlik hesabında ürün adı, ürün grubu, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rekabet birlikte değerlendirilir. Metinsel alanlar yerel embedding ile sayısallaştırılır; fiyat, marj ve maliyet alanları benzerlik skoruna girmez. Örneğin yeni ihale IV Solution ürün grubundaysa sistem geçmişteki IV Solution ihalelerini daha yüksek benzerlikte görür; aynı kurum tipi, benzer bölge ve yakın miktar varsa benzerlik daha da güçlenir.",
         "Benzerlik hesabı ve basit örnek:",
     )
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)

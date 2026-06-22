@@ -109,9 +109,9 @@ def test_advisor_answer_source_is_visible():
 
 def test_methodology_terms_are_present():
     for term in [
-        "TF-IDF",
-        "Cosine similarity",
-        "K-Means",
+        "Yerel metin embedding",
+        "Embedding yakınlığı",
+        "Mixed-Type Clustering",
         "Isolation Forest",
         "Fiyat Koridoru",
         "Backtest",
@@ -120,13 +120,13 @@ def test_methodology_terms_are_present():
         assert term in APP_TEXT
 
 
-def test_profile_page_contains_kmeans_and_isolation_diagnostics():
+def test_profile_page_contains_mixed_type_and_isolation_diagnostics():
     for text in [
-        "K-Means ve Isolation Forest fiyat önermez",
-        "K-Means Analizi",
-        "K-Means Cluster Kalitesi",
+        "KNN emsal arama, mixed-type clustering ve Isolation Forest fiyat önermez",
+        "Mixed-Type Cluster Analizi",
+        "Mixed-Type Cluster Kalitesi",
         "Silhouette Score",
-        "Inertia",
+        "Cluster sıkılığı",
         "Cluster boyut aralığı",
         "Sıra Dışılık Kontrolü (Isolation Forest)",
         "Anomaly score",
@@ -138,9 +138,9 @@ def test_profile_page_contains_kmeans_and_isolation_diagnostics():
 
 def test_profile_models_are_not_described_as_price_predictors():
     for text in [
-        "K-Means fiyat tahmini",
+        "Mixed-type clustering fiyat tahmini",
         "Isolation Forest fiyat tahmini",
-        "K-Means fiyatı doğru tahmin",
+        "mixed-type clustering fiyatı doğru tahmin",
         "Isolation Forest fiyatı doğru tahmin",
     ]:
         assert text not in APP_TEXT
@@ -164,8 +164,8 @@ def test_methodology_key_explanations_are_visible_cards_not_expanders():
         assert label in APP_TEXT
         assert f'with st.expander("{label}' not in APP_TEXT
     for metric in [
-        "K-Means Silhouette Score",
-        "K-Means Inertia",
+        "Mixed-Type Silhouette Score",
+        "Mixed-Type Cluster Sıkılığı",
         "Cluster Size Distribution",
         "Assignment Confidence",
         "Isolation Forest Inlier Rate",
@@ -177,8 +177,8 @@ def test_methodology_key_explanations_are_visible_cards_not_expanders():
 
 def test_scenario_page_labels_price_strategy_scope():
     assert "Öne Çıkan Fiyat Senaryoları" in APP_TEXT
-    assert "K-Means ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir." in APP_TEXT
-    assert "K-Means ve Isolation Forest burada fiyat tahmini olarak kullanılmaz" in APP_TEXT
+    assert "Mixed-type clustering ve Isolation Forest profil tanılama sinyalleri ayrı olarak Profil Uyum Analizi sayfasında değerlendirilir." in APP_TEXT
+    assert "Mixed-type clustering ve Isolation Forest burada fiyat tahmini olarak kullanılmaz" in APP_TEXT
 
 
 def test_removed_reports_and_openrouter_noise_are_absent():
@@ -196,12 +196,23 @@ def test_removed_reports_and_openrouter_noise_are_absent():
 def test_reveal_and_backtest_include_profile_diagnostics():
     for text in [
         "Profil Tanılama Metrikleri",
-        "K-Means / Isolation Forest",
-        "K-Means atama güveni",
+        "Mixed-Type / Isolation Forest",
+        "Mixed-type atama güveni",
         "Manual review",
         "Ürün grubu anomaly oranı",
-        "K-Means Metrikleri",
+        "Mixed-Type Cluster Metrikleri",
         "Sıra Dışılık Kontrolü",
+    ]:
+        assert text in APP_TEXT
+
+
+def test_backtest_distinguishes_selected_tender_from_full_test_set():
+    for text in [
+        "Seçili İhale Backtest Detayı",
+        "Backtest Geneli: Fiyat Koridoru Metrikleri",
+        "Bu metrikler seçili ihale için değil, test yılındaki tüm ihalelerin ortalamasıdır",
+        "Bu oran toplu MAPE değildir",
+        "01 Benzerlik Tabanlı Koridor: düşük=p25, orta=predicted_mid_price/Top-K medyan, yüksek=p75",
     ]:
         assert text in APP_TEXT
 

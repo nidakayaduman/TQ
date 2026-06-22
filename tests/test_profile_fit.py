@@ -1,4 +1,4 @@
-from src.clustering import LIVE_ASSIGNMENT_FEATURES, ProfileFitModel
+from src.clustering import LIVE_ASSIGNMENT_FEATURES, ProfileFitModel, gower_distance_matrix
 from src.evaluation.stress_tests import evaluate_synthetic_outliers
 from src.feature_masking import mask_actual_result_fields
 
@@ -12,6 +12,50 @@ def test_profile_fit_scores_between_zero_and_100(tiny_df):
     assert isinstance(score["is_inlier"], bool)
     assert "anomaly_score" in score
     assert "manual_review_flag" in score
+
+
+def test_gower_distance_rewards_mixed_type_similarity():
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        [
+            {
+                "product_group": "A",
+                "product_name": "A1",
+                "buyer_institution": "Kurum 1",
+                "region": "Marmara",
+                "procedure_type": "Açık",
+                "buyer_institution_type": "Kamu",
+                "quantity": 100,
+                "delivery_months": 6,
+                "competitor_count_estimate": 2,
+            },
+            {
+                "product_group": "A",
+                "product_name": "A1",
+                "buyer_institution": "Kurum 1",
+                "region": "Marmara",
+                "procedure_type": "Açık",
+                "buyer_institution_type": "Kamu",
+                "quantity": 110,
+                "delivery_months": 6,
+                "competitor_count_estimate": 2,
+            },
+            {
+                "product_group": "B",
+                "product_name": "B1",
+                "buyer_institution": "Kurum 9",
+                "region": "Ege",
+                "procedure_type": "Pazarlık",
+                "buyer_institution_type": "Özel",
+                "quantity": 900,
+                "delivery_months": 18,
+                "competitor_count_estimate": 8,
+            },
+        ]
+    )
+    distances = gower_distance_matrix(frame)
+    assert distances[0, 1] < distances[0, 2]
 
 
 def test_profile_fit_does_not_depend_on_scenario_price(tiny_df):
@@ -32,6 +76,9 @@ def test_profile_fit_live_assignment_uses_only_bid_time_profile_fields():
         "final_contract_amount",
         "actual_award_result",
         "actual_delivery_result",
+        "estimated_unit_cost",
+        "estimated_unit_cost_try",
+        "internal_unit_cost_try",
         "scenario_price",
         "recommended_bid_price",
     }
@@ -50,6 +97,9 @@ def test_profile_fit_does_not_depend_on_actual_or_recommended_price_fields(tiny_
         "final_contract_amount": 999_999_999,
         "actual_award_result": "lost",
         "actual_delivery_result": "failed",
+        "estimated_unit_cost": 999_999,
+        "estimated_unit_cost_try": 999_999,
+        "internal_unit_cost_try": 999_999,
         "scenario_price": 999_999,
         "recommended_bid_price": 888_888,
     }
@@ -62,6 +112,9 @@ def test_profile_fit_does_not_depend_on_actual_or_recommended_price_fields(tiny_
         "cluster_distance",
         "anomaly_score",
         "is_inlier",
+        "knn_profile_score",
+        "mixed_cluster_score",
+        "cluster_purity_score",
     ]:
         assert clean_score[key] == polluted_score[key]
 
@@ -78,7 +131,15 @@ def test_profile_fit_returns_cluster_diagnostics(tiny_df):
     assert "cluster_silhouette_score" in score
     assert "cluster_inertia" in score
     assert "nearest_cluster_examples" in score
+    assert "knn_profile_score" in score
+    assert "mixed_cluster_score" in score
+    assert "cluster_purity_score" in score
+    assert "profile_score_components" in score
+    assert "manual_review_reasons" in score
     assert isinstance(score["nearest_cluster_examples"], list)
+    assert 0 <= score["knn_profile_score"] <= 100
+    assert 0 <= score["mixed_cluster_score"] <= 100
+    assert 0 <= score["cluster_purity_score"] <= 100
 
 
 def test_synthetic_outlier_test_produces_manual_review_signal(tiny_df):
