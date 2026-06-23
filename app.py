@@ -1054,6 +1054,387 @@ def inject_global_css() -> None:
 inject_global_css()
 
 
+def inject_theme_refresh_css() -> None:
+    st.markdown(
+        """
+        <style>
+            :root {
+                --app-bg: #111827;
+                --surface: rgba(23, 33, 52, 0.94);
+                --surface-strong: #111827;
+                --surface-soft: rgba(30, 41, 59, 0.90);
+                --surface-muted: #1e293b;
+                --line: rgba(148, 163, 184, 0.18);
+                --line-soft: rgba(56, 189, 248, 0.22);
+                --text: #f8fafc;
+                --muted: #cbd5e1;
+                --primary: #f8fafc;
+                --accent: #38bdf8;
+                --accent-2: #2dd4bf;
+                --accent-soft: rgba(56, 189, 248, 0.12);
+                --blue: #38bdf8;
+                --cyan: #2dd4bf;
+                --purple: #a78bfa;
+                --green: #22c55e;
+                --amber: #f59e0b;
+                --red: #ef4444;
+                --shadow: 0 22px 60px rgba(2, 6, 23, 0.36);
+                --soft-shadow: 0 12px 30px rgba(2, 6, 23, 0.26);
+            }
+            .stApp, .app-bg {
+                background:
+                    radial-gradient(ellipse at 48% 0%, rgba(56, 189, 248, 0.10), transparent 34%),
+                    radial-gradient(ellipse at 92% 20%, rgba(45, 212, 191, 0.07), transparent 30%),
+                    linear-gradient(180deg, #182235 0%, #172033 46%, #1e293b 100%) !important;
+                color: var(--text) !important;
+            }
+            html, body, [data-testid='stAppViewContainer'], [data-testid='stAppViewContainer'] > .main,
+            [data-testid='stMain'], [data-testid='stMainBlockContainer'] {
+                background-color: #172033 !important;
+                color: var(--text) !important;
+            }
+            [data-testid='stSidebar'] {
+                background:
+                    radial-gradient(ellipse at 50% 0%, rgba(56, 189, 248, 0.08), transparent 36%),
+                    rgba(15, 23, 42, 0.96) !important;
+                border-right-color: var(--line) !important;
+                box-shadow: 10px 0 32px rgba(2, 6, 23, 0.28) !important;
+            }
+            [data-testid='stSidebar'] [role='radiogroup'] label:hover {
+                background: rgba(56, 189, 248, 0.10) !important;
+                border-color: rgba(56, 189, 248, 0.22) !important;
+            }
+            [data-testid='stVerticalBlockBorderWrapper'],
+            .glass-card, .method-card, .model-card, .score-card, .scenario-card,
+            .metric-card, .premium-card, .nav-card,
+            .dq-feature-card, .dq-metric-card, .dq-quality-card,
+            .ts-card, .st-key-ts_select_card, .st-key-ts_inputs_card,
+            .sim-metric-card, .pf-card, .pf-kpi-card, .pf-metric-card, .pf-gauge-card,
+            .st-key-pf_gauge_card, .pc-kpi-card, .pc-primary-card, .pc-baseline-card,
+            .sc-kpi-card, .sc-score-card, .sc-strategy-card,
+            .rc-card, .rc-summary-card, .rc-story-card,
+            .report-control-card, .st-key-report_export_backtest,
+            .st-key-report_export_scenario, .st-key-report_export_audit,
+            .st-key-report_export_review, .report-detail-card,
+            .advisor-context-card, .advisor-setup-card, .advisor-status-card {
+                border-color: var(--line) !important;
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)),
+                    rgba(23, 33, 52, 0.92) !important;
+                box-shadow: var(--soft-shadow) !important;
+            }
+            .hero-card {
+                border-color: rgba(56, 189, 248, 0.22) !important;
+                background:
+                    radial-gradient(ellipse at 18% 0%, rgba(56, 189, 248, 0.16), transparent 38%),
+                    radial-gradient(ellipse at 82% 12%, rgba(45, 212, 191, 0.10), transparent 36%),
+                    linear-gradient(180deg, rgba(22, 32, 51, 0.96), rgba(15, 23, 42, 0.98)) !important;
+                box-shadow: var(--shadow) !important;
+            }
+            .hero-card:after {
+                background: radial-gradient(ellipse, rgba(56, 189, 248, 0.10), transparent 68%) !important;
+            }
+            .brand-mark, .chat-orb {
+                background: linear-gradient(145deg, #38bdf8, #0f766e) !important;
+                border-color: rgba(125, 211, 252, 0.34) !important;
+                box-shadow: 0 12px 26px rgba(56, 189, 248, 0.16) !important;
+                color: #f8fafc !important;
+            }
+            .eyebrow, .section-kicker, .advisor-chat-kicker {
+                color: var(--accent-2) !important;
+            }
+            .section-subtitle, .page-subtitle, .card-body, .card-list,
+            .metric-note, .model-body, .method-body, .scenario-row,
+            .chat-header-subtitle, .advisor-secondary-subtitle,
+            .report-section-subtitle {
+                color: var(--muted) !important;
+            }
+            .metric-card:before, .model-card:before, .method-card:before,
+            .scenario-card:before, .premium-card:before,
+            .dq-feature-card:before, .dq-metric-card:before, .dq-quality-card:before,
+            .ts-process-card:before, .ts-summary-card:before,
+            .sim-metric-card:before, .sim-table-card:before,
+            .pf-kpi-card:before, .pf-metric-card:before, .pf-card:before,
+            .pf-gauge-card:before, .pf-table-card:before, .st-key-pf_gauge_card:before {
+                background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.48), transparent) !important;
+                opacity: .45 !important;
+            }
+            .premium-card.card-blue:before,
+            .premium-card.card-purple:before,
+            .premium-card.card-mint:before,
+            .premium-card.card-green:before,
+            .premium-card.card-cyan:before {
+                background: radial-gradient(ellipse at top left, rgba(56, 189, 248, 0.12), transparent 46%) !important;
+            }
+            .premium-card.card-amber:before {
+                background: radial-gradient(ellipse at top left, rgba(245, 158, 11, 0.12), transparent 46%) !important;
+            }
+            .premium-card.card-red:before {
+                background: radial-gradient(ellipse at top left, rgba(239, 68, 68, 0.12), transparent 46%) !important;
+            }
+            .card-icon, .metric-icon, .model-icon, .method-number,
+            .dq-index, .ts-step, .sc-card-number {
+                background: rgba(56, 189, 248, 0.10) !important;
+                border-color: rgba(56, 189, 248, 0.20) !important;
+                color: #e0f2fe !important;
+            }
+            .scope-pill, .status-badge, .card-pill, .global-status-pill,
+            .advisor-status-pill, .advisor-model-chip, .report-badge,
+            .pc-pill, .sc-pill, .rc-pill {
+                background: rgba(15, 23, 42, 0.74) !important;
+                border-color: var(--line) !important;
+                color: var(--text) !important;
+                box-shadow: none !important;
+            }
+            .status-success, .status-good, .global-status-good,
+            .sc-pill-good, .rc-pill-good, .report-badge-success,
+            .advisor-model-chip-primary {
+                border-color: rgba(34, 197, 94, 0.30) !important;
+                background: rgba(34, 197, 94, 0.11) !important;
+                color: #bbf7d0 !important;
+            }
+            .status-warning, .status-warn, .global-status-warn,
+            .rc-pill-warn, .report-badge-warning,
+            .advisor-model-chip-backup {
+                border-color: rgba(245, 158, 11, 0.32) !important;
+                background: rgba(245, 158, 11, 0.11) !important;
+                color: #fde68a !important;
+            }
+            .status-danger, .status-bad, .global-status-bad,
+            .sc-pill-bad, .rc-pill-bad, .report-badge-danger {
+                border-color: rgba(239, 68, 68, 0.34) !important;
+                background: rgba(239, 68, 68, 0.12) !important;
+                color: #fecaca !important;
+            }
+            .warning-callout, .warning-box, .ts-warning,
+            .advisor-warning-banner {
+                border-color: rgba(245, 158, 11, 0.28) !important;
+                background:
+                    linear-gradient(135deg, rgba(245, 158, 11, 0.10), rgba(239, 68, 68, 0.035)),
+                    rgba(17, 24, 39, 0.88) !important;
+                color: var(--text) !important;
+            }
+            .info-callout, .info-box, .dq-info .info-callout,
+            .sim-callout, .pf-callout, .pc-note-card,
+            .sc-note-card, .rc-export-card, .advisor-safe-banner {
+                border-color: rgba(56, 189, 248, 0.20) !important;
+                background:
+                    linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(45, 212, 191, 0.035)),
+                    rgba(17, 24, 39, 0.88) !important;
+                color: var(--muted) !important;
+                box-shadow: var(--soft-shadow) !important;
+            }
+            .rc-summary-card, .rc-export-card, .rc-price-point.actual {
+                border-color: rgba(56, 189, 248, 0.20) !important;
+                background:
+                    linear-gradient(135deg, rgba(56, 189, 248, 0.07), rgba(45, 212, 191, 0.025)),
+                    rgba(23, 33, 52, 0.92) !important;
+            }
+            .rc-summary-card .rc-pill:not(.rc-pill-good):not(.rc-pill-bad),
+            .rc-export-card .rc-pill:not(.rc-pill-good):not(.rc-pill-bad),
+            .rc-story-card .rc-pill-warn,
+            .rc-pill-warn {
+                border-color: rgba(56, 189, 248, 0.26) !important;
+                background: rgba(56, 189, 248, 0.10) !important;
+                color: #bae6fd !important;
+            }
+            .rc-section .section-kicker {
+                color: #7dd3fc !important;
+            }
+            .formula-panel, .chat-header, .chat-body, .chat-wide-shell,
+            .st-key-advisor_chat_module {
+                border-color: rgba(56, 189, 248, 0.20) !important;
+                background:
+                    radial-gradient(ellipse at 12% 0%, rgba(56, 189, 248, 0.10), transparent 34%),
+                    linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(23, 33, 52, 0.96)) !important;
+                box-shadow: var(--soft-shadow) !important;
+            }
+            .st-key-advisor_chat_module {
+                border-radius: 20px !important;
+            }
+            .st-key-advisor_chat_module .chat-wide-shell {
+                background: rgba(15, 23, 42, 0.66) !important;
+            }
+            .chat-bubble, .st-key-advisor_chat_module .chat-bubble {
+                border-color: var(--line) !important;
+                box-shadow: 0 10px 22px rgba(2, 6, 23, 0.20) !important;
+            }
+            .chat-bubble-user, .st-key-advisor_chat_module .chat-bubble-user {
+                background: linear-gradient(135deg, rgba(14, 165, 233, 0.88), rgba(13, 148, 136, 0.86)) !important;
+                border-color: rgba(125, 211, 252, 0.30) !important;
+                color: #f8fafc !important;
+            }
+            .chat-bubble-assistant, .st-key-advisor_chat_module .chat-bubble-assistant {
+                background: rgba(30, 41, 59, 0.82) !important;
+                border-color: rgba(148, 163, 184, 0.18) !important;
+            }
+            .chat-source {
+                background: rgba(45, 212, 191, 0.14) !important;
+                border: 1px solid rgba(45, 212, 191, 0.22) !important;
+                color: #ccfbf1 !important;
+            }
+            .st-key-advisor_chat_module div[data-testid='stForm'],
+            .st-key-advisor_chat_module div[data-testid='stTextInput'],
+            .chat-input-area {
+                background: rgba(15, 23, 42, 0.72) !important;
+                border-color: var(--line) !important;
+            }
+            button[kind], div[data-testid='stDownloadButton'] button,
+            div[data-testid='stButton'] button,
+            .st-key-ts_inputs_card div[data-testid='stButton'] button,
+            .st-key-advisor_chat_module div[data-testid='stFormSubmitButton'] button,
+            .st-key-report_export_backtest div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_scenario div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_audit div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_review div[data-testid='stDownloadButton'] button {
+                border-color: rgba(56, 189, 248, 0.34) !important;
+                background: linear-gradient(180deg, rgba(14, 165, 233, 0.92), rgba(13, 148, 136, 0.90)) !important;
+                color: #f8fafc !important;
+                box-shadow: 0 10px 22px rgba(14, 165, 233, 0.14) !important;
+            }
+            button[kind]:hover, div[data-testid='stDownloadButton'] button:hover,
+            div[data-testid='stButton'] button:hover,
+            .st-key-advisor_chat_module div[data-testid='stButton'] button:hover {
+                border-color: rgba(125, 211, 252, 0.52) !important;
+                background: linear-gradient(180deg, rgba(56, 189, 248, 0.92), rgba(45, 212, 191, 0.84)) !important;
+                box-shadow: 0 12px 26px rgba(56, 189, 248, 0.16) !important;
+            }
+            .quick-question button,
+            .st-key-advisor_chat_module div[data-testid='stButton'] button {
+                background: rgba(30, 41, 59, 0.72) !important;
+                border-color: rgba(148, 163, 184, 0.18) !important;
+                box-shadow: none !important;
+            }
+            div[data-testid='stTabs'] button[aria-selected='true'] {
+                background: rgba(56, 189, 248, 0.12) !important;
+                color: var(--text) !important;
+            }
+            div[data-baseweb='select'] > div,
+            div[data-baseweb='input'] > div,
+            div[data-testid='stNumberInput'] input,
+            div[data-testid='stTextInput'] input,
+            div[data-testid='stChatInput'] textarea,
+            .st-key-advisor_chat_module div[data-testid='stForm'] input,
+            textarea {
+                background: rgba(15, 23, 42, 0.84) !important;
+                border-color: rgba(148, 163, 184, 0.24) !important;
+                color: #f8fafc !important;
+                -webkit-text-fill-color: #f8fafc !important;
+                box-shadow: none !important;
+            }
+            div[data-testid='stNumberInput'] input *,
+            div[data-testid='stTextInput'] input *,
+            div[data-testid='stFileUploader'] *,
+            div[data-baseweb='select'] *,
+            div[data-baseweb='input'] *,
+            div[data-testid='stNumberInput'] button,
+            div[data-testid='stNumberInput'] button * {
+                color: #f8fafc !important;
+                -webkit-text-fill-color: #f8fafc !important;
+            }
+            div[data-testid='stNumberInput'] svg *,
+            div[data-baseweb='select'] svg * {
+                fill: #cbd5e1 !important;
+                color: #cbd5e1 !important;
+            }
+            div[data-testid='stDataFrame'],
+            div[data-testid='stTable'],
+            div[data-testid='stDataFrameResizable'],
+            .global-table-card, .dq-table-card, .ts-masked-table-wrap,
+            .sim-table-card, .pf-table-card, .pc-table-card,
+            .sc-table-card, .rc-table-card, .advisor-advanced-table {
+                background: rgba(15, 23, 42, 0.92) !important;
+                border-color: var(--line) !important;
+                color: #e5e7eb !important;
+                -webkit-text-fill-color: #e5e7eb !important;
+                --text-color: #e5e7eb;
+                --background-color: #111827;
+                --secondary-background-color: #1e293b;
+                box-shadow: var(--soft-shadow) !important;
+            }
+            div[data-testid='stDataFrame'] *,
+            div[data-testid='stTable'] *,
+            div[data-testid='stDataFrameResizable'] *,
+            div[data-testid='stDataFrame'] :where(p, li, label, span, div, small, strong, em, code),
+            div[data-testid='stTable'] :where(p, li, label, span, div, small, strong, em, code) {
+                color: #e5e7eb !important;
+                -webkit-text-fill-color: #e5e7eb !important;
+            }
+            div[data-testid='stDataFrame'] table,
+            div[data-testid='stTable'] table,
+            div[data-testid='stDataFrame'] thead,
+            div[data-testid='stTable'] thead,
+            div[data-testid='stDataFrame'] tbody,
+            div[data-testid='stTable'] tbody,
+            div[data-testid='stDataFrame'] tr,
+            div[data-testid='stTable'] tr,
+            div[data-testid='stDataFrame'] th,
+            div[data-testid='stTable'] th,
+            div[data-testid='stDataFrame'] td,
+            div[data-testid='stTable'] td {
+                background: #111827 !important;
+                color: #e5e7eb !important;
+                -webkit-text-fill-color: #e5e7eb !important;
+            }
+            .global-dark-table th, .dq-table thead th, .ts-masked-table th,
+            .sim-table th, .pf-table th, .pc-table th,
+            .sc-table th, .rc-table th, .advisor-advanced-table th {
+                background: rgba(30, 41, 59, 0.98) !important;
+                border-bottom-color: rgba(148, 163, 184, 0.20) !important;
+                color: #cbd5e1 !important;
+            }
+            .global-dark-table td, .dq-table tbody td, .ts-masked-table td,
+            .sim-table td, .pf-table td, .pc-table td,
+            .sc-table td, .rc-table td, .advisor-advanced-table td {
+                background: rgba(15, 23, 42, 0.62) !important;
+                border-bottom-color: rgba(148, 163, 184, 0.12) !important;
+                color: #dbe4ef !important;
+            }
+            .global-dark-table tr:nth-child(even) td,
+            .dq-table tbody tr:nth-child(even) td,
+            .ts-masked-table tr:nth-child(even) td,
+            .sim-table tr:nth-child(even) td,
+            .pf-table tr:nth-child(even) td,
+            .pc-table tr:nth-child(even) td,
+            .sc-table tr:nth-child(even) td,
+            .rc-table tr:nth-child(even) td {
+                background: rgba(30, 41, 59, 0.42) !important;
+            }
+            .global-table-code, .dq-table-code, .sim-id, .pf-id {
+                color: #7dd3fc !important;
+            }
+            .global-progress-fill, .sim-score-fill,
+            .sc-progress-fill {
+                background: linear-gradient(90deg, #38bdf8, #2dd4bf) !important;
+                box-shadow: none !important;
+            }
+            .pc-value, .pc-primary-title, .pc-band-value, .pc-baseline-title,
+            .pc-baseline-value, .sc-value, .sc-score-title, .sc-card-title,
+            .sc-price, .sc-mini-metric b, .rc-value, .rc-summary-title,
+            .rc-summary-metric b, .rc-rank-value, .report-section-title,
+            .report-control-title, .report-export-title, .report-export-action-title,
+            .advisor-kv-row b, .advisor-status-value, .global-table-strong,
+            .sc-table .sc-id, .rc-table .rc-strong {
+                color: #f8fafc !important;
+            }
+            .pc-label, .pc-note, .pc-primary-copy, .pc-baseline-copy,
+            .sc-label, .sc-note, .sc-score-copy, .sc-summary,
+            .sc-score-component span, .sc-risk-list, .rc-label, .rc-note,
+            .rc-summary-copy, .rc-story-copy, .report-control-body,
+            .report-export-copy, .report-export-action-note,
+            .advisor-status-note, .advisor-kv-row {
+                color: #cbd5e1 !important;
+            }
+            .sc-risk-title, .sc-score-component b, .pc-note-card b,
+            .sc-note-card b, .rc-export-card b, .advisor-model-chip b {
+                color: #7dd3fc !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def init_session_state_defaults() -> None:
     st.session_state.setdefault("session_id", f"st-{uuid.uuid4().hex[:12]}")
     st.session_state.setdefault("user_id", os.getenv("USER_ID", "anonymous"))
@@ -1174,6 +1555,17 @@ def set_advisor_llm_status(status: str, source: str, reason: str = "", model_id:
         "reason": reason,
         "model": model_id or selected_openrouter_model_id(),
     }
+
+
+def queue_advisor_question(question: str) -> None:
+    normalized = str(question or "").strip()
+    if normalized:
+        st.session_state.advisor_pending_question = normalized
+
+
+def queue_advisor_typed_question() -> None:
+    queue_advisor_question(str(st.session_state.get("advisor_chat_text_input", "")))
+    st.session_state.advisor_chat_text_input = ""
 
 
 def user_friendly_error_message(exc: Exception) -> str:
@@ -2598,10 +2990,10 @@ def render_similar_methodology_callout() -> None:
         <div class='sim-callout'>
             <div class='sim-callout-title'>Benzerlik hesabı ve basit örnek</div>
             <div class='sim-callout-grid'>
-                <div class='sim-callout-item'><b>Yöntem özeti</b>Bu sayfada yerel metin embedding + yapısal KNN yaklaşımı kullanılır: seçili ihale metinsel ve kategorik/sayısal alanlarda geçmiş kazanılmış ihalelerle karşılaştırılır, sonra bu ağırlıklı benzerlik skoruna göre en yakın Top-K benzer kazanılmış ihale listelenir.</div>
+                <div class='sim-callout-item'><b>Yöntem özeti</b>Bu sayfada yerel metin embedding + yapısal benzerlik yaklaşımı kullanılır: seçili ihale metinsel ve kategorik/sayısal alanlarda geçmiş kazanılmış ihalelerle karşılaştırılır, sonra bu ağırlıklı benzerlik skoruna göre en yakın Top-K emsal listelenir.</div>
                 <div class='sim-callout-item'><b>Girdi sinyalleri</b>Ürün adı, ürün grubu, kurum, kurum tipi, bölge, ihale tipi, miktar, teslim süresi ve tahmini rekabet birlikte değerlendirilir.</div>
                 <div class='sim-callout-item'><b>Skor disiplini</b>Fiyat, marj ve maliyet alanları benzerlik skoruna girmez; metinsel alanlar yerel embedding ile sayısallaştırılır.</div>
-                <div class='sim-callout-item'><b>KNN burada nerede?</b>KNN ayrı bir kazan/kaybet modeli değildir. Aşağıdaki weighted similarity formülü her geçmiş kazanılmış ihale için hesaplanır; skorlar büyükten küçüğe sıralanır ve en yakın Top-K kayıt seçilir.</div>
+                <div class='sim-callout-item'><b>Top-K burada ne yapıyor?</b>Bu ayrı bir kazan/kaybet modeli değildir. Aşağıdaki weighted similarity formülü her geçmiş kazanılmış ihale için hesaplanır; skorlar büyükten küçüğe sıralanır ve en yakın Top-K kayıt seçilir.</div>
                 <div class='sim-callout-item'><b>Benzerlik skoru formülü</b>0.42 * embedding_similarity + 0.15 * product_group_match + 0.10 * region_match + 0.08 * procedure_match + 0.05 * institution_type_match + 0.12 * quantity_similarity + 0.05 * delivery_similarity + 0.03 * competitor_similarity.</div>
                 <div class='sim-callout-item'><b>Basit örnek</b>Aynı ürün grubu, aynı bölge ve yakın miktar ölçeğinde iki ihale varsa skor yükselir; miktar veya teslim süresi çok farklıysa skor düşer ama ürün/kurum benzerliği tamamen sıfırlanmaz.</div>
                 <div class='sim-callout-item'><b>Yorumlama</b>Tarihsel fiyatlar sadece emsal bilgisini yorumlamak için gösterilir; seçili test ihalesinin gerçek sonucu reveal öncesi kullanılmaz.</div>
@@ -2985,7 +3377,7 @@ def render_profile_callout() -> None:
         <div class='pf-callout'>
             <div class='pf-callout-title'>Profil modelleri ne yapar?</div>
             <div class='pf-callout-body'>
-                Bu sayfa üç farklı profil sinyalini ayrı okur: KNN emsal arama benzer kazanılmış ihaleleri bulur, mixed-type clustering geçmiş başarı gruplarını tanımlar, Isolation Forest sıra dışılık / manuel inceleme sinyali verir.
+                Bu sayfa üç farklı profil sinyalini ayrı okur: Top-K emsal retrieval benzer kazanılmış ihaleleri bulur, mixed-type clustering geçmiş başarı gruplarını tanımlar, Isolation Forest sıra dışılık / manuel inceleme sinyali verir.
                 Bu modeller fiyat önermez ve gerçek kazanma olasılığı üretmez; fiyat aralığı ayrı olarak Fiyat Koridoru bölümünde değerlendirilir.
             </div>
         </div>
@@ -4875,14 +5267,14 @@ def build_gauge(score: float, title: str = "Skor") -> go.Figure:
             title={"text": title, "font": {"size": 14, "color": "rgba(255,255,255,0.84)"}},
             gauge={
                 "axis": {"range": [0, 100]},
-                "bar": {"color": "#ff6a2b"},
+                "bar": {"color": "#38bdf8"},
                 "bgcolor": "rgba(255,255,255,0.06)",
                 "borderwidth": 1,
-                "bordercolor": "rgba(255, 123, 66, 0.22)",
+                "bordercolor": "rgba(148, 163, 184, 0.22)",
                 "steps": [
-                    {"range": [0, 45], "color": "rgba(255, 79, 31, 0.16)"},
-                    {"range": [45, 70], "color": "rgba(255, 157, 66, 0.14)"},
-                    {"range": [70, 100], "color": "rgba(216, 155, 82, 0.14)"},
+                    {"range": [0, 45], "color": "rgba(239, 68, 68, 0.14)"},
+                    {"range": [45, 70], "color": "rgba(245, 158, 11, 0.12)"},
+                    {"range": [70, 100], "color": "rgba(45, 212, 191, 0.14)"},
                 ],
             },
         )
@@ -5859,12 +6251,12 @@ def render_methodology() -> None:
         )
 
     with tabs[1]:
-        section_header("Benzerlik nasıl hesaplanıyor?", "Yerel metin embedding ve yapısal KNN sinyalleri yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır.", "Retrieval")
+        section_header("Benzerlik nasıl hesaplanıyor?", "Yerel metin embedding ve yapısal ağırlıklı benzerlik sinyalleri yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır.", "Retrieval")
         render_method_grid(
             [
                 ("İhale metni hazırlanır", "Ürün adı, ürün grubu, kurum, bölge, ihale tipi ve miktar bilgileri tek bir ihale profiline dönüştürülür."),
                 ("Yerel embedding ile vektöre çevrilir", "Metinsel alanlar deterministik yerel vektörlerle temsil edilir; dış servis veya secret gerekmez."),
-                ("KNN benzerliği hesaplanır", "Metin embedding yakınlığı ürün, kurum tipi, bölge, ihale tipi, miktar, teslim ve rekabet sinyalleriyle birleştirilir."),
+                ("Ağırlıklı benzerlik hesaplanır", "Metin embedding yakınlığı ürün, kurum tipi, bölge, ihale tipi, miktar, teslim ve rekabet sinyalleriyle birleştirilir."),
                 ("Top-K benzer ihaleler seçilir", "En yüksek skorlu kazanılmış ihaleler emsal listeye alınır."),
                 ("Koridor ve skorlar beslenir", "Fiyat koridoru, profil uyumu ve danışman açıklamaları bu emsal setten destek alır."),
             ],
@@ -5903,8 +6295,8 @@ def render_methodology() -> None:
         section_header("Model Bileşenleri", "Her bileşen karar destek çıktısının farklı bir parçasını açıklar.", "Model")
         render_model_grid(
             [
-                ("01", "Embedding + KNN Emsal Arama", "Ne yapar: Yeni ihaleye benzeyen kazanılmış ihaleleri bulur. Neden var: Emsal seti olmadan fiyat ve profil yorumu zayıf kalır. Katkı: Benzer ihaleler listesini, profil uyumunun ana sinyalini ve koridor girdisini üretir.", "blue"),
-                ("02", "Mixed-Type Clustering", "Ne yapar: Kazanılmış ihaleleri kategorik ve sayısal profil alanlarını birlikte okuyan Gower mesafesiyle gruplar. Neden var: Tek tek ihale yerine profil segmenti görmeyi sağlar. Katkı: Profil yorumunu destekler; ana karar sinyali KNN emsalleridir.", "purple"),
+                ("01", "Embedding + Top-K Emsal Retrieval", "Ne yapar: Yeni ihaleye benzeyen kazanılmış ihaleleri bulur. Neden var: Emsal seti olmadan fiyat ve profil yorumu zayıf kalır. Katkı: Benzer ihaleler listesini, profil uyumunun ana sinyalini ve koridor girdisini üretir.", "blue"),
+                ("02", "Mixed-Type Clustering", "Ne yapar: Kazanılmış ihaleleri kategorik ve sayısal profil alanlarını birlikte okuyan Gower mesafesiyle gruplar. Neden var: Tek tek ihale yerine profil segmenti görmeyi sağlar. Katkı: Profil yorumunu destekler; ana karar sinyali Top-K emsallerdir.", "purple"),
                 ("03", "Isolation Forest", "Ne yapar: Yeni ihalenin geçmiş profile normal mi sıra dışı mı uyduğunu kontrol eder. Neden var: Aykırı durumları saklamaz. Katkı: Risk ve manuel inceleme sinyali üretir.", "amber"),
                 ("04", "Price Corridor Engine", "Ne yapar: Emsal kazanılmış ihalelerden düşük, orta ve yüksek fiyat bandı çıkarır. Neden var: Tek nokta fiyat yerine karar aralığı verir. Katkı: Senaryo fiyatlarını besler.", "green"),
                 ("05", "Scenario Scoring", "Ne yapar: Fiyat, karlılık, profil uyumu, güven ve risk cezasını tek karar destek skorunda birleştirir. Neden var: Alternatif teklifleri kıyaslanabilir hale getirir. Katkı: Sıralı senaryo önerisi üretir.", "cyan"),
@@ -6213,7 +6605,7 @@ def scenario_name(index: int) -> str:
 def render_profile_fit_analysis() -> None:
     inject_profile_fit_css()
     page_header(
-        "Profil Uyum Analizi (KNN Emsal + Mixed-Type/Gower Cluster + Isolation Forest)",
+        "Profil Uyum Analizi (Top-K Emsal + Mixed-Type/Gower Cluster + Isolation Forest)",
         "Bu sayfa, seçili ihalenin geçmişte kazanılmış ihale profillerine ne kadar benzediğini gösterir. Sistem; benzer ihaleleri, geçmiş başarı gruplarını ve sıra dışılık kontrolünü birlikte değerlendirir.",
         "Profil uyumu",
     )
@@ -6275,7 +6667,7 @@ def render_profile_fit_analysis() -> None:
             {
                 "label": "Kazanılmış Profil Uyum Skoru",
                 "value": format_score(best.get("won_profile_fit_score")),
-                "body": f"Seçili ihale geçmişte kazanılmış işlere genel olarak ne kadar benziyor? Skor; KNN emsal yakınlığı %{knn_weight * 100:.0f}, Isolation Forest tipikliği %{isolation_weight * 100:.0f}, mixed-type/Gower cluster yakınlığı %{cluster_weight * 100:.0f} ağırlıkla birleşir.",
+                "body": f"Seçili ihale geçmişte kazanılmış işlere genel olarak ne kadar benziyor? Skor; Top-K emsal yakınlığı %{knn_weight * 100:.0f}, Isolation Forest tipikliği %{isolation_weight * 100:.0f}, mixed-type/Gower cluster yakınlığı %{cluster_weight * 100:.0f} ağırlıkla birleşir.",
                 "badge": fit_level(best.get("won_profile_fit_score")),
                 "status": "good" if float(best.get("won_profile_fit_score", 0) or 0) >= 70 else "warn",
             },
@@ -6296,8 +6688,8 @@ def render_profile_fit_analysis() -> None:
             {
                 "label": "Emsal Benzerlik Gücü",
                 "value": f"{result.get('top10_avg_similarity', 0):.2f}",
-                "body": "Top-10 KNN emsalinin ortalama yakınlığıdır. Ürün, metin, kategori ve sayısal alanlardan gelen 0-1 skorudur; değer 1'e yaklaştıkça emsal havuzu seçili ihaleye daha yakın kabul edilir.",
-                "badge": "KNN / Top-10",
+                "body": "Top-10 emsalinin ortalama ağırlıklı yakınlığıdır. Ürün, metin, kategori ve sayısal alanlardan gelen 0-1 skorudur; değer 1'e yaklaştıkça emsal havuzu seçili ihaleye daha yakın kabul edilir.",
+                "badge": "Top-K / İlk 10",
                 "status": "good",
             },
         ]
@@ -6305,7 +6697,7 @@ def render_profile_fit_analysis() -> None:
     st.markdown(
         "<div class='pf-score-note'><b>Profil uyum skoru nasıl hesaplanır?</b> "
         f"Bu skor fiyat, maliyet, gerçek marj veya önerilen teklif fiyatı kullanmadan hesaplanan yapısal profil uyumudur. "
-        f"KNN emsal benzerliği %{knn_weight * 100:.0f} ağırlıkla geçmişte kazanılmış benzer ihaleleri; "
+        f"Top-K emsal benzerliği %{knn_weight * 100:.0f} ağırlıkla geçmişte kazanılmış benzer ihaleleri; "
         f"Isolation Forest %{isolation_weight * 100:.0f} ağırlıkla geçmiş kazanım dağılımına tipikliği; "
         f"mixed-type cluster %{cluster_weight * 100:.0f} ağırlıkla başarı grubu yakınlığı ve cluster saflığını temsil eder. "
         "Skor fiyat kararı veya gerçek kazanma olasılığı değildir.</div>",
@@ -6319,7 +6711,7 @@ def render_profile_fit_analysis() -> None:
     render_profile_metric_grid(
         [
             (
-                f"KNN emsal benzerliği (%{knn_weight * 100:.0f})",
+                f"Top-K emsal benzerliği (%{knn_weight * 100:.0f})",
                 format_score(profile_components.get("knn_profile_score", best.get("knn_profile_score"))),
                 "Benzer kazanılmış ihalelerin ürün, kurum, bölge, miktar ve metin yakınlığına bakar. 0-1 benzerlik 100'lük skora çevrilir.",
             ),
@@ -6387,7 +6779,7 @@ def render_profile_fit_analysis() -> None:
 
     st.markdown(
         "<div class='pf-section'><div class='section-title'>Mixed-Type Cluster Kalitesi</div>"
-        "<div class='section-subtitle'>Bu bölüm yalnızca mixed-type/Gower cluster yapısının ne kadar dengeli ve okunabilir olduğunu gösterir; KNN emsal yakınlığı ve Isolation Forest sıra dışılık metrikleri değildir.</div></div>",
+        "<div class='section-subtitle'>Bu bölüm yalnızca mixed-type/Gower cluster yapısının ne kadar dengeli ve okunabilir olduğunu gösterir; Top-K emsal yakınlığı ve Isolation Forest sıra dışılık metrikleri değildir.</div></div>",
         unsafe_allow_html=True,
     )
     render_profile_metric_grid(
@@ -6459,7 +6851,7 @@ def render_profile_fit_analysis() -> None:
 
     st.markdown(
         "<div class='pf-section'><div class='section-title'>Emsal sinyali</div>"
-        "<div class='section-subtitle'>Bu bölüm KNN / retrieval kalitesidir. Emsal havuzu seçili ihaleye ne kadar benziyorsa profil uyum skoru ve fiyat koridoru o kadar güvenilir okunur.</div></div>",
+        "<div class='section-subtitle'>Bu bölüm Top-K retrieval kalitesidir. Emsal havuzu seçili ihaleye ne kadar benziyorsa profil uyum skoru ve fiyat koridoru o kadar güvenilir okunur.</div></div>",
         unsafe_allow_html=True,
     )
     render_profile_metric_grid(
@@ -6847,12 +7239,12 @@ def render_reveal_compare() -> None:
 
     st.markdown(
         "<div class='rc-section'><div class='section-title'>Profil Özeti</div>"
-        "<div class='section-subtitle'>Bu bölüm fiyat sonucunu değil, seçili ihalenin geçmiş kazanılmış işlere yapısal olarak benzeyip benzemediğini açıklar. KNN emsal gücü, mixed-type/Gower profil grubu ve Isolation Forest tipiklik sinyali birlikte okunur.</div></div>",
+        "<div class='section-subtitle'>Bu bölüm fiyat sonucunu değil, seçili ihalenin geçmiş kazanılmış işlere yapısal olarak benzeyip benzemediğini açıklar. Top-K emsal gücü, mixed-type/Gower profil grubu ve Isolation Forest tipiklik sinyali birlikte okunur.</div></div>",
         unsafe_allow_html=True,
     )
     render_reveal_metric_grid(
         [
-            ("Profil uyum skoru", format_score(best.get("won_profile_fit_score")), "KNN emsal yakınlığı, Isolation Forest tipikliği ve mixed-type/Gower cluster yakınlığının birleşik skorudur."),
+            ("Profil uyum skoru", format_score(best.get("won_profile_fit_score")), "Top-K emsal yakınlığı, Isolation Forest tipikliği ve mixed-type/Gower cluster yakınlığının birleşik skorudur."),
             ("Uyum yorumu", fit_level(best.get("won_profile_fit_score")), "Yüksekse ihale geçmiş kazanılmış işlere daha tanıdık görünür; düşükse manuel profil kontrolü gerekir."),
             ("Veri güveni", format_score(best.get("model_confidence_score")), "Emsal sayısı, Top-K benzerlik gücü ve fiyat bandı tutarlılığına göre bu okumanın ne kadar güvenilir olduğunu gösterir."),
             ("Profil grubu", str(best.get("cluster_name", "Hesaplanamadı")), f"Mixed-type/Gower modelinin bulduğu geçmiş kazanım segmentidir. Teknik grup ID: {best.get('cluster_id', 'Hesaplanamadı')} · bu grupta n={format_int(best.get('cluster_count'))} ihale var."),
@@ -7575,9 +7967,10 @@ def render_advisor() -> None:
         "AI Danışman karar vermez. Model çıktılarını açıklar, riskleri yorumlar ve iş odaklı açıklama üretir. Bu skor gerçek kazanma olasılığı değildir.</div>",
         unsafe_allow_html=True,
     )
-    selected_question = None
-    typed_question = ""
-    user_question = None
+    queued_question = str(st.session_state.get("advisor_pending_question", "") or "").strip()
+    if queued_question:
+        del st.session_state["advisor_pending_question"]
+    user_question = queued_question or None
     with st.container(key="advisor_chat_module"):
         st.markdown(
             f"""
@@ -7599,11 +7992,16 @@ def render_advisor() -> None:
         qcols = st.columns(4, gap="small")
         for idx, question in enumerate(quick_questions):
             with qcols[idx % 4]:
-                if st.button(question, key=f"quick_advisor_{idx}", width="content"):
-                    selected_question = question
+                st.button(
+                    question,
+                    key=f"quick_advisor_{idx}",
+                    width="content",
+                    on_click=queue_advisor_question,
+                    args=(question,),
+                )
 
-        if selected_question:
-            st.session_state.advisor_chat_messages.append({"role": "user", "content": selected_question})
+        if queued_question:
+            st.session_state.advisor_chat_messages.append({"role": "user", "content": queued_question})
 
         visible_messages = list(st.session_state.get("advisor_chat_messages", []))
         if not visible_messages:
@@ -7617,7 +8015,7 @@ def render_advisor() -> None:
                     "source": "Bağlam hazır",
                 }
             ]
-        if selected_question:
+        if queued_question:
             visible_messages.append(
                 {
                     "role": "assistant",
@@ -7635,21 +8033,11 @@ def render_advisor() -> None:
             unsafe_allow_html=True,
         )
 
-        with st.form("advisor_chat_form", clear_on_submit=True, border=False):
-            input_col, send_col = st.columns([5, 1], gap="small", vertical_alignment="bottom")
-            with input_col:
-                typed_candidate = st.text_input(
-                    "AI Danışman sorusu",
-                    key="advisor_chat_text_input",
-                    placeholder="Bu ihale hakkında sorunuzu yazın...",
-                    label_visibility="collapsed",
-                )
-            with send_col:
-                submitted = st.form_submit_button("Gönder", type="primary", width="stretch")
-        typed_question = typed_candidate.strip() if submitted and typed_candidate else ""
-        if typed_question:
-            st.session_state.advisor_chat_messages.append({"role": "user", "content": typed_question})
-        user_question = selected_question or typed_question
+        chat_question = st.chat_input("Bu ihale hakkında sorunuzu yazın...", key="advisor_chat_input")
+        if chat_question:
+            user_question = str(chat_question).strip()
+            if user_question:
+                st.session_state.advisor_chat_messages.append({"role": "user", "content": user_question})
 
     st.markdown(
         "<div class='advisor-secondary-section'><div class='advisor-secondary-title'>Seçili ihale bağlamı</div>"
@@ -8081,3 +8469,4 @@ def render_page(page_name: str) -> None:
 
 page = render_sidebar()
 render_page(page)
+inject_theme_refresh_css()

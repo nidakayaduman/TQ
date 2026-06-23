@@ -1,4 +1,4 @@
-"""Similar won tender retrieval with local text embeddings and structural KNN signals."""
+"""Similar won tender retrieval with local text embeddings and weighted structural similarity signals."""
 
 from __future__ import annotations
 

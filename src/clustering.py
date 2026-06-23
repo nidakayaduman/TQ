@@ -1,4 +1,4 @@
-"""Won profile fit models using Isolation Forest, KNN evidence, and mixed-type clustering."""
+"""Won profile fit models using Isolation Forest, Top-K retrieval evidence, and mixed-type clustering."""
 
 from __future__ import annotations
 
@@ -337,7 +337,7 @@ class ProfileFitModel:
         if percentile < 20:
             manual_review_reasons.append("Düşük Isolation Forest profil yüzdesi")
         if knn_profile_score < 45:
-            manual_review_reasons.append("Düşük KNN emsal benzerliği")
+            manual_review_reasons.append("Düşük Top-K emsal benzerliği")
         if won_profile_fit_score < 45:
             manual_review_reasons.append("Düşük yapısal profil uyumu")
         if purity_score < LOW_CLUSTER_PURITY_THRESHOLD * 100:
