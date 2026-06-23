@@ -4920,15 +4920,6 @@ def render_reveal_table(df: pd.DataFrame) -> None:
     )
 
 
-def render_reveal_export_note() -> None:
-    st.markdown(
-        "<div class='rc-export-card'><b>Karar notu:</b> "
-        "Bu sonuç tek seçili ihale için reveal sonrası kontrol raporudur. Nihai karar; maliyet, stok, teslimat, ticari öncelikler ve teklif komitesi değerlendirmesiyle verilmelidir."
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-
 def backtest_summary_comment(metrics: dict[str, float], leakage_pass: bool) -> tuple[str, str]:
     coverage = float(metrics.get("band_coverage", 0.0))
     mape = float(metrics.get("mape", 0.0))
@@ -7841,29 +7832,33 @@ def render_reveal_compare() -> None:
         [
             ("Profil uyum skoru", format_score(best.get("won_profile_fit_score")), "Top-K emsal yakınlığı, Isolation Forest tipikliği ve mixed-type/Gower cluster yakınlığının birleşik skorudur."),
             ("Uyum yorumu", fit_level(best.get("won_profile_fit_score")), "Yüksekse ihale geçmiş kazanılmış işlere daha tanıdık görünür; düşükse manuel profil kontrolü gerekir."),
-            ("Veri güveni", format_score(best.get("model_confidence_score")), "Emsal sayısı, Top-K benzerlik gücü ve fiyat bandı tutarlılığına göre bu okumanın ne kadar güvenilir olduğunu gösterir."),
             ("Profil grubu", str(best.get("cluster_name", "Hesaplanamadı")), f"Seçili ihalenin en yakın düştüğü geçmiş kazanım segmentidir; bu grupta n={format_int(best.get('cluster_count'))} ihale var."),
-            ("Isolation Forest durumu", isolation_status, "Seçili ihale geçmiş kazanılmış dağılım içinde normal mi, yoksa manuel inceleme gerektirecek kadar farklı mı?"),
-            ("Atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Profil grubuna atama ne kadar net? Düşükse ihale birden fazla profil grubuna benziyor olabilir."),
         ],
         columns=3,
     )
-    st.markdown(
-        "<div class='rc-export-card'><b>Profil grubu nasıl okunur?</b> "
-        "Karma profil veya benzeri cluster adı, seçili ihalenin geçmişteki hangi kazanım segmentine en yakın olduğunu anlatır. "
-        "Bu değer fiyat doğruluğu metriği değildir; fiyat sonucunu yorumlarken 'bu ihale geçmiş kazanılmış işlere yapısal olarak benziyor mu?' sorusuna cevap verir.</div>",
-        unsafe_allow_html=True,
-    )
 
     st.markdown(
-        "<div class='rc-section'><div class='section-kicker'>Mixed-Type / Isolation Forest</div>"
-        "<div class='section-title'>Profil Tanılama Metrikleri</div>"
-        "<div class='section-subtitle'>Bu compact özet, profil grubu atamasını ve sıra dışılık sinyalini gösterir; fiyat doğruluğu metriği değildir.</div></div>",
+        "<div class='rc-section'><div class='section-title'>Mixed-Type Profil Grubu</div>"
+        "<div class='section-subtitle'>Bu bölüm seçili ihalenin geçmişteki hangi kazanım segmentine daha yakın olduğunu gösterir; fiyat doğruluğu metriği değildir.</div></div>",
         unsafe_allow_html=True,
     )
     render_reveal_metric_grid(
         [
+            ("Profil grubu", str(best.get("cluster_name", "Hesaplanamadı")), f"Bu grupta n={format_int(best.get('cluster_count'))} ihale var."),
             ("Mixed-type atama güveni", format_pct(float(best.get("cluster_assignment_confidence", 0) or 0)), "Seçili ihalenin atandığı profil grubuna diğer gruplara kıyasla ne kadar net yakın olduğunu gösterir."),
+            ("Profil grubu yorumu", fit_level(best.get("won_profile_fit_score")), "Yüksekse ihale geçmiş kazanılmış işlere daha tanıdık görünür; düşükse manuel profil kontrolü gerekir."),
+        ],
+        columns=3,
+    )
+
+    st.markdown(
+        "<div class='rc-section'><div class='section-title'>Isolation Forest Sıra Dışılık</div>"
+        "<div class='section-subtitle'>Bu bölüm seçili ihalenin geçmiş kazanılmış dağılım içinde normal mi, yoksa manuel inceleme gerektirecek kadar farklı mı göründüğünü gösterir.</div></div>",
+        unsafe_allow_html=True,
+    )
+    render_reveal_metric_grid(
+        [
+            ("Durum", isolation_status, "Seçili ihale geçmiş kazanılmış dağılım içinde normal mi, yoksa manuel inceleme gerektirecek kadar farklı mı?"),
             ("Manual review", "Evet" if bool(best.get("manual_review_flag", not best.get("is_inlier", True))) else "Hayır", "Evet ise sistem bu ihalenin profil veya sıra dışılık açısından teklif komitesi tarafından ayrıca kontrol edilmesini ister."),
             ("Anomaly score", format_decimal(best.get("anomaly_score"), 4), "Isolation Forest karar skorudur; eşik altına düşerse ihale geçmiş kazanılmış dağılıma göre daha az tipik kabul edilir."),
             ("Ürün grubu anomaly oranı", format_pct(float(best.get("segment_anomaly_rate", 0) or 0) * 100), "Aynı ürün grubundaki kazanılmış test ihalelerinde manuel inceleme sinyali oranıdır; segmentin ne kadar oynak olduğunu gösterir."),
@@ -7906,17 +7901,6 @@ def render_reveal_compare() -> None:
         ],
         columns=3,
     )
-
-    price_compare = pd.DataFrame(
-        [
-            {"Fiyat noktası": "Düşük öneri", "Birim fiyat": format_try(corridor["predicted_low_price"]), "Ne anlatır?": "Daha rekabetçi teklif seviyesi"},
-            {"Fiyat noktası": "Gerçek kazanılmış fiyat", "Birim fiyat": format_try(actual_price), "Ne anlatır?": "Sonuç açıldıktan sonra görülen tarihsel gerçek fiyat"},
-            {"Fiyat noktası": "Dengeli öneri", "Birim fiyat": format_try(corridor["predicted_mid_price"]), "Ne anlatır?": "Emsallerin orta fiyat seviyesi"},
-            {"Fiyat noktası": "Seçilen en iyi senaryo", "Birim fiyat": format_try(float(best["proposed_unit_price"])), "Ne anlatır?": "Sistemin en yüksek skorlu teklif seçeneği"},
-            {"Fiyat noktası": "Yüksek öneri", "Birim fiyat": format_try(corridor["predicted_high_price"]), "Ne anlatır?": "Daha yüksek karlılık hedefleyen fiyat seviyesi"},
-        ]
-    )
-    render_reveal_table(price_compare)
 
     st.markdown(
         "<div class='rc-section'><div class='section-title'>Senaryo Sıralaması</div>"
@@ -7962,23 +7946,6 @@ def render_reveal_compare() -> None:
         )
         st.session_state[comparison_key] = True
 
-    comparison_display = comparison.copy()
-    for column in ["Gerçek Kazanılmış Birim Fiyat", "Tahmin Düşük", "Tahmin Orta", "Tahmin Yüksek", "Mutlak Hata"]:
-        if column in comparison_display:
-            comparison_display[column] = comparison_display[column].apply(format_try)
-    for column in ["Yüzde Hata", "Gerçek Karlılık Oranı", "Gerçek Senaryo Sıralaması"]:
-        if column in comparison_display:
-            comparison_display[column] = comparison_display[column].apply(format_pct)
-    for column in ["Senaryo Skoru", "Profil Uyum Skoru"]:
-        if column in comparison_display:
-            comparison_display[column] = comparison_display[column].apply(format_score)
-    st.markdown(
-        "<div class='rc-section'><div class='section-title'>Detay Tablosu</div>"
-        "<div class='section-subtitle'>Reveal sonrası tek ihale karşılaştırmasının denetlenebilir özet tablosu.</div></div>",
-        unsafe_allow_html=True,
-    )
-    render_reveal_table(comparison_display)
-    render_reveal_export_note()
     audited_download_button("Karşılaştırma CSV indir", dataframe_to_csv_bytes(comparison), "senaryo_karsilastirma.csv")
 
 

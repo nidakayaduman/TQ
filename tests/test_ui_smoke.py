@@ -291,8 +291,9 @@ def test_removed_reports_and_openrouter_noise_are_absent():
 
 def test_reveal_and_backtest_include_profile_diagnostics():
     for text in [
-        "Profil Tanılama Metrikleri",
-        "Mixed-Type / Isolation Forest",
+        "Mixed-Type Profil Grubu",
+        "Isolation Forest Sıra Dışılık",
+        "Emsal Kalitesi",
         "Mixed-type atama güveni",
         "Manual review",
         "Ürün grubu anomaly oranı",
@@ -300,6 +301,8 @@ def test_reveal_and_backtest_include_profile_diagnostics():
         "Sıra Dışılık Kontrolü",
     ]:
         assert text in APP_TEXT
+    for removed_text in ["Profil Tanılama Metrikleri", "Mixed-Type / Isolation Forest", "Detay Tablosu"]:
+        assert removed_text not in APP_TEXT
 
 
 def test_backtest_distinguishes_selected_tender_from_full_test_set():
@@ -323,7 +326,6 @@ def test_price_reveal_and_backtest_explanations_are_business_clear():
         "Koridor ve baseline karşılaştırması",
         "Benzerlik koridoru + aktif baseline yöntemlerinin düşük fiyat ortalaması.",
         "pc-kpi-card-glow",
-        "Profil grubu nasıl okunur?",
         "Seçili ihalenin en yakın düştüğü geçmiş kazanım segmentidir",
         "Cluster tablosu nasıl okunur?",
         "Karma profil adı, grubun tek bir ürün/bölge karakterine indirgenemediğini",
@@ -336,6 +338,7 @@ def test_price_reveal_and_backtest_explanations_are_business_clear():
         "price_band_fit_score nasıl okunur?",
         "Benzerlik Tabanlı Koridor ile Product Group Median farkı",
         "Product Group Median ise yalnızca aynı ürün grubundaki genel medyan fiyatı alır",
+        "Profil grubu nasıl okunur?",
     ]:
         assert removed_text not in APP_TEXT
 
