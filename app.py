@@ -7579,11 +7579,6 @@ def render_price_corridor_models() -> None:
     avg_mid = float(numeric_rows["Orta fiyat / mid"].mean())
     avg_high = float(numeric_rows["Yüksek fiyat / high"].mean())
     confidence_label = "Yüksek" if result["model_confidence_score"] >= 70 else "Orta" if result["model_confidence_score"] >= 45 else "Düşük"
-    price_display = price_table.copy()
-    for column in ["Düşük fiyat / low", "Orta fiyat / mid", "Yüksek fiyat / high"]:
-        price_display[column] = price_display[column].apply(lambda value: format_optional_try(value, "Henüz aktif değil"))
-    price_display["Tahmin fiyatı"] = price_display["Tahmin fiyatı"].apply(lambda value: format_optional_try(value, "Henüz aktif değil"))
-
     render_price_kpi_grid(
         [
             ("Ortalama alt fiyat", format_try(avg_low), "Benzerlik koridoru + aktif baseline yöntemlerinin düşük fiyat ortalaması."),
@@ -7599,13 +7594,6 @@ def render_price_corridor_models() -> None:
         unsafe_allow_html=True,
     )
     render_price_baseline_grid(rows)
-
-    st.markdown(
-        "<div class='pc-section'><div class='section-title'>Model comparison table</div>"
-        "<div class='section-subtitle'>Ana koridor ve ayrı baseline yöntemleri aynı tabloda karşılaştırılır. Top-K Median tekrarı görünür listeden çıkarılmıştır.</div></div>",
-        unsafe_allow_html=True,
-    )
-    render_price_comparison_table(price_display)
     render_price_decision_note()
 
 
