@@ -133,6 +133,7 @@ PROFILE_DIAGNOSTIC_COLUMNS = [
 ]
 PAGE_NAMES = [
     "Ana Sayfa",
+    "Müşteri Özeti",
     "Veri Seti ve Kalite Kontrol",
     "Metodoloji",
     "Test için İhale Seç",
@@ -1822,18 +1823,6 @@ def page_header(title: str, subtitle: str, eyebrow: str = "Tender IQ") -> None:
     )
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
 
-
-def warning_box() -> None:
-    st.markdown(
-        f"""
-        <div class='warning-callout'>
-            <b>Önemli not:</b> {escape(TURKISH_WARNING)}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def render_metric_card(title: str, value: str, subtitle: str = "", color: str = "blue", icon: str = "") -> None:
     st.markdown(
         premium_card_html(title, subtitle, icon=icon, value=value, color=color, size="metric-size"),
@@ -2219,6 +2208,29 @@ def inject_data_quality_css() -> None:
                 font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
                 font-size: .84rem;
                 white-space: nowrap;
+            }
+            div[data-testid='stFileUploader'] {
+                color: #e5edf7 !important;
+            }
+            div[data-testid='stFileUploader'] section {
+                background:
+                    linear-gradient(180deg, rgba(56, 189, 248, 0.06), rgba(15, 23, 42, 0.92)),
+                    rgba(15, 23, 42, 0.94) !important;
+                border: 1px dashed rgba(148, 163, 184, 0.34) !important;
+                border-radius: 10px !important;
+                color: #e5edf7 !important;
+            }
+            div[data-testid='stFileUploader'] section *,
+            div[data-testid='stFileUploader'] label,
+            div[data-testid='stFileUploader'] small {
+                color: #e5edf7 !important;
+                -webkit-text-fill-color: #e5edf7 !important;
+            }
+            div[data-testid='stFileUploader'] button {
+                background: rgba(30, 41, 59, 0.96) !important;
+                border: 1px solid rgba(56, 189, 248, 0.28) !important;
+                color: #f8fafc !important;
+                box-shadow: none !important;
             }
             @media (max-width: 1180px) {
                 .dq-grid-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -5827,6 +5839,449 @@ def apply_editable_tender_values(masked: dict[str, Any], values: dict[str, Any])
     return adjusted
 
 
+def inject_executive_view_css() -> None:
+    st.markdown(
+        """
+        <style>
+            .ev-shell {
+                max-width: 1180px;
+                margin: 0 auto;
+            }
+            .ev-section {
+                margin-top: 34px;
+            }
+            .ev-grid {
+                display: grid;
+                gap: 16px;
+            }
+            .ev-snapshot-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+            .ev-approach-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .ev-price-grid {
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+            }
+            .ev-card,
+            .ev-summary-card,
+            .ev-empty-card,
+            .ev-list-card,
+            .ev-approach-card,
+            .ev-price-card {
+                border: 1px solid rgba(148, 163, 184, 0.18);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)),
+                    rgba(23, 33, 52, 0.92);
+                border-radius: 8px;
+                box-shadow: 0 12px 30px rgba(2, 6, 23, 0.22);
+            }
+            .ev-card {
+                min-height: 142px;
+                padding: 18px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 12px;
+            }
+            .ev-kicker {
+                color: #7dd3fc;
+                font-size: .72rem;
+                font-weight: 760;
+                letter-spacing: 0;
+            }
+            .ev-value {
+                color: #f8fafc;
+                font-size: 1.38rem;
+                line-height: 1.12;
+                font-weight: 780;
+                overflow-wrap: anywhere;
+            }
+            .ev-copy,
+            .ev-muted {
+                color: #cbd5e1;
+                font-size: .9rem;
+                line-height: 1.5;
+            }
+            .ev-pill {
+                display: inline-flex;
+                width: fit-content;
+                align-items: center;
+                min-height: 26px;
+                padding: 4px 10px;
+                border-radius: 999px;
+                border: 1px solid rgba(56, 189, 248, 0.24);
+                background: rgba(56, 189, 248, 0.10);
+                color: #bae6fd;
+                font-size: .74rem;
+                font-weight: 760;
+            }
+            .ev-pill-good {
+                border-color: rgba(34, 197, 94, 0.30);
+                background: rgba(34, 197, 94, 0.11);
+                color: #bbf7d0;
+            }
+            .ev-pill-warn {
+                border-color: rgba(245, 158, 11, 0.30);
+                background: rgba(245, 158, 11, 0.10);
+                color: #fde68a;
+            }
+            .ev-pill-bad {
+                border-color: rgba(239, 68, 68, 0.32);
+                background: rgba(239, 68, 68, 0.11);
+                color: #fecaca;
+            }
+            .ev-summary-card,
+            .ev-empty-card,
+            .ev-list-card {
+                padding: 20px;
+            }
+            .ev-empty-card {
+                max-width: 760px;
+                margin-top: 16px;
+            }
+            .ev-empty-action {
+                margin-top: 18px;
+                display: inline-flex;
+                border: 1px solid rgba(56, 189, 248, 0.28);
+                background: rgba(56, 189, 248, 0.10);
+                color: #bae6fd;
+                border-radius: 8px;
+                padding: .65rem .85rem;
+                font-weight: 740;
+            }
+            .ev-title {
+                color: #f8fafc;
+                font-size: 1.12rem;
+                line-height: 1.25;
+                font-weight: 760;
+                margin-bottom: 8px;
+            }
+            .ev-approach-card,
+            .ev-price-card {
+                padding: 16px;
+                min-width: 0;
+            }
+            .ev-approach-card.recommended {
+                border-color: rgba(45, 212, 191, 0.34);
+                background:
+                    linear-gradient(135deg, rgba(45, 212, 191, 0.09), rgba(56, 189, 248, 0.035)),
+                    rgba(23, 33, 52, 0.94);
+            }
+            .ev-price-card {
+                min-height: 116px;
+            }
+            .ev-price-label {
+                color: #94a3b8;
+                font-size: .72rem;
+                font-weight: 760;
+                letter-spacing: 0;
+            }
+            .ev-price-value {
+                color: #f8fafc;
+                font-size: 1.18rem;
+                line-height: 1.12;
+                font-weight: 780;
+                margin-top: 10px;
+                overflow-wrap: anywhere;
+            }
+            .ev-list {
+                display: grid;
+                gap: 10px;
+                margin-top: 10px;
+            }
+            .ev-list-item {
+                color: #dbe4ef;
+                border-top: 1px solid rgba(148, 163, 184, 0.12);
+                padding-top: 10px;
+                line-height: 1.45;
+            }
+            .ev-list-item:first-child {
+                border-top: 0;
+                padding-top: 0;
+            }
+            @media (max-width: 1100px) {
+                .ev-snapshot-grid,
+                .ev-price-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .ev-approach-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+            @media (max-width: 720px) {
+                .ev-snapshot-grid,
+                .ev-price-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def executive_score_level(score: Any, strong: float = 70, medium: float = 45) -> tuple[str, str]:
+    try:
+        value = float(score)
+    except (TypeError, ValueError):
+        return "Yeterli veri yok", "warn"
+    if value >= strong:
+        return "Güçlü", "good"
+    if value >= medium:
+        return "Orta", "warn"
+    return "Zayıf", "bad"
+
+
+def executive_attention_level(best: dict[str, Any], confidence: float) -> tuple[str, str, str]:
+    risk_flags = best.get("risk_flags", [])
+    risk_count = len(risk_flags) if isinstance(risk_flags, list) else 1 if risk_flags else 0
+    manual_review = bool(best.get("manual_review_flag"))
+    valid = bool(best.get("hard_constraints_valid", True))
+    if not valid:
+        return "Kritik", "bad", "Temel teklif koşulları manuel inceleme gerektiriyor."
+    if manual_review or risk_count >= 3 or confidence < 45:
+        return "Yüksek", "bad", "Bazı maliyet, fiyat veya profil sinyalleri manuel kontrol gerektiriyor."
+    if risk_count or confidence < 65:
+        return "Orta", "warn", "Bazı varsayımlar teklif komitesi tarafından kontrol edilmeli."
+    return "Düşük", "good", "Belirgin kritik risk sinyali düşük görünüyor."
+
+
+def executive_approach_name(row: dict[str, Any]) -> str:
+    mode = str(row.get("strategy_mode", "") or "").casefold()
+    label = str(row.get("strategy_label", "") or "")
+    text = f"{mode} {label}".casefold()
+    if "aggressive" in text or "agresif" in text:
+        return "Agresif yaklaşım"
+    if "margin" in text or "marj" in text or "protect" in text or "koruma" in text:
+        return "Marj koruma yaklaşımı"
+    if "balanced" in text or "dengeli" in text:
+        return "Dengeli yaklaşım"
+    return "Manuel inceleme önerilir"
+
+
+def executive_business_risks(best: dict[str, Any], result: dict[str, Any], quality: dict[str, float]) -> list[str]:
+    risks: list[str] = []
+    corridor = result.get("corridor", {})
+    low = float(corridor.get("predicted_low_price") or 0)
+    high = float(corridor.get("predicted_high_price") or 0)
+    mid = float(corridor.get("predicted_mid_price") or 0)
+    if mid > 0 and (high - low) / mid > 0.35:
+        risks.append("Fiyat aralığı geniş; nihai fiyat için manuel değerlendirme gerekir.")
+    margin = float(best.get("computed_margin_pct", 0) or 0)
+    if margin < 10:
+        risks.append("Maliyet varsayımı marj üzerinde hassasiyet yaratıyor.")
+    elif margin < 18:
+        risks.append("Marj seviyesi kabul edilebilir görünse de maliyet varsayımı güncel olmalı.")
+    if float(best.get("won_profile_fit_score", 0) or 0) < 55 or bool(best.get("manual_review_flag")):
+        risks.append("İhale profili bazı açılardan geçmiş kazanılmış işlerden ayrışıyor.")
+    if float(best.get("model_confidence_score", result.get("model_confidence_score", 0)) or 0) < 65:
+        risks.append("Analiz güven seviyesi orta; benzer geçmiş iş sinyalleri sınırlı okunmalı.")
+    if float(current_tender().get("delivery_months", 0) if current_tender() else 0) <= 2:
+        risks.append("Teslim süresi operasyonel baskı oluşturabilir.")
+    if float(quality.get("topk_avg_similarity", 0.0) or 0.0) < 0.55:
+        risks.append("Benzer geçmiş işlerle yakınlık sınırlı; teklif öncesi iş birimi kontrolü önerilir.")
+    if not risks:
+        risks.append("Belirgin kritik risk sinyali yok. Yine de nihai karar öncesinde maliyet, stok ve teslim kapasitesi kontrol edilmelidir.")
+    return risks[:3]
+
+
+def executive_recommendation_reasons(best: dict[str, Any], result: dict[str, Any], quality: dict[str, float]) -> list[str]:
+    reasons: list[str] = []
+    if float(quality.get("topk_avg_similarity", 0.0) or 0.0) >= 0.55:
+        reasons.append("Benzer geçmiş ihaleler yeterli seviyede bulundu.")
+    if float(best.get("price_band_fit_score", 0) or 0) >= 60:
+        reasons.append("Önerilen fiyat, tarihsel fiyat aralığından kopmuyor.")
+    if float(best.get("computed_margin_pct", 0) or 0) >= 12:
+        reasons.append("Yaklaşım, marjı tamamen feda etmeden rekabetçi kalıyor.")
+    if float(result.get("model_confidence_score", best.get("model_confidence_score", 0)) or 0) >= 65:
+        reasons.append("Analiz güven seviyesi karar desteği için yeterli görünüyor.")
+    if not reasons:
+        reasons.append("Sistem net bir güçlü sinyal üretmediği için komite değerlendirmesi ana karar noktası olmalı.")
+    return reasons[:3]
+
+
+def render_executive_view() -> None:
+    inject_executive_view_css()
+    page_header(
+        "Müşteri Özeti",
+        "Seçili ihale için müşteri ve karar komitesi seviyesinde sade karar destek görünümü.",
+        "Executive View",
+    )
+    st.markdown("<div class='ev-shell'>", unsafe_allow_html=True)
+    result = st.session_state.get("scenario_result")
+    tender = current_tender()
+    if not result or not tender:
+        st.markdown(
+            """
+            <div class='ev-empty-card'>
+                <div class='ev-title'>Analiz henüz hazır değil</div>
+                <div class='ev-copy'>Bu sayfa, seçili ihale için simülasyon çalıştırıldıktan sonra müşteri seviyesinde karar özeti üretir. Önce ‘Test için İhale Seç’ sayfasından bir ihale seçip simülasyonu çalıştırın.</div>
+                <div class='ev-empty-action'>Test için İhale Seç sayfasına git</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    scenarios = result.get("scenarios", pd.DataFrame())
+    if not isinstance(scenarios, pd.DataFrame) or scenarios.empty:
+        st.markdown(
+            """
+            <div class='ev-empty-card'>
+                <div class='ev-title'>Analiz henüz hazır değil</div>
+                <div class='ev-copy'>Bu bilgi simülasyon sonrası gösterilir. Lütfen seçili ihale için simülasyonu yeniden çalıştırın.</div>
+                <div class='ev-empty-action'>Test için İhale Seç sayfasına git</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    valid_scenarios = scenarios[scenarios["hard_constraints_valid"].astype(bool)].copy() if "hard_constraints_valid" in scenarios else scenarios.copy()
+    recommendation_row = (valid_scenarios if not valid_scenarios.empty else scenarios).iloc[0].to_dict()
+    best = scenarios.iloc[0].to_dict()
+    corridor = result.get("corridor", {})
+    quality = retrieval_quality_from_result(result, tender)
+    similarity_label, similarity_status = executive_score_level(best.get("won_profile_fit_score"))
+    price_label, price_status = executive_score_level(best.get("price_band_fit_score"), strong=75, medium=55)
+    confidence = float(result.get("model_confidence_score", best.get("model_confidence_score", 0)) or 0)
+    confidence_label, confidence_status = executive_score_level(confidence, strong=70, medium=55)
+    attention_label, attention_status, attention_copy = executive_attention_level(best, confidence)
+    approach = executive_approach_name(recommendation_row)
+    margin = float(recommendation_row.get("computed_margin_pct", best.get("computed_margin_pct", 0)) or 0)
+    margin_label = "Sağlıklı" if margin >= 18 else "Dikkat" if margin >= 10 else "Riskli"
+    margin_status = "good" if margin >= 18 else "warn" if margin >= 10 else "bad"
+    proposed_price = recommendation_row.get("proposed_unit_price", corridor.get("predicted_mid_price"))
+
+    snapshot_cards = [
+        (
+            "Geçmiş İşlere Benzerlik",
+            similarity_label,
+            "Bu ihale geçmişte kazanılmış işlere yüksek düzeyde benziyor." if similarity_status == "good" else "Bu ihale bazı açılardan geçmiş kazanılmış işlerden ayrışıyor; manuel kontrol önerilir.",
+            similarity_status,
+        ),
+        (
+            "Fiyat Aralığı",
+            f"{format_try(corridor.get('predicted_low_price'))} - {format_try(corridor.get('predicted_high_price'))}",
+            "Benzer geçmiş işlerde fiyatlar çoğunlukla bu aralıkta oluşmuş.",
+            price_status,
+        ),
+        (
+            "Önerilen Yaklaşım",
+            approach,
+            "Bu yaklaşım fiyat uyumu ve marj sağlığını birlikte okumak için başlangıç noktasıdır.",
+            "good" if "Dengeli" in approach else "warn",
+        ),
+        (
+            "Dikkat Seviyesi",
+            attention_label,
+            attention_copy,
+            attention_status,
+        ),
+    ]
+    cards_html = "".join(
+        "<div class='ev-card'>"
+        f"<div><div class='ev-kicker'>{escape(title)}</div><div class='ev-value'>{escape(value)}</div></div>"
+        f"<div class='ev-copy'>{escape(copy)}</div>"
+        f"<span class='ev-pill ev-pill-{escape(status)}'>{escape(value if title == 'Dikkat Seviyesi' else title)}</span>"
+        "</div>"
+        for title, value, copy, status in snapshot_cards
+    )
+    st.markdown(f"<div class='ev-grid ev-snapshot-grid'>{cards_html}</div>", unsafe_allow_html=True)
+
+    summary = (
+        f"Seçili ihale geçmişte kazanılmış işlere {similarity_label.lower()} seviyede benziyor. "
+        f"Benzer işlerde fiyat aralığı {format_try(corridor.get('predicted_low_price'))} ile {format_try(corridor.get('predicted_high_price'))} arasında oluşmuş. "
+        f"{approach}, fiyat aralığı ve marj açısından teklif komitesi için makul bir başlangıç noktası olarak görünüyor. "
+        f"Tahmini marj {format_pct(margin)} seviyesinde ve marj durumu {margin_label.lower()} okunuyor. "
+        f"Analiz güven seviyesi {confidence_label.lower()}; nihai karar öncesinde maliyet, stok ve teslim kapasitesi kontrol edilmelidir."
+    )
+    st.markdown(
+        "<div class='ev-section ev-summary-card'>"
+        "<div class='ev-title'>Yönetici yorumu</div>"
+        f"<div class='ev-copy'>{escape(summary)}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    approach_items = [
+        ("Agresif", "Rekabetçi fiyat gerekirse", "Marj düşebilir"),
+        ("Dengeli", "Fiyat ve marj birlikte korunmak istenirse", "Ana başlangıç noktası olabilir"),
+        ("Marj Koruma", "Kârlılık öncelikliyse", "Fiyat rekabetten uzaklaşabilir"),
+    ]
+    approach_html = "".join(
+        f"<div class='ev-approach-card {'recommended' if name in approach else ''}'>"
+        f"<div class='ev-title'>{escape(name)}</div>"
+        f"<div class='ev-copy'>{escape(when)}</div>"
+        f"<div class='ev-muted' style='margin-top:10px;'>{escape(note)}</div>"
+        "</div>"
+        for name, when, note in approach_items
+    )
+    st.markdown(
+        "<div class='ev-section'>"
+        "<div class='ev-title'>Önerilen başlangıç noktası: " + escape(approach) + "</div>"
+        "<div class='ev-copy'>Bu öneri nihai karar değil, teklif komitesi için başlangıç noktasıdır.</div>"
+        f"<div class='ev-grid ev-approach-grid' style='margin-top:14px;'>{approach_html}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    price_items = [
+        ("Düşük referans", format_try(corridor.get("predicted_low_price"))),
+        ("Orta referans", format_try(corridor.get("predicted_mid_price"))),
+        ("Yüksek referans", format_try(corridor.get("predicted_high_price"))),
+        ("Önerilen başlangıç fiyatı", format_try(proposed_price)),
+        ("Tahmini marj", f"{format_pct(margin)} · {margin_label}"),
+    ]
+    price_html = "".join(
+        "<div class='ev-price-card'>"
+        f"<div class='ev-price-label'>{escape(label)}</div>"
+        f"<div class='ev-price-value'>{escape(value)}</div>"
+        "</div>"
+        for label, value in price_items
+    )
+    st.markdown(
+        "<div class='ev-section'>"
+        "<div class='ev-title'>Fiyat ve marj görünümü</div>"
+        "<div class='ev-copy'>Bu değerler, seçili ihaleye benzeyen geçmiş kazanılmış işlerde oluşan fiyat seviyelerinden üretilmiştir.</div>"
+        f"<div class='ev-grid ev-price-grid' style='margin-top:14px;'>{price_html}</div>"
+        f"<div style='margin-top:12px;'>{badge(margin_label, margin_status)}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    risks_html = "".join(f"<div class='ev-list-item'>{escape(item)}</div>" for item in executive_business_risks(best, result, quality))
+    reasons_html = "".join(f"<div class='ev-list-item'>{escape(item)}</div>" for item in executive_recommendation_reasons(best, result, quality))
+    checklist = [
+        "Maliyet varsayımı güncel mi?",
+        "Stok ve teslim kapasitesi yeterli mi?",
+        "İhale stratejik olarak önemli mi?",
+        "Rakip yoğunluğu beklenenden yüksek olabilir mi?",
+        "Marj eşiği şirket politikasıyla uyumlu mu?",
+    ]
+    checklist_html = "".join(f"<div class='ev-list-item'>{escape(item)}</div>" for item in checklist)
+    st.markdown(
+        "<div class='ev-section ev-grid ev-approach-grid'>"
+        "<div class='ev-list-card'><div class='ev-title'>Dikkat edilmesi gereken ana riskler</div><div class='ev-list'>" + risks_html + "</div></div>"
+        "<div class='ev-list-card'><div class='ev-title'>Bu önerinin temel nedenleri</div><div class='ev-list'>" + reasons_html + "</div></div>"
+        "<div class='ev-list-card'><div class='ev-title'>Komite neyi kontrol etmeli?</div><div class='ev-list'>" + checklist_html + "</div></div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Teknik metodoloji notu", expanded=False):
+        st.markdown(
+            "Emsal ihaleler, lokal metin vektör benzerliği ve yapısal benzerlik sinyalleriyle seçilir. "
+            "Fiyat aralığı, benzer kazanılmış ihalelerin tarihsel fiyat dağılımından üretilir. "
+            "Profil uyumu, benzerlik, tipiklik ve profil grubu sinyallerini birleştirir. "
+            "Bu ekran kazanma olasılığı üretmez; karar destek amacıyla kullanılır."
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def scenario_input_signature(tender: dict[str, Any]) -> tuple[Any, ...]:
     signature_fields = [
         "tender_id",
@@ -6049,27 +6504,6 @@ def render_data_quality() -> None:
     )
 
     st.markdown(
-        "<div class='dq-info'>"
-        "<div class='info-callout'><b>Veri neden önemli?</b> "
-        "Bu adım, sistemin fiyat koridoru, benzer ihale eşleştirmesi, profil uyumu ve senaryo skorlaması için kullandığı tarihsel kazanılmış ihale veri setini yükler ve doğrular. Kalite kontrolleri, verinin analiz için uygun ve güvenli olup olmadığını gösterir."
-        "</div></div>",
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        "<div class='dq-section-tight'><div class='section-title'>Veri ne işe yarıyor?</div>"
-        "<div class='section-subtitle'>Veri seti, Tender IQ'nun tüm karar destek çıktılarının temel girdisidir.</div></div>",
-        unsafe_allow_html=True,
-    )
-    data_use_cards = [
-        ("Benzer ihale bulma", "Yeni ihale, geçmiş kazanılmış ihalelerle karşılaştırılır ve en yakın emsaller bulunur."),
-        ("Fiyat koridoru üretme", "Benzer kazanılmış ihalelerden düşük, orta ve yüksek fiyat bandı çıkarılır."),
-        ("Profil uyumu hesaplama", "Yeni ihalenin geçmiş kazanılmış işlere ne kadar tanıdık göründüğü ölçülür."),
-        ("Senaryo ve karlılık analizi", "Aday teklif fiyatlarının karlılık, katkı ve risk etkisi karşılaştırılır."),
-    ]
-    render_data_quality_feature_grid(data_use_cards)
-
-    st.markdown(
         "<div class='dq-section'><div class='section-title'>Veri özeti</div>"
         "<div class='section-subtitle'>Demo veri setinin iş seviyesindeki kısa görünümü.</div></div>",
         unsafe_allow_html=True,
@@ -6082,21 +6516,6 @@ def render_data_quality() -> None:
             ("Tarih aralığı", f"{start} - {end}", "İhale tarihi"),
         ]
     )
-
-    st.markdown(
-        "<div class='dq-section'><div class='section-title'>Kalite kontrol sonucu</div>"
-        "<div class='section-subtitle'>Analize başlamadan önce veri setinin kullanılabilirliği doğrulanır.</div></div>",
-        unsafe_allow_html=True,
-    )
-    status = "good" if schema_result.valid and quality["passed"] else "warn"
-    quality_cards = [
-        ("Şema kontrolü", "Geçti" if schema_result.valid else "Eksik", "Zorunlu kolonların bulunup bulunmadığını kontrol eder.", "good" if schema_result.valid else "bad"),
-        ("Zorunlu kolonlar", "Tamam" if not schema_result.missing_columns else "Eksik", "Ürün, kurum, miktar, tarih, fiyat ve karlılık alanlarının durumunu gösterir.", "good" if not schema_result.missing_columns else "bad"),
-        ("Eksik veri durumu", "Uygun" if quality["passed"] else "Uyarı", "Boş veya sorunlu değerlerin analizi bozup bozmadığını inceler.", "good" if quality["passed"] else "warn"),
-        ("Tekrarlı kayıt kontrolü", format_int(summary["duplicate_tender_ids"]), "Aynı tender_id ile gelen tekrarları görünür kılar.", "good" if summary["duplicate_tender_ids"] == 0 else "warn"),
-        ("Veri kullanıma hazır mı?", "Hazır" if status == "good" else "Kontrol gerekli", "Kalite ve şema kontrollerinin ortak sonucudur.", status),
-    ]
-    render_data_quality_status_grid(quality_cards)
 
     st.markdown(
         "<div class='dq-section'><div class='section-title'>Zorunlu kolonlar</div>"
@@ -6190,28 +6609,30 @@ def render_data_quality() -> None:
             )
             st.success("Veri yüklendi ve uygulama şemasına uyarlandı.")
 
+    status = "good" if schema_result.valid and quality["passed"] else "warn"
+    quality_cards = [
+        ("Şema kontrolü", "Geçti" if schema_result.valid else "Eksik", "Zorunlu kolonların bulunup bulunmadığını kontrol eder.", "good" if schema_result.valid else "bad"),
+        ("Zorunlu kolonlar", "Tamam" if not schema_result.missing_columns else "Eksik", "Ürün, kurum, miktar, tarih, fiyat ve karlılık alanlarının durumunu gösterir.", "good" if not schema_result.missing_columns else "bad"),
+        ("Eksik veri durumu", "Uygun" if quality["passed"] else "Uyarı", "Boş veya sorunlu değerlerin analizi bozup bozmadığını inceler.", "good" if quality["passed"] else "warn"),
+        ("Tekrarlı kayıt kontrolü", format_int(summary["duplicate_tender_ids"]), "Aynı tender_id ile gelen tekrarları görünür kılar.", "good" if summary["duplicate_tender_ids"] == 0 else "warn"),
+        ("Veri kullanıma hazır mı?", "Hazır" if status == "good" else "Kontrol gerekli", "Kalite ve şema kontrollerinin ortak sonucudur.", status),
+    ]
+    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
+    with st.expander("Kalite kontrol sonucu", expanded=False):
+        st.markdown(
+            "<div class='section-subtitle'>Analize başlamadan önce veri setinin kullanılabilirliği doğrulanır.</div>",
+            unsafe_allow_html=True,
+        )
+        render_data_quality_status_grid(quality_cards)
+
 
 def render_methodology() -> None:
     page_header(
         "Metodoloji",
-        "Sistem neyi, neden ve nasıl hesaplıyor? Aşağıdaki bölüm metodolojiyi temelden ama iş dilinde açıklar.",
+        "Karar destek çıktılarının hangi iş sinyallerinden beslendiğini gösterir.",
         "Metodoloji",
     )
-    warning_box()
     info_callout(PWIN_PROXY_EXPLANATION, "Profil uyum göstergesi ne anlatır?")
-    st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-
-    section_header("Nasıl çalışır?", "Teknik bileşenler iş akışına göre beş adımda okunur.")
-    render_premium_grid(
-        [
-            {"icon": "01", "title": "İhale Profili Oluşturulur", "body": "Ürün, kurum, bölge, miktar ve ihale tipi tek profilde toplanır.", "pill": "Girdi", "color": "blue"},
-            {"icon": "02", "title": "Emsal İhaleler Bulunur", "body": "Geçmiş kazanılmış ihaleler arasından en yakın emsaller seçilir.", "pill": "Emsal", "color": "purple"},
-            {"icon": "03", "title": "Profil Uyumu Kontrol Edilir", "body": "Başarı grubu ve sıra dışılık sinyali birlikte değerlendirilir.", "pill": "Profil", "color": "mint"},
-            {"icon": "04", "title": "Fiyat Koridoru Üretilir", "body": "Emsal fiyatlardan düşük, dengeli ve yüksek seviye çıkarılır.", "pill": "Fiyat", "color": "amber"},
-            {"icon": "05", "title": "Senaryolar Skorlanır", "body": "Fiyat, profil, karlılık, güven ve risk birlikte puanlanır.", "pill": "Skor", "color": "cyan"},
-        ],
-        columns=3,
-    )
 
     st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
     tabs = st.tabs(
@@ -6245,10 +6666,6 @@ def render_methodology() -> None:
                 "Ürün, kurum, bölge, miktar, teslim süresi, fiyat bandı, beklenen karlılık, risk ve model güveni birlikte okunur. Düşük skor çoğu zaman manuel inceleme sinyalidir.",
                 "03",
             )
-        info_callout(
-            "Negatif sınıf güvenilir olmadığı için kazan/kaybet sınıflandırması ölçülmez. Backtest, fiyat koridoru hizası, profil uyumu, segment performansı, sızıntı kontrolü ve danışman güvenliği üzerinden yapılır.",
-            "Neden accuracy, precision, recall veya ROC-AUC ana başarı metriği değil?",
-        )
 
     with tabs[1]:
         section_header("Benzerlik nasıl hesaplanıyor?", "Yerel metin embedding ve yapısal ağırlıklı benzerlik sinyalleri yeni ihaleyi geçmiş kazanılmış ihalelerle karşılaştırır.", "Retrieval")
@@ -6276,20 +6693,6 @@ def render_methodology() -> None:
                 "İki ihalenin sayısal vektörlerinin birbirine ne kadar yakın olduğunu ölçer. Skor 1'e yaklaştıkça benzerlik artar; 0'a yaklaştıkça azalır.",
                 "Yakınlık hesabı",
             )
-        info_callout(
-            "Örnek profil: serum ürün grubu, kamu hastanesi, Marmara bölgesi, açık ihale ve 50.000 adet. Aynı ürün grubu, benzer kurum tipi, aynı bölge ve yakın miktar varsa benzerlik güçlenir.",
-            "Top-K retrieval ve eşleşme metrikleri",
-        )
-        metrics = pd.DataFrame(
-            [
-                ["Ürün Grubu Eşleşme Oranı", "İlk K benzer ihale içinde aynı ürün grubuna düşen kayıt oranı."],
-                ["Bölge Eşleşme Oranı", "Benzer ihalelerin seçili ihale ile aynı bölgede olma oranı."],
-                ["Miktar Bandı Eşleşme Oranı", "Benzer ihalelerin yakın miktar ölçeğinde olma oranı."],
-                ["İlk K Ortalama Benzerlik", "Getirilen benzer ihalelerin ortalama embedding ve yapısal özellik benzerliği."],
-            ],
-            columns=["Metrik", "Ne anlatır?"],
-        )
-        render_global_dark_table(metrics)
 
     with tabs[2]:
         section_header("Model Bileşenleri", "Her bileşen karar destek çıktısının farklı bir parçasını açıklar.", "Model")
@@ -6306,10 +6709,6 @@ def render_methodology() -> None:
             ]
         )
         st.markdown('<div class="divider-space"></div>', unsafe_allow_html=True)
-        info_callout(
-            "Çok yüksek veya çok düşük miktar, alışılmadık ürün-kurum kombinasyonu, çok kısa teslim süresi, olağan dışı fiyat seviyesi veya düşük benzer ihale sayısı manuel inceleme sinyali üretebilir.",
-            "Sıra dışı durum örnekleri",
-        )
         info_callout(
             "Sistem seçili ihaleye en çok benzeyen kazanılmış ihaleleri bulur. Ana fiyat koridoru bu emsal ihalelerdeki normalize fiyatların alt, orta ve üst yüzdeliklerinden üretilir. Lineer regresyon ve Random Forest/ağaç tabanlı baseline bu koridoru açıklanabilir fiyat referanslarıyla kıyaslar; gerçek kazanma olasılığı üretmez. Koridor çok genişse karar desteği zayıflar, bu yüzden backtestte band genişliği de ölçülür.",
             "Fiyat koridoru nasıl oluşuyor?",
@@ -6343,10 +6742,6 @@ def render_methodology() -> None:
             "Backtest ve Metrikler",
             "Test yılındaki geçmiş kazanılmış ihaleler, sonuç fiyatı ve gerçek karlılık oranı gizlenerek sisteme o gün yeni gelmiş canlı ihale gibi verilir; sistem önce emsal, profil, koridor ve senaryo çıktısı üretir, sonra gerçek sonuç açılarak bu çıktılarla karşılaştırılır.",
             "Ölçüm",
-        )
-        info_callout(
-            "Backtest’in amacı kazanma/kaybetme tahmini doğruluğunu ölçmek değildir. Amaç, sistemin geçmişte kazanılmış ama sonucu gizlenmiş ihaleleri geçmiş başarı profillerine doğru yerleştirip yerleştiremediğini ve fiyat/senaryo önerilerinin tarihsel sonuçlarla ne kadar tutarlı olduğunu ölçmektir.",
-            "Backtest amacı:",
         )
         render_method_grid(
             [
@@ -8432,6 +8827,7 @@ def render_reports() -> None:
 def render_page(page_name: str) -> None:
     pages = {
         "Ana Sayfa": render_home,
+        "Müşteri Özeti": render_executive_view,
         "Veri Seti ve Kalite Kontrol": render_data_quality,
         "Metodoloji": render_methodology,
         "Test için İhale Seç": render_test_simulator,

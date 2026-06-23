@@ -36,6 +36,7 @@ def test_no_html_sent_to_plain_streamlit_renderers():
 def test_turkish_pages_and_chatbot_exist():
     for label in [
         "Ana Sayfa",
+        "Müşteri Özeti",
         "Veri Seti ve Kalite Kontrol",
         "Metodoloji",
         "Test için İhale Seç",
@@ -204,11 +205,8 @@ def test_removed_visual_noise_and_score_section_are_absent():
     assert 'icon="•"' not in APP_TEXT
 
 
-def test_methodology_key_explanations_are_visible_cards_not_expanders():
+def test_methodology_keeps_core_explanations_after_simplification():
     for label in [
-        "Neden accuracy, precision, recall veya ROC-AUC ana başarı metriği değil?",
-        "Top-K retrieval ve eşleşme metrikleri",
-        "Sıra dışı durum örnekleri",
         "Fiyat koridoru nasıl oluşuyor?",
         "Başarıyı hangi metriklerle ölçüyoruz?",
     ]:
@@ -224,6 +222,22 @@ def test_methodology_key_explanations_are_visible_cards_not_expanders():
         "Synthetic Outlier Manual Review Rate",
     ]:
         assert metric in APP_TEXT
+
+
+def test_requested_explanatory_boxes_are_removed():
+    for text in [
+        "Veri neden önemli?",
+        "Veri ne işe yarıyor?",
+        "Sistem neyi, neden ve nasıl hesaplıyor? Aşağıdaki bölüm",
+        "Önemli not:",
+        "Nasıl çalışır?",
+        "Neden accuracy, precision, recall veya ROC-AUC ana başarı metriği değil?",
+        "Top-K retrieval ve eşleşme metrikleri",
+        "Sıra dışı durum örnekleri",
+        "Backtest amacı:",
+    ]:
+        assert text not in APP_TEXT
+    assert 'with st.expander("Kalite kontrol sonucu", expanded=False)' in APP_TEXT
 
 
 def test_scenario_page_labels_price_strategy_scope():
