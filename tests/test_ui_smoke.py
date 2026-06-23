@@ -164,15 +164,13 @@ def test_profile_page_contains_mixed_type_and_isolation_diagnostics():
         "Mixed-Type Cluster Analizi",
         "Mixed-Type Cluster Kalitesi",
         "Silhouette Score",
-        "Cluster sıkılığı",
         "Cluster boyut aralığı",
         "Sıra Dışılık Kontrolü (Isolation Forest)",
         "Anomaly score",
         "Threshold",
         "Manual review flag",
-        "Teknik ID: Cluster",
         "Örneğin 1 / 0 = bir küçük grup var, boş grup yok.",
-        "Sabit 0-100 aralığı yoktur; aynı cluster içindeki ihalelerin cluster merkezine Gower uzaklıklarının toplamıdır",
+        "pf-kpi-card-highlight",
     ]:
         assert text in APP_TEXT
 
@@ -182,8 +180,8 @@ def test_similar_tender_methodology_explains_retrieval_from_basics():
         "Yöntem özeti",
         "yerel metin embedding + yapısal benzerlik yaklaşımı",
         "en yakın Top-K emsal listelenir",
-        "Basit örnek",
-        "miktar veya teslim süresi çok farklıysa skor düşer",
+        "İlk 10 Emsal Benzerliği",
+        "İlk 10 Emsal Kayıt",
     ]:
         assert text in APP_TEXT
 
@@ -309,7 +307,7 @@ def test_price_reveal_and_backtest_explanations_are_business_clear():
         "Product Group Median ise yalnızca aynı ürün grubundaki genel medyan fiyatı alır",
         "Baseline modeller ana koridora alternatif karar değildir",
         "Profil grubu nasıl okunur?",
-        "Mixed-type/Gower modelinin bulduğu geçmiş kazanım segmentidir",
+        "Seçili ihalenin en yakın düştüğü geçmiş kazanım segmentidir",
         "Cluster tablosu nasıl okunur?",
         "Karma profil adı, grubun tek bir ürün/bölge karakterine indirgenemediğini",
         "Test ihalelerinin yüzde kaçı tek bir profil grubuna net oturmuyor?",
