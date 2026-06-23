@@ -5876,12 +5876,20 @@ def inject_executive_view_css() -> None:
             .ev-price-grid {
                 grid-template-columns: repeat(5, minmax(0, 1fr));
             }
+            .ev-sim-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .ev-examples-grid {
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+            }
             .ev-card,
             .ev-summary-card,
             .ev-empty-card,
             .ev-list-card,
             .ev-approach-card,
-            .ev-price-card {
+            .ev-price-card,
+            .ev-sim-card,
+            .ev-example-card {
                 border: 1px solid rgba(148, 163, 184, 0.18);
                 background:
                     linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)),
@@ -5971,9 +5979,36 @@ def inject_executive_view_css() -> None:
                 margin-bottom: 8px;
             }
             .ev-approach-card,
-            .ev-price-card {
+            .ev-price-card,
+            .ev-sim-card,
+            .ev-example-card {
                 padding: 16px;
                 min-width: 0;
+            }
+            .ev-sim-card {
+                min-height: 156px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 12px;
+            }
+            .ev-sim-card-good {
+                border-color: rgba(34, 197, 94, 0.28);
+                background:
+                    linear-gradient(135deg, rgba(34, 197, 94, 0.09), rgba(56, 189, 248, 0.035)),
+                    rgba(23, 33, 52, 0.94);
+            }
+            .ev-sim-card-warn {
+                border-color: rgba(245, 158, 11, 0.28);
+                background:
+                    linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(56, 189, 248, 0.025)),
+                    rgba(23, 33, 52, 0.94);
+            }
+            .ev-sim-card-bad {
+                border-color: rgba(239, 68, 68, 0.30);
+                background:
+                    linear-gradient(135deg, rgba(239, 68, 68, 0.09), rgba(56, 189, 248, 0.022)),
+                    rgba(23, 33, 52, 0.94);
             }
             .ev-approach-card.recommended {
                 border-color: rgba(45, 212, 191, 0.34);
@@ -5998,6 +6033,34 @@ def inject_executive_view_css() -> None:
                 margin-top: 10px;
                 overflow-wrap: anywhere;
             }
+            .ev-sim-value {
+                color: #f8fafc;
+                font-size: 1.24rem;
+                line-height: 1.16;
+                font-weight: 780;
+                overflow-wrap: anywhere;
+            }
+            .ev-sim-score {
+                color: #94a3b8;
+                font-size: .78rem;
+                line-height: 1.35;
+                margin-top: 6px;
+            }
+            .ev-example-card {
+                min-height: 116px;
+            }
+            .ev-example-title {
+                color: #f8fafc;
+                font-size: .92rem;
+                line-height: 1.25;
+                font-weight: 760;
+                margin-bottom: 8px;
+            }
+            .ev-example-meta {
+                color: #cbd5e1;
+                font-size: .78rem;
+                line-height: 1.42;
+            }
             .ev-list {
                 display: grid;
                 gap: 10px;
@@ -6015,16 +6078,19 @@ def inject_executive_view_css() -> None:
             }
             @media (max-width: 1100px) {
                 .ev-snapshot-grid,
-                .ev-price-grid {
+                .ev-price-grid,
+                .ev-examples-grid {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
                 }
+                .ev-sim-grid,
                 .ev-approach-grid {
                     grid-template-columns: 1fr;
                 }
             }
             @media (max-width: 720px) {
                 .ev-snapshot-grid,
-                .ev-price-grid {
+                .ev-price-grid,
+                .ev-examples-grid {
                     grid-template-columns: 1fr;
                 }
             }
@@ -6046,16 +6112,162 @@ def executive_score_level(score: Any, strong: float = 70, medium: float = 45) ->
     return "Zayıf", "bad"
 
 
-def executive_attention_level(best: dict[str, Any], confidence: float) -> tuple[str, str, str]:
+def executive_similarity_score(result: dict[str, Any], quality: dict[str, float]) -> float:
+    value = result.get("top10_avg_similarity")
+    if value is None:
+        similar = result.get("similar", pd.DataFrame())
+        if isinstance(similar, pd.DataFrame) and not similar.empty and "overall_similarity_score" in similar:
+            value = pd.to_numeric(similar.head(10)["overall_similarity_score"], errors="coerce").mean()
+    if value is None or pd.isna(value):
+        value = quality.get("topk_avg_similarity", 0.0)
+    value = float(value or 0.0)
+    return value * 100 if value <= 1 else value
+
+
+def executive_cluster_confidence(best: dict[str, Any]) -> float:
+    value = float(best.get("cluster_assignment_confidence", 0) or 0)
+    return value * 100 if 0 < value <= 1 else value
+
+
+def executive_typicality_score(best: dict[str, Any]) -> float:
+    components = best.get("profile_score_components", {})
+    if not isinstance(components, dict):
+        components = {}
+    value = components.get("inlier_score", best.get("inlier_score", 0))
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def executive_similarity_profile(best: dict[str, Any], result: dict[str, Any], quality: dict[str, float]) -> dict[str, Any]:
+    similarity_score = executive_similarity_score(result, quality)
+    similarity_level, similarity_status = executive_score_level(similarity_score, strong=75, medium=55)
+    if similarity_status == "good":
+        similarity_copy = "Bu ihale için yeterli sayıda benzer geçmiş kazanılmış ihale bulundu."
+    elif similarity_status == "warn":
+        similarity_copy = "Benzer geçmiş ihale sinyali orta seviyede; fiyat ve risk yorumu manuel kontrolle desteklenmeli."
+    else:
+        similarity_copy = "Benzer geçmiş ihale sinyali zayıf; komite yorumu ve saha bilgisi daha kritik hale gelir."
+
+    typicality_score = executive_typicality_score(best)
+    is_inlier = bool(best.get("is_inlier", typicality_score >= 55))
+    manual_review = bool(best.get("manual_review_flag"))
+    if is_inlier and typicality_score >= 65 and not manual_review:
+        typicality_label, typicality_status = "Normal profile yakın", "good"
+        typicality_copy = "Bu ihale geçmiş kazanılmış işler içinde tipik bir profile yakın görünüyor."
+    elif typicality_score >= 45 and not manual_review:
+        typicality_label, typicality_status = "Kısmen farklı", "warn"
+        typicality_copy = "Bu ihale geçmiş profile genel olarak yakın; bazı varsayımlar komite tarafından kontrol edilmeli."
+    else:
+        typicality_label, typicality_status = "Sıra dışı / manuel kontrol önerilir", "bad"
+        typicality_copy = "Bu ihale geçmiş kazanılmış işlerden bazı yönleriyle ayrışıyor. Maliyet, teslim süresi veya ürün/kurum kombinasyonu manuel kontrol edilmelidir."
+
+    cluster_score = float(best.get("cluster_component_score", best.get("mixed_cluster_score", 0)) or 0)
+    cluster_confidence = executive_cluster_confidence(best)
+    cluster_name = str(best.get("cluster_name", "Benzer başarı profili") or "Benzer başarı profili")
+    dominant_parts = [
+        str(best.get("cluster_dominant_product_group", "") or "").strip(),
+        str(best.get("cluster_dominant_institution_type", "") or "").strip(),
+        str(best.get("cluster_dominant_region", "") or "").strip(),
+    ]
+    readable_parts = [part for part in dominant_parts if part and part.casefold() not in {"hesaplanamadı", "nan", "none"}]
+    if cluster_confidence >= 55 or cluster_score >= 60:
+        cluster_label, cluster_status = cluster_name, "good"
+        if readable_parts:
+            cluster_copy = "Bu ihale, geçmişte kazanılmış " + " / ".join(readable_parts[:3]) + " ağırlıklı profile yakın görünüyor."
+        else:
+            cluster_copy = "Bu ihale, geçmişte kazanılmış benzer bir başarı profiline yakın görünüyor."
+    elif cluster_confidence >= 30 or cluster_score >= 45:
+        cluster_label, cluster_status = "Kısmen net profil", "warn"
+        cluster_copy = "Bu ihale geçmiş başarı profiline kısmen oturuyor; iş yorumu ile desteklenmeli."
+    else:
+        cluster_label, cluster_status = "Net profil zayıf", "bad"
+        cluster_copy = "Bu ihale net bir geçmiş başarı profiline güçlü şekilde oturmuyor; manuel yorum önerilir."
+
+    status_rank = {"good": 2, "warn": 1, "bad": 0}
+    total = status_rank[similarity_status] + status_rank[typicality_status] + status_rank[cluster_status]
+    if total >= 5:
+        interpretation = (
+            "Genel olarak seçili ihale, geçmiş kazanılmış işlere güçlü düzeyde benziyor. "
+            "Benzer emsaller ve profil sinyali fiyat koridorunun karar desteği olarak okunmasını destekliyor."
+        )
+        overall_label = "güçlü"
+    elif total >= 3:
+        interpretation = (
+            "Genel olarak seçili ihale, geçmiş kazanılmış işlere orta düzeyde benziyor. "
+            "Fiyat koridoru okunabilir; ancak maliyet, teslim kapasitesi ve profil ayrışmaları nihai teklif öncesinde kontrol edilmelidir."
+        )
+        overall_label = "orta"
+    else:
+        interpretation = (
+            "Genel olarak seçili ihale, geçmiş kazanılmış işlerden belirgin şekilde ayrışıyor. "
+            "Bu nedenle fiyat ve teklif yaklaşımı komite yorumu ve manuel kontrolle desteklenmelidir."
+        )
+        overall_label = "zayıf"
+
+    return {
+        "similarity_score": similarity_score,
+        "similarity_level": similarity_level,
+        "similarity_status": similarity_status,
+        "similarity_copy": similarity_copy,
+        "typicality_score": typicality_score,
+        "typicality_label": typicality_label,
+        "typicality_status": typicality_status,
+        "typicality_copy": typicality_copy,
+        "cluster_score": cluster_score,
+        "cluster_confidence": cluster_confidence,
+        "cluster_label": cluster_label,
+        "cluster_status": cluster_status,
+        "cluster_copy": cluster_copy,
+        "interpretation": interpretation,
+        "overall_label": overall_label,
+    }
+
+
+def executive_similar_examples(result: dict[str, Any], limit: int = 5) -> list[str]:
+    similar = result.get("similar", pd.DataFrame())
+    if not isinstance(similar, pd.DataFrame) or similar.empty:
+        return []
+    examples: list[str] = []
+    for _, row in similar.head(limit).iterrows():
+        parts = [
+            str(row.get("product_group", "") or "").strip(),
+            str(row.get("region", "") or "").strip(),
+            str(row.get("buyer_institution_type", row.get("buyer_institution", "")) or "").strip(),
+        ]
+        clean_parts = [part for part in parts if part and part.casefold() not in {"nan", "none"}]
+        price = row.get(CANONICAL_PRICE_COLUMN)
+        price_text = format_try(price) if price is not None and not pd.isna(price) else ""
+        score = row.get("overall_similarity_score")
+        score_text = f"Benzerlik {float(score):.2f}" if score is not None and not pd.isna(score) else ""
+        meta = " / ".join(clean_parts[:3])
+        if price_text:
+            meta = f"{meta} / {price_text}" if meta else price_text
+        if score_text:
+            meta = f"{meta} · {score_text}" if meta else score_text
+        if meta:
+            examples.append(meta)
+    return examples
+
+
+def executive_attention_level(best: dict[str, Any], confidence: float, profile: dict[str, Any]) -> tuple[str, str, str]:
     risk_flags = best.get("risk_flags", [])
     risk_count = len(risk_flags) if isinstance(risk_flags, list) else 1 if risk_flags else 0
     manual_review = bool(best.get("manual_review_flag"))
     valid = bool(best.get("hard_constraints_valid", True))
+    profile_alerts = 0
+    if float(profile.get("similarity_score", 0) or 0) < 55:
+        profile_alerts += 1
+    if float(profile.get("typicality_score", 0) or 0) < 45:
+        profile_alerts += 1
+    if float(profile.get("cluster_confidence", 0) or 0) < 35:
+        profile_alerts += 1
     if not valid:
         return "Kritik", "bad", "Temel teklif koşulları manuel inceleme gerektiriyor."
-    if manual_review or risk_count >= 3 or confidence < 45:
+    if manual_review or risk_count >= 3 or confidence < 45 or profile_alerts >= 2:
         return "Yüksek", "bad", "Bazı maliyet, fiyat veya profil sinyalleri manuel kontrol gerektiriyor."
-    if risk_count or confidence < 65:
+    if risk_count or confidence < 65 or profile_alerts:
         return "Orta", "warn", "Bazı varsayımlar teklif komitesi tarafından kontrol edilmeli."
     return "Düşük", "good", "Belirgin kritik risk sinyali düşük görünüyor."
 
@@ -6158,11 +6370,12 @@ def render_executive_view() -> None:
     best = scenarios.iloc[0].to_dict()
     corridor = result.get("corridor", {})
     quality = retrieval_quality_from_result(result, tender)
+    profile = executive_similarity_profile(best, result, quality)
     similarity_label, similarity_status = executive_score_level(best.get("won_profile_fit_score"))
     price_label, price_status = executive_score_level(best.get("price_band_fit_score"), strong=75, medium=55)
     confidence = float(result.get("model_confidence_score", best.get("model_confidence_score", 0)) or 0)
     confidence_label, confidence_status = executive_score_level(confidence, strong=70, medium=55)
-    attention_label, attention_status, attention_copy = executive_attention_level(best, confidence)
+    attention_label, attention_status, attention_copy = executive_attention_level(best, confidence, profile)
     approach = executive_approach_name(recommendation_row)
     margin = float(recommendation_row.get("computed_margin_pct", best.get("computed_margin_pct", 0)) or 0)
     margin_label = "Sağlıklı" if margin >= 18 else "Dikkat" if margin >= 10 else "Riskli"
@@ -6205,12 +6418,74 @@ def render_executive_view() -> None:
     )
     st.markdown(f"<div class='ev-grid ev-snapshot-grid'>{cards_html}</div>", unsafe_allow_html=True)
 
+    similarity_cards = [
+        (
+            "Benzer Geçmiş İhale Gücü",
+            profile["similarity_level"],
+            f"Skor: {profile['similarity_score']:.0f}/100",
+            profile["similarity_copy"],
+            profile["similarity_status"],
+        ),
+        (
+            "Geçmiş Profile Göre Normallik",
+            profile["typicality_label"],
+            f"Skor: {profile['typicality_score']:.0f}/100",
+            profile["typicality_copy"],
+            profile["typicality_status"],
+        ),
+        (
+            "Benzer Başarı Profili",
+            profile["cluster_label"],
+            f"Atama güveni: {profile['cluster_confidence']:.0f}/100",
+            profile["cluster_copy"],
+            profile["cluster_status"],
+        ),
+    ]
+    similarity_html = "".join(
+        f"<div class='ev-sim-card ev-sim-card-{escape(status)}'>"
+        f"<div><div class='ev-kicker'>{escape(title)}</div><div class='ev-sim-value'>{escape(value)}</div><div class='ev-sim-score'>{escape(score)}</div></div>"
+        f"<div class='ev-copy'>{escape(copy)}</div>"
+        "</div>"
+        for title, value, score, copy, status in similarity_cards
+    )
+    examples = executive_similar_examples(result)
+    examples_html = "".join(
+        "<div class='ev-example-card'>"
+        f"<div class='ev-example-title'>Örnek {idx}</div>"
+        f"<div class='ev-example-meta'>{escape(example)}</div>"
+        "</div>"
+        for idx, example in enumerate(examples[:5], start=1)
+    )
+    examples_block = (
+        "<div style='margin-top:18px;'><div class='ev-title'>En yakın geçmiş örnekler</div>"
+        f"<div class='ev-grid ev-examples-grid'>{examples_html}</div></div>"
+        if examples_html
+        else "<div class='ev-muted' style='margin-top:14px;'>Benzerlik analizi henüz hazır değil. Bu bölüm, simülasyon çalıştırıldıktan sonra seçili ihalenin geçmiş kazanılmış işlere ne kadar benzediğini gösterir.</div>"
+    )
+    st.markdown(
+        "<div class='ev-section ev-summary-card'>"
+        "<div class='ev-title'>Geçmiş İhalelere Benzerlik</div>"
+        "<div class='ev-copy'>Bu bölüm, seçili ihalenin geçmişte kazanılmış işlere yapısal olarak ne kadar benzediğini gösterir.</div>"
+        f"<div class='ev-grid ev-sim-grid' style='margin-top:14px;'>{similarity_html}</div>"
+        "<div class='ev-title' style='margin-top:18px;'>Bu sonuç nasıl okunmalı?</div>"
+        f"<div class='ev-copy'>{escape(profile['interpretation'])}</div>"
+        f"{examples_block}"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    with st.expander("Bu benzerlik nasıl hesaplanıyor?", expanded=False):
+        st.markdown(
+            "Benzer geçmiş ihaleler, metin vektör benzerliği ve ürün grubu, bölge, ihale tipi, kurum tipi, miktar, teslim süresi ve tahmini rakip sayısı gibi yapısal sinyallerin ağırlıklı birleşimiyle seçilir. "
+            "Geçmiş profile göre normallik, Isolation Forest çıktısından; benzer başarı profili ise mixed-type/Gower distance + Agglomerative Clustering yaklaşımından gelir. "
+            "Bu bölüm kazanma olasılığı değil, geçmiş kazanılmış işlere yapısal benzerlik gösterir."
+        )
+
     summary = (
-        f"Seçili ihale geçmişte kazanılmış işlere {similarity_label.lower()} seviyede benziyor. "
-        f"Benzer işlerde fiyat aralığı {format_try(corridor.get('predicted_low_price'))} ile {format_try(corridor.get('predicted_high_price'))} arasında oluşmuş. "
+        f"Seçili ihale geçmiş kazanılmış işlere {profile['overall_label']} düzeyde benziyor. "
+        f"Bu nedenle fiyat koridoru {format_try(corridor.get('predicted_low_price'))} ile {format_try(corridor.get('predicted_high_price'))} aralığında karar desteği olarak okunabilir. "
         f"{approach}, fiyat aralığı ve marj açısından teklif komitesi için makul bir başlangıç noktası olarak görünüyor. "
         f"Tahmini marj {format_pct(margin)} seviyesinde ve marj durumu {margin_label.lower()} okunuyor. "
-        f"Analiz güven seviyesi {confidence_label.lower()}; nihai karar öncesinde maliyet, stok ve teslim kapasitesi kontrol edilmelidir."
+        f"Dikkat seviyesi {attention_label.lower()}; nihai karar öncesinde maliyet, stok ve teslim kapasitesi kontrol edilmelidir."
     )
     st.markdown(
         "<div class='ev-section ev-summary-card'>"

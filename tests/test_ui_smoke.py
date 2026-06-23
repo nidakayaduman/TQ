@@ -73,6 +73,23 @@ def test_advisor_ui_does_not_render_raw_json_schema():
     assert '"forbidden_claims_check"' not in APP_TEXT
 
 
+def test_executive_view_has_customer_similarity_section():
+    for text in [
+        "Geçmiş İhalelere Benzerlik",
+        "Benzer Geçmiş İhale Gücü",
+        "Geçmiş Profile Göre Normallik",
+        "Benzer Başarı Profili",
+        "Bu sonuç nasıl okunmalı?",
+        "En yakın geçmiş örnekler",
+        "Bu benzerlik nasıl hesaplanıyor?",
+        "executive_similarity_profile",
+        "executive_attention_level(best, confidence, profile)",
+        "Seçili ihale geçmiş kazanılmış işlere",
+        "Dikkat seviyesi",
+    ]:
+        assert text in APP_TEXT
+
+
 def test_openrouter_models_are_explicit_and_selectable():
     for text in [
         "OpenRouter Model Seçimi",
