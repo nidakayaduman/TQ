@@ -158,10 +158,40 @@ def test_advisor_answer_source_is_visible():
         "answer_source",
         "advisor_llm_status",
         "set_advisor_llm_status",
+        "AI cevap hazırlanıyor",
+        "AI cevap hazırlıyor. Yanıt hazır olunca burada görünecek.",
+        "queue_advisor_question(queued)",
+        "advisor_greeting_answer",
+        "is_advisor_greeting(user_question)",
     ]:
         assert text in APP_TEXT
     assert "Güvenli fallback -" not in APP_TEXT
     assert "ADVISOR_CHAT_UI_VERSION" in APP_TEXT
+
+
+def test_theme_has_no_legacy_orange_tokens():
+    for token in [
+        "#ff4f1f",
+        "#ff9d42",
+        "#ff7448",
+        "#ffb25e",
+        "#ff6a2b",
+        "#b5280d",
+        "#fb923c",
+        "#f97316",
+        "#f59e0b",
+        "#fed7aa",
+        "#ffbd8a",
+        "255, 79, 31",
+        "255,79,31",
+        "255, 123, 66",
+        "255,123,66",
+        "255, 157, 66",
+        "255,157,66",
+        "255, 93, 36",
+        "181,40,13",
+    ]:
+        assert token not in APP_TEXT
 
 
 def test_methodology_terms_are_present():

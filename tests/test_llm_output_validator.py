@@ -137,6 +137,7 @@ def test_prompt_requests_foundational_then_technical_explanation():
     assert "Önce konuyu temel seviyede açıkla" in prompt
     assert "mixed-type/Gower profil grubu" in prompt
     assert "Risk kodlarını ham teknik etiket olarak yazma" in prompt
+    assert "Kullanıcı sadece selamlaşırsa" in prompt
 
 
 def test_free_text_payload_is_wrapped_then_validates():
