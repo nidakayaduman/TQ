@@ -3533,6 +3533,16 @@ def inject_price_corridor_css() -> None:
                 flex-direction: column;
                 justify-content: space-between;
             }
+            .pc-kpi-card-glow {
+                border-color: rgba(56, 189, 248, 0.40);
+                background:
+                    linear-gradient(135deg, rgba(56, 189, 248, 0.14), rgba(45, 212, 191, 0.06)),
+                    rgba(15, 23, 42, 0.94);
+                box-shadow:
+                    0 0 0 1px rgba(56, 189, 248, 0.14),
+                    0 18px 42px rgba(56, 189, 248, 0.14),
+                    0 16px 34px rgba(0, 0, 0, 0.28);
+            }
             .pc-label {
                 color: rgba(245, 247, 250, 0.62);
                 font-size: 0.78rem;
@@ -3764,8 +3774,9 @@ def inject_price_corridor_css() -> None:
 def render_price_kpi_grid(items: list[tuple[str, str, str]]) -> None:
     cards = []
     for label, value, note in items:
+        glow_class = " pc-kpi-card-glow" if label.startswith("Ortalama") else ""
         cards.append(
-            "<div class='pc-kpi-card'>"
+            f"<div class='pc-kpi-card{glow_class}'>"
             "<div>"
             f"<div class='pc-label'>{escape(label)}</div>"
             f"<div class='pc-value'>{escape(value)}</div>"
@@ -7575,41 +7586,19 @@ def render_price_corridor_models() -> None:
 
     render_price_kpi_grid(
         [
-            ("Ortalama alt fiyat", format_try(avg_low), "Görünen aktif yöntemlerin düşük fiyat ortalaması."),
-            ("Ortalama orta fiyat", format_try(avg_mid), "Ana koridor ve baseline orta fiyatlarının ortalaması."),
-            ("Ortalama üst fiyat", format_try(avg_high), "Görünen aktif yöntemlerin yüksek fiyat ortalaması."),
+            ("Ortalama alt fiyat", format_try(avg_low), "Benzerlik koridoru + aktif baseline yöntemlerinin düşük fiyat ortalaması."),
+            ("Ortalama orta fiyat", format_try(avg_mid), "Benzerlik koridoru + aktif baseline yöntemlerinin orta fiyat ortalaması."),
+            ("Ortalama üst fiyat", format_try(avg_high), "Benzerlik koridoru + aktif baseline yöntemlerinin yüksek fiyat ortalaması."),
             ("Model güveni", format_score(result["model_confidence_score"]), "Benzer ihale sayısı ve benzerlik gücü."),
         ]
     )
 
     st.markdown(
-        "<div class='pc-section'><div class='section-title'>Ana fiyat koridoru</div>"
-        "<div class='section-subtitle'>Benzerlik tabanlı yöntem bu sayfanın ana fiyat bandıdır; düşük, orta ve yüksek fiyatı Top-K emsal havuzu üzerinden üretir.</div></div>",
+        "<div class='pc-section'><div class='section-title'>Koridor ve baseline karşılaştırması</div>"
+        "<div class='section-subtitle'>Benzerlik tabanlı fiyat koridoru ve baseline referansları aynı yerde karşılaştırılır. Üstteki ortalama kartları, burada görünen aktif yöntemlerin düşük-orta-yüksek fiyatlarının ortalamasıdır.</div></div>",
         unsafe_allow_html=True,
     )
-    render_primary_corridor_card(corridor, confidence_label)
-    st.markdown(
-        "<div class='pc-note-card'><b>price_band_fit_score nasıl okunur?</b> "
-        "Önerilen fiyat p25-p75 koridorunun içindeyse 65-100 arası skor alır. "
-        "Fiyat medyana, yani p50 / orta fiyat noktasına yaklaştıkça skor yükselir. "
-        "Fiyat bandın dışına çıkarsa skor 0-65 aralığına düşer; banddan uzaklaştıkça ceza artar.</div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<div class='pc-note-card'><b>Benzerlik Tabanlı Koridor ile Product Group Median farkı:</b> "
-        "Benzerlik Tabanlı Koridor seçili ihaleye en yakın Top-K emsalleri tek tek bulur ve bu emsal havuzunun p25 / p50 / p75 fiyatlarından düşük-orta-yüksek band üretir. "
-        "Product Group Median ise yalnızca aynı ürün grubundaki genel medyan fiyatı alır; seçili ihalenin kurumunu, bölgesini, miktarını veya metinsel benzerliğini tek tek eşleştirmez. "
-        "Bu yüzden Product Group Median ana öneri değil, ana koridorun ürün grubu ortalamasına göre nerede durduğunu gösteren basit kontrol referansıdır.</div>",
-        unsafe_allow_html=True,
-    )
-
-    baseline_rows = [row for row in rows if row["Yöntem"] != "Benzerlik Tabanlı Fiyat Koridoru"]
-    st.markdown(
-        "<div class='pc-section'><div class='section-title'>Baseline karşılaştırması</div>"
-        "<div class='section-subtitle'>Baseline modeller ana koridora alternatif karar değildir; her biri farklı ve daha basit bir referans üretir. Kartlardaki düşük/yüksek aralıklar, bu tek referans fiyatın etrafına ana emsal koridorunun genişlik oranı uygulanarak gösterilir.</div></div>",
-        unsafe_allow_html=True,
-    )
-    render_price_baseline_grid(baseline_rows)
+    render_price_baseline_grid(rows)
 
     st.markdown(
         "<div class='pc-section'><div class='section-title'>Model comparison table</div>"

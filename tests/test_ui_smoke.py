@@ -320,9 +320,9 @@ def test_backtest_distinguishes_selected_tender_from_full_test_set():
 
 def test_price_reveal_and_backtest_explanations_are_business_clear():
     for text in [
-        "Benzerlik Tabanlı Koridor ile Product Group Median farkı",
-        "Product Group Median ise yalnızca aynı ürün grubundaki genel medyan fiyatı alır",
-        "Baseline modeller ana koridora alternatif karar değildir",
+        "Koridor ve baseline karşılaştırması",
+        "Benzerlik koridoru + aktif baseline yöntemlerinin düşük fiyat ortalaması.",
+        "pc-kpi-card-glow",
         "Profil grubu nasıl okunur?",
         "Seçili ihalenin en yakın düştüğü geçmiş kazanım segmentidir",
         "Cluster tablosu nasıl okunur?",
@@ -332,6 +332,12 @@ def test_price_reveal_and_backtest_explanations_are_business_clear():
         "ihale kazanılmış olsa bile geçmiş kazanım profiline göre alışılmadık özellikler taşıyor olabilir",
     ]:
         assert text in APP_TEXT
+    for removed_text in [
+        "price_band_fit_score nasıl okunur?",
+        "Benzerlik Tabanlı Koridor ile Product Group Median farkı",
+        "Product Group Median ise yalnızca aynı ürün grubundaki genel medyan fiyatı alır",
+    ]:
+        assert removed_text not in APP_TEXT
 
 
 def test_backtest_profile_diagnostics_cache_is_versioned():
