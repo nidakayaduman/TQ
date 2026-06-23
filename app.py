@@ -611,10 +611,24 @@ def inject_global_css() -> None:
                     rgba(7,7,7,0.62);
             }
             .st-key-advisor_chat_module .chat-body {
-                min-height: 270px;
-                max-height: 460px;
-                padding: 1rem;
+                min-height: 560px;
+                height: 62vh;
+                max-height: 760px;
+                overflow-y: auto;
+                padding: 1.15rem;
                 background: transparent;
+                scroll-behavior: smooth;
+            }
+            .st-key-advisor_chat_module .chat-body::-webkit-scrollbar {
+                width: 10px;
+            }
+            .st-key-advisor_chat_module .chat-body::-webkit-scrollbar-track {
+                background: rgba(15, 23, 42, 0.58);
+                border-radius: 999px;
+            }
+            .st-key-advisor_chat_module .chat-body::-webkit-scrollbar-thumb {
+                background: rgba(56, 189, 248, 0.38);
+                border-radius: 999px;
             }
             .st-key-advisor_chat_module .chat-bubble {
                 max-width: min(760px, 82%);
@@ -1042,7 +1056,7 @@ def inject_global_css() -> None:
                 .st-key-advisor_chat_module { padding: .85rem; }
                 .advisor-chat-header { flex-direction: column; align-items: flex-start; }
                 .advisor-status-pills { justify-content: flex-start; max-width: 100%; }
-                .st-key-advisor_chat_module .chat-body { max-height: 360px; }
+                .st-key-advisor_chat_module .chat-body { min-height: 430px; height: 58vh; max-height: 640px; }
                 .st-key-advisor_chat_module .chat-bubble { max-width: 92%; }
                 .advisor-status-grid { grid-template-columns: 1fr; }
             }
@@ -8488,17 +8502,6 @@ def render_advisor() -> None:
     )
     model_attempts = openrouter_model_attempt_order(previous_model_id)
     primary_model_id = model_attempts[0] if model_attempts else previous_model_id
-    backup_model_ids = model_attempts[1:]
-    active_llm_status = st.session_state.get("advisor_llm_status", {})
-    last_used_model = str(active_llm_status.get("model") or primary_model_id)
-    backup_text = " -> ".join(openrouter_model_label(model_id) for model_id in backup_model_ids) if backup_model_ids else "Yedek model yok"
-    model_chain_html = (
-        "<div class='advisor-model-chain'>"
-        f"<span class='advisor-model-chip advisor-model-chip-primary'><b>Primary</b>{escape(openrouter_model_label(primary_model_id))}</span>"
-        f"<span class='advisor-model-chip advisor-model-chip-backup'><b>Backup</b>{escape(backup_text)}</span>"
-        f"<span class='advisor-model-chip'><b>Son kullanılan</b>{escape(openrouter_model_label(last_used_model))}</span>"
-        "</div>"
-    )
     corridor = context.get("corridor", {})
     risk_flags = context.get("risk_flags", [])
     risk_status = "Uyarı var" if risk_flags else "Düşük"
@@ -8512,19 +8515,8 @@ def render_advisor() -> None:
         ("Model güveni", f"{context.get('model_confidence_score', 0):.1f}/100"),
         ("Profil grubu", str(context.get("cluster_name", "Kazanılmış profil grubu"))),
     ]
-    current_validation = st.session_state.get("advisor_validation", validation)
     safe_context = sanitize_advisor_context(context)
     context_status = validate_advisor_context(safe_context)
-    status_pills_html = "".join(
-        f"<span class='advisor-status-pill'>{escape(label)}</span>"
-        for label in [
-            "Schema doğrulandı" if current_validation.get("schema_valid") else "Schema kontrolü",
-            "Kanıt kontrolü aktif" if current_validation.get("grounding_score", 0) else "Kanıt kontrolü hazır",
-            "Yasak iddia filtresi aktif",
-            "Fallback hazır" if current_validation.get("fallback_used") else "LLM aktif",
-            "Bağlam doğrulandı" if context_status.get("context_valid") else "Bağlam kontrolü",
-        ]
-    )
 
     st.markdown(
         "<div class='advisor-safe-banner'><b>Güvenli kullanım notu:</b> "
@@ -8546,8 +8538,6 @@ def render_advisor() -> None:
                         <div class='chat-header-subtitle'>Sorularınızı seçili ihale bağlamı ve doğrulanmış model çıktıları üzerinden yanıtlar.</div>
                     </div>
                 </div>
-                <div class='advisor-status-pills'>{status_pills_html}</div>
-                {model_chain_html}
             </div>
             """,
             unsafe_allow_html=True,
@@ -8625,28 +8615,6 @@ def render_advisor() -> None:
         unsafe_allow_html=True,
     )
 
-    validation_cards = [
-        ("Yanıt doğrulama", "Yanıt doğrulandı" if current_validation.get("advisor_validation_status") == "pass" else "Kontrol gerekiyor", "Schema, yasak iddia ve grounding kontrolleri izlenir."),
-        ("Yasak iddia kontrolü", "Bulunmadı" if not current_validation.get("forbidden_claims_detected") else "Tespit edildi", "Kesin sonuç, garanti veya rakip davranışı iddiaları engellenir."),
-        ("Fallback durumu", "Kullanıldı" if current_validation.get("fallback_used") else "Kullanılmadı", "LLM yoksa veya doğrulama geçmezse güvenli deterministik yanıt döner."),
-        ("Seçili primary model", openrouter_model_label(primary_model_id), primary_model_id),
-        ("Otomatik backup", backup_text, "Primary model hata verirse sıradaki model otomatik denenir."),
-        ("Son kullanılan model", openrouter_model_label(last_used_model), str(active_llm_status.get("reason") or "Henüz LLM çağrısı yapılmadı.")),
-    ]
-    status_cards_html = "".join(
-        "<div class='advisor-status-card'>"
-        f"<div><div class='advisor-status-label'>{escape(label)}</div><div class='advisor-status-value'>{escape(value)}</div></div>"
-        f"<div class='advisor-status-note'>{escape(note)}</div>"
-        "</div>"
-        for label, value, note in validation_cards
-    )
-    st.markdown(
-        "<div class='advisor-secondary-section'><div class='advisor-secondary-title'>Doğrulama ve güvenlik durumu</div>"
-        "<div class='advisor-secondary-subtitle'>Guardrail ve fallback bilgileri sohbeti gölgelemeyecek şekilde özetlenir.</div></div>"
-        f"<div class='advisor-status-grid'>{status_cards_html}</div>",
-        unsafe_allow_html=True,
-    )
-
     st.markdown(
         "<div class='advisor-secondary-section'><div class='advisor-secondary-title'>Model ve Çalışma Ayarları</div>"
         "<div class='advisor-secondary-subtitle'>OpenRouter Model Seçimi burada yapılır. Seçim değiştiğinde yeni sorular bu modelle yanıtlanır.</div></div>",
@@ -8660,7 +8628,7 @@ def render_advisor() -> None:
         format_func=lambda model_id: openrouter_model_option_label(next(model for model in OPENROUTER_MODELS if model["model_id"] == model_id)),
     )
     st.markdown(
-        "<div class='chat-header-subtitle'>AI Danışman önce seçili primary modeli çağırır; yanıt alınamazsa listedeki backup model otomatik denenir. Tüm çağrılar doğrulanmış ve maskelenmiş bağlam üzerinden yapılır.</div>",
+        "<div class='chat-header-subtitle'>Yeni sorular seçili OpenRouter modeliyle, maskelenmiş ve doğrulanmış analiz bağlamı üzerinden yanıtlanır.</div>",
         unsafe_allow_html=True,
     )
     selected_model = next(model for model in OPENROUTER_MODELS if model["model_id"] == selected_model_id)
@@ -8699,11 +8667,8 @@ def render_advisor() -> None:
             [
                 ["Yanıt doğrulama", st.session_state.get("advisor_validation", validation).get("advisor_validation_status", "-")],
                 ["Bağlam doğrulama", "Geçti" if context_status.get("context_valid") else "Kontrol gerekiyor"],
-                ["Fallback advisor", "Kullanılıyor" if st.session_state.get("advisor_validation", validation).get("fallback_used") else "Gerekmedi"],
                 ["Offline mod", "Aktif" if llm_provider() in {"none", "offline", "disabled", "fallback"} else "Pasif"],
                 ["OpenRouter primary", f"{openrouter_model_label(primary_model_id)} / {primary_model_id}"],
-                ["OpenRouter backup", backup_text],
-                ["Son kullanılan model", f"{openrouter_model_label(last_used_model)} / {last_used_model}"],
             ],
             columns=["Kontrol", "Durum"],
         )

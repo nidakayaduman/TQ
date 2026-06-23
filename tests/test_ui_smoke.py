@@ -115,14 +115,21 @@ def test_openrouter_models_are_explicit_and_selectable():
         "poolside/laguna-m.1:free",
         "openrouter_model_attempt_order",
         "openrouter_model_label",
-        "advisor-model-chain",
-        "Seçili primary model",
-        "Otomatik backup",
-        "Son kullanılan model",
-        "Primary model hata verirse sıradaki model otomatik denenir.",
+        "Yeni sorular seçili OpenRouter modeliyle",
         "selected_openrouter_model_id()",
     ]:
         assert text in APP_TEXT
+    for removed_text in [
+        "Schema doğrulandı",
+        "Kanıt kontrolü aktif",
+        "Yasak iddia filtresi aktif",
+        "Fallback hazır",
+        "Bağlam doğrulandı",
+        "Otomatik backup",
+        "Son kullanılan model",
+        "Doğrulama ve güvenlik durumu",
+    ]:
+        assert removed_text not in APP_TEXT
     assert "google/gemma-4-31b-it:free" not in APP_TEXT
 
 
