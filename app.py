@@ -1608,17 +1608,21 @@ def inject_light_theme_css() -> None:
                 background: rgba(248, 252, 255, 0.72) !important;
                 backdrop-filter: blur(14px) saturate(130%) !important;
             }
+            .stApp :where(p, li, label, span, div, small, strong, em, code, figcaption) {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
             .stApp :where(h1, h2, h3, h4, h5, h6),
             .page-title, .section-title, .hero-title,
             .card-title, .metric-value, .score-value,
             .model-title, .method-title, .scenario-title, .scenario-price,
             .pc-value, .pc-primary-title, .pc-band-value, .pc-baseline-title,
             .pc-baseline-value, .sc-value, .sc-score-title, .sc-card-title,
-            .sc-price, .sc-mini-metric b, .rc-value, .rc-summary-title,
+            .pc-mini-band b, .sc-price, .sc-mini-metric b, .rc-value, .rc-summary-title,
             .rc-summary-metric b, .rc-rank-value, .report-section-title,
             .report-control-title, .report-export-title, .report-export-action-title,
             .advisor-kv-row b, .global-table-strong,
-            .chat-header-title, .sidebar-title {
+            .chat-header-title, .sidebar-title, .sc-table .sc-id {
                 color: var(--text) !important;
                 -webkit-text-fill-color: var(--text) !important;
             }
@@ -1627,7 +1631,7 @@ def inject_light_theme_css() -> None:
             .card-body, .card-list, .metric-note, .model-body, .method-body,
             .scenario-row, .chat-header-subtitle, .advisor-secondary-subtitle,
             .report-section-subtitle, .pc-label, .pc-note, .pc-primary-copy,
-            .pc-baseline-copy, .sc-label, .sc-note, .sc-score-copy, .sc-summary,
+            .pc-baseline-copy, .pc-mini-band span, .sc-label, .sc-note, .sc-score-copy, .sc-summary,
             .sc-score-component span, .sc-risk-list, .rc-label, .rc-note,
             .rc-summary-copy, .rc-story-copy, .report-control-body,
             .report-export-copy, .report-export-action-note,
@@ -1847,6 +1851,38 @@ def inject_light_theme_css() -> None:
             div[data-baseweb='select'] svg * {
                 fill: #475569 !important;
                 color: #475569 !important;
+            }
+            .st-key-ts_select_card label,
+            .st-key-ts_inputs_card label,
+            .st-key-ts_select_card div[data-baseweb='select'] *,
+            .st-key-ts_inputs_card div[data-baseweb='input'] *,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] input,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] button,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] button * {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .st-key-ts_select_card svg *,
+            .st-key-ts_inputs_card svg * {
+                fill: #475569 !important;
+                color: #475569 !important;
+            }
+            .st-key-ts_select_card div[data-baseweb='select'] > div,
+            .st-key-ts_inputs_card div[data-baseweb='input'] > div,
+            .st-key-ts_inputs_card div[data-testid='stNumberInput'] input {
+                background: rgba(255,255,255,0.88) !important;
+                border-color: rgba(71, 85, 105, 0.20) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .sim-callout-title,
+            .sim-callout-item b {
+                color: #0369a1 !important;
+                -webkit-text-fill-color: #0369a1 !important;
+            }
+            .sim-callout-item {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
             }
             div[data-testid='stDataFrame'],
             div[data-testid='stTable'],

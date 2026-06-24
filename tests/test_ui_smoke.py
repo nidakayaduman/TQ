@@ -201,6 +201,19 @@ def test_theme_has_no_legacy_orange_tokens():
         assert token not in APP_TEXT
 
 
+def test_light_theme_overrides_global_white_text_for_basic_elements():
+    for text in [
+        ".stApp :where(p, li, label, span, div, small, strong, em, code, figcaption)",
+        "color: var(--text) !important;",
+        "-webkit-text-fill-color: var(--text) !important;",
+        ".st-key-ts_select_card label",
+        ".sim-callout-item b",
+        ".pc-mini-band b",
+        ".sc-table .sc-id",
+    ]:
+        assert text in APP_TEXT
+
+
 def test_methodology_terms_are_present():
     for term in [
         "Yerel metin embedding",
