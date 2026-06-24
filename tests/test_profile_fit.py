@@ -133,12 +133,20 @@ def test_profile_fit_returns_cluster_diagnostics(tiny_df):
     assert "nearest_cluster_examples" in score
     assert "topk_profile_score" in score
     assert "mixed_cluster_score" in score
+    assert "nearest_profile_density_score" in score
+    assert "global_inlier_score" in score
+    assert "segment_inlier_score" in score
+    assert "isolation_calibration_scope" in score
     assert "cluster_purity_score" in score
     assert "profile_score_components" in score
     assert "manual_review_reasons" in score
     assert isinstance(score["nearest_cluster_examples"], list)
     assert 0 <= score["topk_profile_score"] <= 100
     assert 0 <= score["mixed_cluster_score"] <= 100
+    assert 0 <= score["nearest_profile_density_score"] <= 100
+    assert 0 <= score["global_inlier_score"] <= 100
+    assert 0 <= score["segment_inlier_score"] <= 100
+    assert score["inlier_score"] >= score["global_inlier_score"]
     assert 0 <= score["cluster_purity_score"] <= 100
 
 

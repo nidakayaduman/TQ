@@ -26,6 +26,10 @@ LIVE_ASSIGNMENT_FEATURES = [*CATEGORICAL, *NUMERIC]
 DEFAULT_CONTAMINATION = 0.05
 DEFAULT_PROFILE_WEIGHTS = {"topk": 0.50, "isolation": 0.35, "cluster": 0.15}
 LOW_CLUSTER_PURITY_THRESHOLD = 0.50
+SEGMENT_CALIBRATION_MIN_SIZE = 8
+SEGMENT_MODEL_MIN_SIZE = 12
+PROFILE_NEIGHBOR_MIN_SIZE = 5
+PROFILE_NEIGHBOR_K = 10
 
 
 def _one_hot_encoder() -> OneHotEncoder:
@@ -74,6 +78,24 @@ def _dense_array(value: Any) -> np.ndarray:
     if hasattr(value, "toarray"):
         return np.asarray(value.toarray())
     return np.asarray(value)
+
+
+def _key(value: Any) -> str:
+    return "" if pd.isna(value) else str(value)
+
+
+def _percentile_from_scores(scores: np.ndarray, raw_score: float) -> float:
+    if len(scores) == 0:
+        return 0.0
+    return float(np.searchsorted(scores, raw_score, side="right") / len(scores) * 100)
+
+
+def _nearest_mean_distance(distances: np.ndarray, k: int = PROFILE_NEIGHBOR_K) -> float:
+    values = np.asarray(distances, dtype=float)
+    if len(values) == 0:
+        return 1.0
+    ordered = np.sort(values)
+    return float(ordered[: min(k, len(ordered))].mean())
 
 
 def _safe_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -140,6 +162,10 @@ class ProfileFitModel:
     preprocessor: ColumnTransformer
     isolation_model: IsolationForest
     historical_scores: np.ndarray
+    product_isolation_models: dict[str, IsolationForest]
+    product_isolation_scores: dict[str, np.ndarray]
+    group_isolation_models: dict[str, IsolationForest]
+    group_isolation_scores: dict[str, np.ndarray]
     cluster_model: AgglomerativeClustering
     cluster_profiles: dict[int, dict[str, Any]]
     cluster_distances: dict[int, np.ndarray]
@@ -167,7 +193,28 @@ class ProfileFitModel:
         encoded = _dense_array(preprocessor.fit_transform(features))
         isolation_model = IsolationForest(n_estimators=200, contamination=contamination_value, random_state=42)
         isolation_model.fit(encoded)
-        historical_scores = np.sort(isolation_model.decision_function(encoded))
+        training_scores = isolation_model.decision_function(encoded)
+        historical_scores = np.sort(training_scores)
+        product_isolation_models: dict[str, IsolationForest] = {}
+        product_isolation_scores: dict[str, np.ndarray] = {}
+        for product, group in data.groupby("product_name"):
+            if len(group) < SEGMENT_MODEL_MIN_SIZE:
+                continue
+            indices = group.index.to_numpy()
+            segment_model = IsolationForest(n_estimators=200, contamination=contamination_value, random_state=42)
+            segment_model.fit(encoded[indices])
+            product_isolation_models[_key(product)] = segment_model
+            product_isolation_scores[_key(product)] = np.sort(segment_model.decision_function(encoded[indices]))
+        group_isolation_models: dict[str, IsolationForest] = {}
+        group_isolation_scores: dict[str, np.ndarray] = {}
+        for segment, group in data.groupby("product_group"):
+            if len(group) < SEGMENT_MODEL_MIN_SIZE:
+                continue
+            indices = group.index.to_numpy()
+            segment_model = IsolationForest(n_estimators=200, contamination=contamination_value, random_state=42)
+            segment_model.fit(encoded[indices])
+            group_isolation_models[_key(segment)] = segment_model
+            group_isolation_scores[_key(segment)] = np.sort(segment_model.decision_function(encoded[indices]))
         training_predictions = isolation_model.predict(encoded)
         training_inlier_rate = float((training_predictions == 1).mean())
         training_anomaly_rate = float((training_predictions == -1).mean())
@@ -247,6 +294,10 @@ class ProfileFitModel:
             preprocessor=preprocessor,
             isolation_model=isolation_model,
             historical_scores=historical_scores,
+            product_isolation_models=product_isolation_models,
+            product_isolation_scores=product_isolation_scores,
+            group_isolation_models=group_isolation_models,
+            group_isolation_scores=group_isolation_scores,
             cluster_model=cluster_model,
             cluster_profiles=profiles,
             cluster_distances=distance_map,
@@ -268,8 +319,28 @@ class ProfileFitModel:
         features = _feature_frame(query_frame)
         encoded = _dense_array(self.preprocessor.transform(features))
         raw_score = float(self.isolation_model.decision_function(encoded)[0])
-        percentile = float(np.searchsorted(self.historical_scores, raw_score, side="right") / len(self.historical_scores) * 100)
-        inlier = bool(self.isolation_model.predict(encoded)[0] == 1)
+        global_percentile = _percentile_from_scores(self.historical_scores, raw_score)
+        product_key = _key(features["product_name"].iloc[0])
+        group_key = _key(features["product_group"].iloc[0])
+        product_model = self.product_isolation_models.get(product_key)
+        group_model = self.group_isolation_models.get(group_key)
+        product_scores = self.product_isolation_scores.get(product_key, np.array([]))
+        group_scores = self.group_isolation_scores.get(group_key, np.array([]))
+        segment_percentile = global_percentile
+        segment_inlier = bool(self.isolation_model.predict(encoded)[0] == 1)
+        isolation_calibration_scope = "global"
+        if product_model is not None and len(product_scores) >= SEGMENT_CALIBRATION_MIN_SIZE:
+            product_raw_score = float(product_model.decision_function(encoded)[0])
+            segment_percentile = _percentile_from_scores(product_scores, product_raw_score)
+            segment_inlier = bool(product_model.predict(encoded)[0] == 1)
+            isolation_calibration_scope = "product_name"
+        elif group_model is not None and len(group_scores) >= SEGMENT_CALIBRATION_MIN_SIZE:
+            group_raw_score = float(group_model.decision_function(encoded)[0])
+            segment_percentile = _percentile_from_scores(group_scores, group_raw_score)
+            segment_inlier = bool(group_model.predict(encoded)[0] == 1)
+            isolation_calibration_scope = "product_group"
+        percentile = float(max(global_percentile, segment_percentile))
+        inlier = bool(self.isolation_model.predict(encoded)[0] == 1 or segment_inlier)
 
         similar = self.retriever.retrieve(query, top_k=min(50, max(len(self.cluster_examples), 1)))
         retrieval = retrieval_quality(similar, query, top_k=min(50, max(len(similar), 1)))
@@ -291,7 +362,19 @@ class ProfileFitModel:
         reference = self.cluster_distances.get(cluster_id, np.array([nearest_distance]))
         distance_percentile = float(np.searchsorted(reference, nearest_distance, side="right") / max(len(reference), 1))
         cluster_score = float(np.clip((1 - distance_percentile) * 100, 0, 100))
-        mixed_cluster_score = cluster_score
+        product_mask = self.cluster_features["product_name"].astype(str).to_numpy() == str(features["product_name"].iloc[0])
+        group_mask = self.cluster_features["product_group"].astype(str).to_numpy() == str(features["product_group"].iloc[0])
+        profile_scope = "all"
+        profile_pool = np.ones(len(query_distances), dtype=bool)
+        if int(product_mask.sum()) >= PROFILE_NEIGHBOR_MIN_SIZE:
+            profile_pool = product_mask
+            profile_scope = "product_name"
+        elif int(group_mask.sum()) >= PROFILE_NEIGHBOR_MIN_SIZE:
+            profile_pool = group_mask
+            profile_scope = "product_group"
+        nearest_profile_distance = _nearest_mean_distance(query_distances[profile_pool])
+        nearest_profile_density_score = float(np.clip((1 - nearest_profile_distance) * 100, 0, 100))
+        mixed_cluster_score = float(max(cluster_score, nearest_profile_density_score))
         profile = self.cluster_profiles[cluster_id]
         purity_score = float(profile.get("cluster_purity_score", 0.0) or 0.0)
         cluster_component = float(np.clip(0.70 * mixed_cluster_score + 0.30 * purity_score, 0, 100))
@@ -347,15 +430,24 @@ class ProfileFitModel:
             "inlier_score": float(np.clip(percentile, 0, 100)),
             "anomaly_score": raw_score,
             "isolation_threshold": 0.0,
+            "global_inlier_score": float(np.clip(global_percentile, 0, 100)),
+            "segment_inlier_score": float(np.clip(segment_percentile, 0, 100)),
+            "isolation_calibration_scope": isolation_calibration_scope,
             "manual_review_flag": bool(manual_review_reasons),
             "manual_review_reasons": manual_review_reasons,
             "topk_profile_score": topk_profile_score,
             "mixed_cluster_score": mixed_cluster_score,
+            "nearest_profile_density_score": nearest_profile_density_score,
+            "nearest_profile_distance": nearest_profile_distance,
+            "nearest_profile_scope": profile_scope,
             "cluster_purity_score": purity_score,
             "profile_score_components": {
                 "topk_profile_score": topk_profile_score,
                 "inlier_score": float(np.clip(percentile, 0, 100)),
+                "global_inlier_score": float(np.clip(global_percentile, 0, 100)),
+                "segment_inlier_score": float(np.clip(segment_percentile, 0, 100)),
                 "mixed_cluster_score": mixed_cluster_score,
+                "nearest_profile_density_score": nearest_profile_density_score,
                 "cluster_purity_score": purity_score,
                 "cluster_component_score": cluster_component,
                 "weights": self.score_weights,

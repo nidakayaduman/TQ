@@ -114,8 +114,8 @@ PWIN_PROXY_EXPLANATION = (
     "olarak Kazanılmış Profil Uyum Skoru kullanılır. Bu skor; emsal benzerlik, mixed-type başarı profili, "
     "Isolation Forest uygunluğu, fiyat bandı uyumu, karlılık/risk dengesi ve model güveninden beslenir."
 )
-BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v3"
-SCENARIO_RENDER_CACHE_VERSION = "scenario-cards-v2"
+BACKTEST_PROFILE_DIAGNOSTICS_CACHE_VERSION = "profile-diagnostics-v5"
+SCENARIO_RENDER_CACHE_VERSION = "scenario-cards-v4"
 ADVISOR_CHAT_UI_VERSION = "advisor-chat-v4"
 ADVISOR_GREETING_RE = re.compile(
     r"^\s*(?:"
