@@ -315,7 +315,7 @@ def score_scenario(
                 "isolation_threshold",
                 "manual_review_flag",
                 "manual_review_reasons",
-                "knn_profile_score",
+                "topk_profile_score",
                 "mixed_cluster_score",
                 "cluster_purity_score",
                 "profile_score_components",

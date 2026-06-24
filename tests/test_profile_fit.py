@@ -112,7 +112,7 @@ def test_profile_fit_does_not_depend_on_actual_or_recommended_price_fields(tiny_
         "cluster_distance",
         "anomaly_score",
         "is_inlier",
-        "knn_profile_score",
+        "topk_profile_score",
         "mixed_cluster_score",
         "cluster_purity_score",
     ]:
@@ -131,13 +131,13 @@ def test_profile_fit_returns_cluster_diagnostics(tiny_df):
     assert "cluster_silhouette_score" in score
     assert "cluster_inertia" in score
     assert "nearest_cluster_examples" in score
-    assert "knn_profile_score" in score
+    assert "topk_profile_score" in score
     assert "mixed_cluster_score" in score
     assert "cluster_purity_score" in score
     assert "profile_score_components" in score
     assert "manual_review_reasons" in score
     assert isinstance(score["nearest_cluster_examples"], list)
-    assert 0 <= score["knn_profile_score"] <= 100
+    assert 0 <= score["topk_profile_score"] <= 100
     assert 0 <= score["mixed_cluster_score"] <= 100
     assert 0 <= score["cluster_purity_score"] <= 100
 

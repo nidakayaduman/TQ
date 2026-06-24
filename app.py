@@ -129,7 +129,7 @@ PROFILE_DIAGNOSTIC_COLUMNS = [
     "cluster_min_size",
     "cluster_max_size",
     "cluster_assignment_confidence",
-    "knn_profile_score",
+    "topk_profile_score",
     "mixed_cluster_score",
     "cluster_purity_score",
     "manual_review_reasons",
@@ -1565,6 +1565,368 @@ def inject_theme_refresh_css() -> None:
     )
 
 
+def inject_light_theme_css() -> None:
+    st.markdown(
+        """
+        <style>
+            :root {
+                --app-bg: #f4f9fc;
+                --surface: rgba(255, 255, 255, 0.82);
+                --surface-strong: rgba(255, 255, 255, 0.94);
+                --surface-soft: rgba(238, 246, 251, 0.82);
+                --surface-muted: #e8f2f8;
+                --line: rgba(71, 85, 105, 0.18);
+                --line-soft: rgba(14, 116, 144, 0.20);
+                --text: #0f172a;
+                --muted: #475569;
+                --primary: #0f172a;
+                --accent: #0284c7;
+                --accent-2: #0f766e;
+                --accent-soft: rgba(2, 132, 199, 0.10);
+                --blue: #0284c7;
+                --cyan: #0f766e;
+                --purple: #2563eb;
+                --green: #16a34a;
+                --amber: #0f766e;
+                --red: #dc2626;
+                --shadow: 0 22px 60px rgba(15, 23, 42, 0.10);
+                --soft-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            }
+            html, body,
+            .stApp, .app-bg,
+            [data-testid='stAppViewContainer'],
+            [data-testid='stAppViewContainer'] > .main,
+            [data-testid='stMain'],
+            [data-testid='stMainBlockContainer'] {
+                background:
+                    radial-gradient(ellipse at 15% 0%, rgba(186, 230, 253, 0.70), transparent 35%),
+                    radial-gradient(ellipse at 88% 10%, rgba(204, 251, 241, 0.62), transparent 32%),
+                    linear-gradient(135deg, #f8fcff 0%, #eef7fb 48%, #f6fbff 100%) !important;
+                color: var(--text) !important;
+            }
+            [data-testid='stHeader'] {
+                background: rgba(248, 252, 255, 0.72) !important;
+                backdrop-filter: blur(14px) saturate(130%) !important;
+            }
+            .stApp :where(h1, h2, h3, h4, h5, h6),
+            .page-title, .section-title, .hero-title,
+            .card-title, .metric-value, .score-value,
+            .model-title, .method-title, .scenario-title, .scenario-price,
+            .pc-value, .pc-primary-title, .pc-band-value, .pc-baseline-title,
+            .pc-baseline-value, .sc-value, .sc-score-title, .sc-card-title,
+            .sc-price, .sc-mini-metric b, .rc-value, .rc-summary-title,
+            .rc-summary-metric b, .rc-rank-value, .report-section-title,
+            .report-control-title, .report-export-title, .report-export-action-title,
+            .advisor-kv-row b, .global-table-strong,
+            .chat-header-title, .sidebar-title {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .stApp :where(p, li, label, small, span),
+            .page-subtitle, .section-subtitle, .hero-subtitle,
+            .card-body, .card-list, .metric-note, .model-body, .method-body,
+            .scenario-row, .chat-header-subtitle, .advisor-secondary-subtitle,
+            .report-section-subtitle, .pc-label, .pc-note, .pc-primary-copy,
+            .pc-baseline-copy, .sc-label, .sc-note, .sc-score-copy, .sc-summary,
+            .sc-score-component span, .sc-risk-list, .rc-label, .rc-note,
+            .rc-summary-copy, .rc-story-copy, .report-control-body,
+            .report-export-copy, .report-export-action-note,
+            .advisor-status-note, .advisor-kv-row, .sidebar-subtitle, .sidebar-note {
+                color: var(--muted) !important;
+                -webkit-text-fill-color: var(--muted) !important;
+            }
+            [data-testid='stSidebar'] {
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.84), rgba(239, 248, 252, 0.82)),
+                    rgba(255, 255, 255, 0.86) !important;
+                border-right-color: var(--line) !important;
+                box-shadow: 12px 0 34px rgba(15, 23, 42, 0.08) !important;
+                backdrop-filter: blur(20px) saturate(135%) !important;
+            }
+            [data-testid='stSidebar'] .stRadio label,
+            [data-testid='stSidebar'] * {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            [data-testid='stSidebar'] [role='radiogroup'] label:hover {
+                background: rgba(2, 132, 199, 0.08) !important;
+                border-color: rgba(2, 132, 199, 0.18) !important;
+            }
+            .hero-card,
+            [data-testid='stVerticalBlockBorderWrapper'],
+            .glass-card, .method-card, .model-card, .score-card, .scenario-card,
+            .metric-card, .premium-card, .nav-card,
+            .dq-feature-card, .dq-metric-card, .dq-quality-card,
+            .ts-card, .st-key-ts_select_card, .st-key-ts_inputs_card,
+            .sim-metric-card, .pf-card, .pf-kpi-card, .pf-metric-card, .pf-gauge-card,
+            .st-key-pf_gauge_card, .pc-kpi-card, .pc-primary-card, .pc-baseline-card,
+            .sc-kpi-card, .sc-score-card, .sc-strategy-card,
+            .rc-card, .rc-summary-card, .rc-story-card,
+            .report-control-card, .st-key-report_export_backtest,
+            .st-key-report_export_scenario, .st-key-report_export_audit,
+            .st-key-report_export_review, .report-detail-card,
+            .advisor-context-card, .advisor-setup-card, .advisor-status-card,
+            .chat-wide-shell, .chat-body, .chat-header, .st-key-advisor_chat_module,
+            .formula-panel, .global-table-card, .dq-table-card, .ts-masked-table-wrap,
+            .sim-table-card, .pf-table-card, .pc-table-card,
+            .sc-table-card, .rc-table-card, .advisor-advanced-table {
+                border-color: var(--line) !important;
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.90), rgba(255,255,255,0.68)),
+                    rgba(255, 255, 255, 0.78) !important;
+                box-shadow: var(--soft-shadow) !important;
+                backdrop-filter: blur(18px) saturate(125%) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .hero-card {
+                background:
+                    radial-gradient(ellipse at 18% 0%, rgba(186, 230, 253, 0.72), transparent 38%),
+                    radial-gradient(ellipse at 82% 12%, rgba(204, 251, 241, 0.58), transparent 36%),
+                    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(240, 249, 255, 0.86)) !important;
+            }
+            .brand-mark, .chat-orb {
+                background: linear-gradient(145deg, #0284c7, #0f766e) !important;
+                border-color: rgba(2, 132, 199, 0.26) !important;
+                box-shadow: 0 12px 24px rgba(2, 132, 199, 0.14) !important;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+            }
+            .eyebrow, .section-kicker, .advisor-chat-kicker,
+            .global-table-code, .dq-table-code, .sim-id, .pf-id,
+            .sc-risk-title, .sc-score-component b, .pc-note-card b,
+            .sc-note-card b, .rc-export-card b, .advisor-model-chip b {
+                color: #0369a1 !important;
+                -webkit-text-fill-color: #0369a1 !important;
+            }
+            .metric-card:before, .model-card:before, .method-card:before,
+            .scenario-card:before, .premium-card:before,
+            .dq-feature-card:before, .dq-metric-card:before, .dq-quality-card:before,
+            .ts-process-card:before, .ts-summary-card:before,
+            .sim-metric-card:before, .sim-table-card:before,
+            .pf-kpi-card:before, .pf-metric-card:before, .pf-card:before,
+            .pf-gauge-card:before, .pf-table-card:before, .st-key-pf_gauge_card:before {
+                background: linear-gradient(90deg, transparent, rgba(2, 132, 199, 0.42), transparent) !important;
+                opacity: .72 !important;
+            }
+            .scope-pill, .status-badge, .card-pill, .global-status-pill,
+            .advisor-status-pill, .advisor-model-chip, .report-badge,
+            .pc-pill, .sc-pill, .rc-pill,
+            .hero-badge {
+                background: rgba(255, 255, 255, 0.76) !important;
+                border-color: var(--line) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+                box-shadow: none !important;
+            }
+            .status-success, .status-good, .global-status-good,
+            .sc-pill-good, .rc-pill-good, .report-badge-success {
+                border-color: rgba(22, 163, 74, 0.26) !important;
+                background: rgba(220, 252, 231, 0.82) !important;
+                color: #166534 !important;
+                -webkit-text-fill-color: #166534 !important;
+            }
+            .status-warning, .status-warn, .global-status-warn,
+            .rc-pill-warn, .report-badge-warning,
+            .premium-card.card-amber:before,
+            .metric-card-amber, .model-card-amber, .method-card-amber, .scenario-card-amber {
+                border-color: rgba(15, 118, 110, 0.24) !important;
+                background-color: rgba(204, 251, 241, 0.72) !important;
+                color: #0f766e !important;
+                -webkit-text-fill-color: #0f766e !important;
+            }
+            .status-danger, .status-bad, .global-status-bad,
+            .sc-pill-bad, .rc-pill-bad, .report-badge-danger {
+                border-color: rgba(220, 38, 38, 0.24) !important;
+                background: rgba(254, 226, 226, 0.78) !important;
+                color: #991b1b !important;
+                -webkit-text-fill-color: #991b1b !important;
+            }
+            .warning-callout, .warning-box, .ts-warning, .advisor-warning-banner,
+            .info-callout, .info-box, .dq-info .info-callout,
+            .sim-callout, .pf-callout, .pc-note-card,
+            .sc-note-card, .rc-export-card, .advisor-safe-banner {
+                border-color: rgba(2, 132, 199, 0.16) !important;
+                background:
+                    linear-gradient(135deg, rgba(224, 242, 254, 0.78), rgba(204, 251, 241, 0.48)),
+                    rgba(255,255,255,0.82) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .chat-wide-shell, .st-key-advisor_chat_module .chat-wide-shell {
+                background: rgba(255,255,255,0.74) !important;
+            }
+            .chat-body, .st-key-advisor_chat_module .chat-body {
+                background:
+                    radial-gradient(ellipse at 16% 0%, rgba(224, 242, 254, 0.66), transparent 38%),
+                    rgba(255,255,255,0.68) !important;
+            }
+            .chat-bubble, .st-key-advisor_chat_module .chat-bubble {
+                border-color: var(--line) !important;
+                box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08) !important;
+            }
+            .chat-bubble-user, .st-key-advisor_chat_module .chat-bubble-user {
+                background: linear-gradient(135deg, #0284c7, #0f766e) !important;
+                border-color: rgba(2, 132, 199, 0.24) !important;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+            }
+            .chat-bubble-assistant, .st-key-advisor_chat_module .chat-bubble-assistant {
+                background: rgba(255,255,255,0.88) !important;
+                border-color: rgba(71, 85, 105, 0.16) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .chat-bubble-pending {
+                border-color: rgba(2, 132, 199, 0.24) !important;
+                background:
+                    linear-gradient(135deg, rgba(224, 242, 254, 0.90), rgba(204, 251, 241, 0.72)),
+                    rgba(255,255,255,0.90) !important;
+                color: #075985 !important;
+                -webkit-text-fill-color: #075985 !important;
+            }
+            .chat-source {
+                background: rgba(204, 251, 241, 0.76) !important;
+                border: 1px solid rgba(15, 118, 110, 0.18) !important;
+                color: #0f766e !important;
+                -webkit-text-fill-color: #0f766e !important;
+            }
+            button[kind], div[data-testid='stDownloadButton'] button,
+            div[data-testid='stButton'] button,
+            .st-key-ts_inputs_card div[data-testid='stButton'] button,
+            .st-key-advisor_chat_module div[data-testid='stFormSubmitButton'] button,
+            .st-key-report_export_backtest div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_scenario div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_audit div[data-testid='stDownloadButton'] button,
+            .st-key-report_export_review div[data-testid='stDownloadButton'] button {
+                border-color: rgba(2, 132, 199, 0.26) !important;
+                background: linear-gradient(180deg, #0284c7, #0f766e) !important;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+                box-shadow: 0 10px 22px rgba(2, 132, 199, 0.12) !important;
+            }
+            button[kind]:hover, div[data-testid='stDownloadButton'] button:hover,
+            div[data-testid='stButton'] button:hover,
+            .st-key-advisor_chat_module div[data-testid='stButton'] button:hover {
+                border-color: rgba(2, 132, 199, 0.38) !important;
+                background: linear-gradient(180deg, #0369a1, #0f766e) !important;
+                box-shadow: 0 12px 26px rgba(2, 132, 199, 0.16) !important;
+            }
+            .quick-question button,
+            .st-key-advisor_chat_module div[data-testid='stButton'] button {
+                background: rgba(255,255,255,0.78) !important;
+                border-color: rgba(71, 85, 105, 0.18) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+                box-shadow: none !important;
+            }
+            div[data-baseweb='select'] > div,
+            div[data-baseweb='input'] > div,
+            div[data-testid='stNumberInput'] input,
+            div[data-testid='stTextInput'] input,
+            div[data-testid='stChatInput'] textarea,
+            .st-key-advisor_chat_module div[data-testid='stForm'] input,
+            textarea {
+                background: rgba(255,255,255,0.88) !important;
+                border-color: rgba(71, 85, 105, 0.20) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+                box-shadow: none !important;
+            }
+            div[data-baseweb='select'] *,
+            div[data-baseweb='input'] *,
+            div[data-testid='stNumberInput'] input *,
+            div[data-testid='stTextInput'] input *,
+            div[data-testid='stFileUploader'] *,
+            div[data-testid='stNumberInput'] button,
+            div[data-testid='stNumberInput'] button * {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            div[data-testid='stNumberInput'] svg *,
+            div[data-baseweb='select'] svg * {
+                fill: #475569 !important;
+                color: #475569 !important;
+            }
+            div[data-testid='stDataFrame'],
+            div[data-testid='stTable'],
+            div[data-testid='stDataFrameResizable'],
+            .global-table-card, .dq-table-card, .ts-masked-table-wrap,
+            .sim-table-card, .pf-table-card, .pc-table-card,
+            .sc-table-card, .rc-table-card, .advisor-advanced-table {
+                background: rgba(255,255,255,0.90) !important;
+                border-color: var(--line) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+                --text-color: #0f172a;
+                --background-color: #ffffff;
+                --secondary-background-color: #eef6fb;
+                box-shadow: var(--soft-shadow) !important;
+            }
+            div[data-testid='stDataFrame'] *,
+            div[data-testid='stTable'] *,
+            div[data-testid='stDataFrameResizable'] *,
+            .global-dark-table,
+            .global-dark-table *,
+            .dq-table, .dq-table *,
+            .ts-masked-table, .ts-masked-table *,
+            .sim-table, .sim-table *,
+            .pf-table, .pf-table *,
+            .pc-table, .pc-table *,
+            .sc-table, .sc-table *,
+            .rc-table, .rc-table *,
+            .advisor-advanced-table, .advisor-advanced-table * {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            div[data-testid='stDataFrame'] table,
+            div[data-testid='stTable'] table,
+            div[data-testid='stDataFrame'] thead,
+            div[data-testid='stTable'] thead,
+            div[data-testid='stDataFrame'] tbody,
+            div[data-testid='stTable'] tbody,
+            div[data-testid='stDataFrame'] tr,
+            div[data-testid='stTable'] tr,
+            div[data-testid='stDataFrame'] th,
+            div[data-testid='stTable'] th,
+            div[data-testid='stDataFrame'] td,
+            div[data-testid='stTable'] td,
+            .global-dark-table th, .dq-table thead th, .ts-masked-table th,
+            .sim-table th, .pf-table th, .pc-table th,
+            .sc-table th, .rc-table th, .advisor-advanced-table th {
+                background: rgba(226, 239, 247, 0.92) !important;
+                border-bottom-color: rgba(71, 85, 105, 0.14) !important;
+                color: #334155 !important;
+                -webkit-text-fill-color: #334155 !important;
+            }
+            .global-dark-table td, .dq-table tbody td, .ts-masked-table td,
+            .sim-table td, .pf-table td, .pc-table td,
+            .sc-table td, .rc-table td, .advisor-advanced-table td {
+                background: rgba(255,255,255,0.84) !important;
+                border-bottom-color: rgba(71, 85, 105, 0.10) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .global-dark-table tr:nth-child(even) td,
+            .dq-table tbody tr:nth-child(even) td,
+            .ts-masked-table tr:nth-child(even) td,
+            .sim-table tr:nth-child(even) td,
+            .pf-table tr:nth-child(even) td,
+            .pc-table tr:nth-child(even) td,
+            .sc-table tr:nth-child(even) td,
+            .rc-table tr:nth-child(even) td {
+                background: rgba(241, 248, 252, 0.86) !important;
+            }
+            .global-progress-fill, .sim-score-fill, .sc-progress-fill {
+                background: linear-gradient(90deg, #0284c7, #0f766e) !important;
+                box-shadow: none !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def init_session_state_defaults() -> None:
     st.session_state.setdefault("session_id", f"st-{uuid.uuid4().hex[:12]}")
     st.session_state.setdefault("user_id", os.getenv("USER_ID", "anonymous"))
@@ -1786,7 +2148,7 @@ def ensure_backtest_columns(results: pd.DataFrame) -> pd.DataFrame:
         "isolation_threshold": 0.0,
         "manual_review_flag": False,
         "manual_review_reasons": "",
-        "knn_profile_score": 0.0,
+        "topk_profile_score": 0.0,
         "mixed_cluster_score": 0.0,
         "cluster_purity_score": 0.0,
         "profile_score_components": {},
@@ -7443,7 +7805,7 @@ def render_profile_fit_analysis() -> None:
     component_weights = profile_components.get("weights", {})
     if not isinstance(component_weights, dict):
         component_weights = {}
-    knn_weight = float(component_weights.get("knn", 0.50) or 0.50)
+    topk_weight = float(component_weights.get("topk", 0.50) or 0.50)
     isolation_weight = float(component_weights.get("isolation", 0.35) or 0.35)
     cluster_weight = float(component_weights.get("cluster", 0.15) or 0.15)
     cluster_name = str(best.get("cluster_name", "Geçmiş başarı grubu"))
@@ -7484,7 +7846,7 @@ def render_profile_fit_analysis() -> None:
             {
                 "label": "Kazanılmış Profil Uyum Skoru",
                 "value": format_score(best.get("won_profile_fit_score")),
-                "body": f"Seçili ihale geçmişte kazanılmış işlere genel olarak ne kadar benziyor? Skor; Top-K emsal yakınlığı %{knn_weight * 100:.0f}, Isolation Forest tipikliği %{isolation_weight * 100:.0f}, mixed-type/Gower cluster yakınlığı %{cluster_weight * 100:.0f} ağırlıkla birleşir.",
+                "body": f"Seçili ihale geçmişte kazanılmış işlere genel olarak ne kadar benziyor? Skor; Top-K emsal yakınlığı %{topk_weight * 100:.0f}, Isolation Forest tipikliği %{isolation_weight * 100:.0f}, mixed-type/Gower cluster yakınlığı %{cluster_weight * 100:.0f} ağırlıkla birleşir.",
                 "badge": fit_level(best.get("won_profile_fit_score")),
                 "status": "good" if float(best.get("won_profile_fit_score", 0) or 0) >= 70 else "warn",
                 "highlight": True,
@@ -7510,7 +7872,7 @@ def render_profile_fit_analysis() -> None:
     st.markdown(
         "<div class='pf-score-note'><b>Profil uyum skoru nasıl hesaplanır?</b> "
         f"Bu skor fiyat, maliyet, gerçek marj veya önerilen teklif fiyatı kullanmadan hesaplanan yapısal profil uyumudur. "
-        f"Top-K emsal benzerliği %{knn_weight * 100:.0f} ağırlıkla geçmişte kazanılmış benzer ihaleleri; "
+        f"Top-K emsal benzerliği %{topk_weight * 100:.0f} ağırlıkla geçmişte kazanılmış benzer ihaleleri; "
         f"Isolation Forest %{isolation_weight * 100:.0f} ağırlıkla geçmiş kazanım dağılımına tipikliği; "
         f"mixed-type cluster %{cluster_weight * 100:.0f} ağırlıkla başarı grubu yakınlığı ve cluster saflığını temsil eder. "
         "Skor fiyat kararı veya gerçek kazanma olasılığı değildir.</div>",
@@ -7524,8 +7886,8 @@ def render_profile_fit_analysis() -> None:
     render_profile_metric_grid(
         [
             (
-                f"Top-K emsal benzerliği (%{knn_weight * 100:.0f})",
-                format_score(profile_components.get("knn_profile_score", best.get("knn_profile_score"))),
+                f"Top-K emsal benzerliği (%{topk_weight * 100:.0f})",
+                format_score(profile_components.get("topk_profile_score", best.get("topk_profile_score"))),
                 "Benzer kazanılmış ihalelerin ürün, kurum, bölge, miktar ve metin yakınlığını 100'lük profil bileşenine çevirir. 0-1 Top-10 ortalaması Emsal İhale Analizi sayfasında ayrı gösterilir.",
             ),
             (
@@ -9142,3 +9504,4 @@ def render_page(page_name: str) -> None:
 page = render_sidebar()
 render_page(page)
 inject_theme_refresh_css()
+inject_light_theme_css()

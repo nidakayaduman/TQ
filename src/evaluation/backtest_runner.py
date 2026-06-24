@@ -151,7 +151,7 @@ def run_backtest(train_df: pd.DataFrame, test_df: pd.DataFrame, top_k: int | Non
                 "isolation_threshold": profile.get("isolation_threshold"),
                 "manual_review_flag": profile.get("manual_review_flag"),
                 "manual_review_reasons": "; ".join(profile.get("manual_review_reasons", [])),
-                "knn_profile_score": profile.get("knn_profile_score"),
+                "topk_profile_score": profile.get("topk_profile_score"),
                 "mixed_cluster_score": profile.get("mixed_cluster_score"),
                 "cluster_purity_score": profile.get("cluster_purity_score"),
                 "profile_score_components": profile.get("profile_score_components"),

@@ -24,7 +24,7 @@ NUMERIC = ["quantity", "delivery_months", "competitor_count_estimate"]
 CLUSTER_TRAINING_FEATURES = [*CATEGORICAL, *NUMERIC]
 LIVE_ASSIGNMENT_FEATURES = [*CATEGORICAL, *NUMERIC]
 DEFAULT_CONTAMINATION = 0.05
-DEFAULT_PROFILE_WEIGHTS = {"knn": 0.50, "isolation": 0.35, "cluster": 0.15}
+DEFAULT_PROFILE_WEIGHTS = {"topk": 0.50, "isolation": 0.35, "cluster": 0.15}
 LOW_CLUSTER_PURITY_THRESHOLD = 0.50
 
 
@@ -273,7 +273,7 @@ class ProfileFitModel:
 
         similar = self.retriever.retrieve(query, top_k=min(50, max(len(self.cluster_examples), 1)))
         retrieval = retrieval_quality(similar, query, top_k=min(50, max(len(similar), 1)))
-        knn_profile_score = float(np.clip(retrieval.get("topk_avg_similarity", 0.0) * 100, 0, 100))
+        topk_profile_score = float(np.clip(retrieval.get("topk_avg_similarity", 0.0) * 100, 0, 100))
 
         query_distances = gower_distance_to_frame(features.iloc[0].to_dict(), self.cluster_features, self.gower_ranges)
         cluster_average_distances = []
@@ -298,7 +298,7 @@ class ProfileFitModel:
         cluster_component = float(np.clip(0.70 * mixed_cluster_score + 0.30 * purity_score, 0, 100))
         won_profile_fit_score = float(
             np.clip(
-                self.score_weights["knn"] * knn_profile_score
+                self.score_weights["topk"] * topk_profile_score
                 + self.score_weights["isolation"] * float(np.clip(percentile, 0, 100))
                 + self.score_weights["cluster"] * cluster_component,
                 0,
@@ -336,7 +336,7 @@ class ProfileFitModel:
             manual_review_reasons.append("Isolation Forest sıra dışı sinyali")
         if percentile < 20:
             manual_review_reasons.append("Düşük Isolation Forest profil yüzdesi")
-        if knn_profile_score < 45:
+        if topk_profile_score < 45:
             manual_review_reasons.append("Düşük Top-K emsal benzerliği")
         if won_profile_fit_score < 45:
             manual_review_reasons.append("Düşük yapısal profil uyumu")
@@ -350,11 +350,11 @@ class ProfileFitModel:
             "isolation_threshold": 0.0,
             "manual_review_flag": bool(manual_review_reasons),
             "manual_review_reasons": manual_review_reasons,
-            "knn_profile_score": knn_profile_score,
+            "topk_profile_score": topk_profile_score,
             "mixed_cluster_score": mixed_cluster_score,
             "cluster_purity_score": purity_score,
             "profile_score_components": {
-                "knn_profile_score": knn_profile_score,
+                "topk_profile_score": topk_profile_score,
                 "inlier_score": float(np.clip(percentile, 0, 100)),
                 "mixed_cluster_score": mixed_cluster_score,
                 "cluster_purity_score": purity_score,

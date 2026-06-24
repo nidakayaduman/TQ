@@ -170,6 +170,13 @@ def test_advisor_answer_source_is_visible():
 
 
 def test_theme_has_no_legacy_orange_tokens():
+    for text in [
+        "def inject_light_theme_css",
+        "--app-bg: #f4f9fc",
+        "linear-gradient(135deg, #f8fcff 0%, #eef7fb 48%, #f6fbff 100%)",
+        "inject_light_theme_css()",
+    ]:
+        assert text in APP_TEXT
     for token in [
         "#ff4f1f",
         "#ff9d42",

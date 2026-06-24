@@ -20,7 +20,7 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
         "isolation_contamination": 0.05,
         "aggressive_anomaly_rate_threshold": 0.25,
         "score_weights": {
-            "knn": 0.50,
+            "topk": 0.50,
             "isolation": 0.35,
             "cluster": 0.15,
         },
