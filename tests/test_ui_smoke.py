@@ -214,6 +214,16 @@ def test_light_theme_overrides_global_white_text_for_basic_elements():
         assert text in APP_TEXT
 
 
+def test_light_theme_keeps_page_specific_cards_white_with_dark_text():
+    for text in [
+        ".ev-card, .ev-summary-card, .ev-empty-card, .ev-list-card",
+        ".rc-price-point, .rc-price-point.actual",
+        ".st-key-ts_masked_expander div[data-testid='stExpander']",
+        "background: #ffffff !important;",
+    ]:
+        assert text in APP_TEXT
+
+
 def test_methodology_terms_are_present():
     for term in [
         "Yerel metin embedding",

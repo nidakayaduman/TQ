@@ -1665,11 +1665,13 @@ def inject_light_theme_css() -> None:
             .sim-metric-card, .pf-card, .pf-kpi-card, .pf-metric-card, .pf-gauge-card,
             .st-key-pf_gauge_card, .pc-kpi-card, .pc-primary-card, .pc-baseline-card,
             .sc-kpi-card, .sc-score-card, .sc-strategy-card,
-            .rc-card, .rc-summary-card, .rc-story-card,
+            .rc-card, .rc-summary-card, .rc-story-card, .rc-price-point,
             .report-control-card, .st-key-report_export_backtest,
             .st-key-report_export_scenario, .st-key-report_export_audit,
             .st-key-report_export_review, .report-detail-card,
             .advisor-context-card, .advisor-setup-card, .advisor-status-card,
+            .ev-card, .ev-summary-card, .ev-empty-card, .ev-list-card,
+            .ev-approach-card, .ev-price-card, .ev-sim-card, .ev-example-card,
             .chat-wide-shell, .chat-body, .chat-header, .st-key-advisor_chat_module,
             .formula-panel, .global-table-card, .dq-table-card, .ts-masked-table-wrap,
             .sim-table-card, .pf-table-card, .pc-table-card,
@@ -1682,6 +1684,32 @@ def inject_light_theme_css() -> None:
                 backdrop-filter: blur(18px) saturate(125%) !important;
                 color: var(--text) !important;
                 -webkit-text-fill-color: var(--text) !important;
+            }
+            .ev-card, .ev-summary-card, .ev-empty-card, .ev-list-card,
+            .ev-approach-card, .ev-price-card, .ev-sim-card, .ev-example-card,
+            .rc-price-point, .rc-price-point.actual,
+            .st-key-ts_masked_expander div[data-testid='stExpander'] {
+                background: #ffffff !important;
+                border-color: rgba(71, 85, 105, 0.18) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+                box-shadow: var(--soft-shadow) !important;
+            }
+            .ev-card *, .ev-summary-card *, .ev-empty-card *, .ev-list-card *,
+            .ev-approach-card *, .ev-price-card *, .ev-sim-card *, .ev-example-card *,
+            .rc-price-point *, .st-key-ts_masked_expander div[data-testid='stExpander'] *,
+            .st-key-ts_masked_expander div[data-testid='stExpander'] summary {
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .ev-pill, .ev-pill-good, .ev-pill-warn, .ev-pill-bad {
+                background: #ffffff !important;
+                border-color: rgba(71, 85, 105, 0.22) !important;
+                color: var(--text) !important;
+                -webkit-text-fill-color: var(--text) !important;
+            }
+            .st-key-ts_masked_expander div[data-testid='stExpander'] summary {
+                background: #ffffff !important;
             }
             .hero-card {
                 background:
