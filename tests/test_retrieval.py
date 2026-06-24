@@ -1,3 +1,5 @@
+import pandas as pd
+
 from src.feature_masking import mask_actual_result_fields
 from src.retrieval import RetrievalEngine, retrieval_quality
 
@@ -27,6 +29,20 @@ def test_retrieval_does_not_depend_on_price_or_cost_fields(tiny_df):
     dirty = engine.retrieve(polluted, top_k=5)
     assert clean["tender_id"].tolist() == dirty["tender_id"].tolist()
     assert clean["overall_similarity_score"].tolist() == dirty["overall_similarity_score"].tolist()
+
+
+def test_retrieval_breaks_equal_scores_by_tender_id(tiny_df):
+    rows = []
+    for tender_id in ["TIE-B", "TIE-A"]:
+        row = tiny_df.iloc[0].copy()
+        row["tender_id"] = tender_id
+        rows.append(row)
+    engine = RetrievalEngine.fit(pd.DataFrame([row.to_dict() for row in rows]))
+    query = mask_actual_result_fields(rows[0].to_dict())
+
+    similar = engine.retrieve(query, top_k=2)
+
+    assert similar["tender_id"].tolist() == ["TIE-A", "TIE-B"]
 
 
 def test_retrieval_quality_exposes_structural_match_rates(tiny_df):

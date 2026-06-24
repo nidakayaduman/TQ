@@ -18,7 +18,9 @@ def temporal_split(
     train_end_year = int(train_end_year if train_end_year is not None else config.get("train_end_year", 2023))
     validation_year = int(validation_year if validation_year is not None else config.get("validation_year", 2024))
     test_year = int(test_year if test_year is not None else config.get("test_year", 2025))
-    data = normalize_schema(df).sort_values("tender_date")
+    data = normalize_schema(df)
+    sort_columns = ["tender_date", *(["tender_id"] if "tender_id" in data.columns else [])]
+    data = data.sort_values(sort_columns, kind="mergesort")
     train = data[data["year"] <= train_end_year].copy()
     validation = data[data["year"] == validation_year].copy()
     test = data[data["year"] == test_year].copy()
@@ -28,7 +30,9 @@ def temporal_split(
 
 
 def rolling_backtest_splits(df: pd.DataFrame, min_train_year: int | None = None) -> list[dict[str, object]]:
-    data = normalize_schema(df).sort_values("tender_date")
+    data = normalize_schema(df)
+    sort_columns = ["tender_date", *(["tender_id"] if "tender_id" in data.columns else [])]
+    data = data.sort_values(sort_columns, kind="mergesort")
     years = sorted(int(year) for year in data["year"].dropna().unique())
     if min_train_year is not None:
         years = [year for year in years if year >= min_train_year]

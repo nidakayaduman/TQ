@@ -114,7 +114,15 @@ class RetrievalEngine:
             scores.append(score)
         result = self.training_data.copy()
         result["overall_similarity_score"] = np.clip(scores, 0, 1)
-        return result.sort_values("overall_similarity_score", ascending=False).head(top_k).reset_index(drop=True)
+        result["_retrieval_tender_id_sort"] = (
+            result["tender_id"].astype(str) if "tender_id" in result.columns else result.index.astype(str)
+        )
+        ranked = result.sort_values(
+            ["overall_similarity_score", "_retrieval_tender_id_sort"],
+            ascending=[False, True],
+            kind="mergesort",
+        )
+        return ranked.drop(columns=["_retrieval_tender_id_sort"]).head(top_k).reset_index(drop=True)
 
 
 def retrieval_quality(similar: pd.DataFrame, query: pd.Series | dict[str, Any], top_k: int = 50) -> dict[str, float]:
