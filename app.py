@@ -5887,6 +5887,12 @@ def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, A
     baseline = predict_baseline_prices(get_history_frame(), tender) if tender else pd.DataFrame()
     quality = retrieval_quality_from_result(result, tender)
     scenario_weights = load_scenario_weights()
+    profile_components = best.get("profile_score_components", {})
+    if not isinstance(profile_components, dict):
+        profile_components = {}
+    profile_component_weights = profile_components.get("weights", {})
+    if not isinstance(profile_component_weights, dict):
+        profile_component_weights = {}
     corridor = result["corridor"]
     evidence_items = [
         {
@@ -5939,8 +5945,13 @@ def advisor_context(result: dict[str, Any], best: dict[str, Any]) -> dict[str, A
                 "risk_penalty_score": scenario_weights.get("risk_penalty_score", -0.10),
             },
             "won_profile_fit_score": {
-                "historical_distribution_fit": 0.65,
-                "success_group_closeness": 0.35,
+                "topk_profile_score": profile_component_weights.get("topk", 0.50),
+                "isolation_inlier_score": profile_component_weights.get("isolation", 0.35),
+                "mixed_cluster_component": profile_component_weights.get("cluster", 0.15),
+                "cluster_component_blend": {
+                    "mixed_cluster_score": 0.70,
+                    "cluster_purity_score": 0.30,
+                },
             },
         },
         "similar_tender_count": len(result["similar"]),
@@ -7455,7 +7466,7 @@ def render_methodology() -> None:
         with c3:
             glass_card(
                 "Kazanılmış Profil Uyum Skoru",
-                "Ürün, kurum, bölge, miktar, teslim süresi, fiyat bandı, beklenen karlılık, risk ve model güveni birlikte okunur. Düşük skor çoğu zaman manuel inceleme sinyalidir.",
+                "Ürün, kurum, bölge, miktar, teslim süresi ve rekabet gibi profil alanları Top-K emsal benzerliği, Isolation Forest tipikliği ve mixed-type cluster yakınlığıyla okunur. Fiyat bandı, karlılık, risk ve model güveni ayrı senaryo skorunda değerlendirilir.",
                 "03",
             )
 

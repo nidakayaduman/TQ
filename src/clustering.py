@@ -292,7 +292,6 @@ class ProfileFitModel:
         distance_percentile = float(np.searchsorted(reference, nearest_distance, side="right") / max(len(reference), 1))
         cluster_score = float(np.clip((1 - distance_percentile) * 100, 0, 100))
         mixed_cluster_score = cluster_score
-        won_profile_fit_score = float(np.clip(0.65 * percentile + 0.35 * cluster_score, 0, 100))
         profile = self.cluster_profiles[cluster_id]
         purity_score = float(profile.get("cluster_purity_score", 0.0) or 0.0)
         cluster_component = float(np.clip(0.70 * mixed_cluster_score + 0.30 * purity_score, 0, 100))
